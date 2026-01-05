@@ -19,6 +19,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { GoogleDriveImportSettings } from './GoogleDriveImportSettings';
+import DriveImportStatus from '@/components/drive/DriveImportStatus';
 import { toast } from 'sonner';
 
 // Google Drive icon component using forwardRef to avoid ref warnings
@@ -382,7 +383,8 @@ export function GoogleIntegration() {
 
             {/* Import Settings Panel */}
             {showImportSettings && (
-              <div className="animate-in slide-in-from-top-2">
+              <div className="animate-in slide-in-from-top-2 space-y-4">
+                <DriveImportStatus />
                 <GoogleDriveImportSettings />
               </div>
             )}
