@@ -4,12 +4,17 @@ import { useAuth } from './useAuth';
 import { UserRole } from '@/types';
 
 export function useUserRole() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    // Wait for auth to finish loading
+    if (authLoading) {
+      return;
+    }
+
     if (user) {
       fetchRole();
     } else {
@@ -17,12 +22,13 @@ export function useUserRole() {
       setIsAdmin(false);
       setLoading(false);
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   const fetchRole = async () => {
     if (!user) return;
 
     try {
+      console.log('Fetching role for user:', user.id);
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
@@ -31,6 +37,7 @@ export function useUserRole() {
 
       if (error) throw error;
       
+      console.log('Role data:', data);
       const userRole = (data?.role as UserRole) || 'closer';
       setRole(userRole);
       setIsAdmin(userRole === 'admin');
