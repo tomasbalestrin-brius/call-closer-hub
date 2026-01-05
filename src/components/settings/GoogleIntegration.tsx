@@ -44,25 +44,26 @@ function toFriendlyGoogleConnectError(err: unknown): FriendlyError {
   const message =
     typeof err === "string"
       ? err
-      : (err as any)?.message || (err as any)?.error_description || "";
+      : (err as { message?: string; error_description?: string })?.message || 
+        (err as { message?: string; error_description?: string })?.error_description || "";
 
   const lower = message.toLowerCase();
-
-  if (lower.includes("manual linking") && lower.includes("disabled")) {
-    return {
-      message:
-        "A vinculação manual de contas está desativada no backend. Para conectar o Google Drive, habilite \"Manual linking / Vinculação manual\" nas configurações de autenticação do Lovable Cloud e tente novamente.",
-      causes: [
-        "Vinculação manual de contas desativada (Manual linking)",
-        "Política de segurança do backend impedindo a conexão",
-      ],
-    };
-  }
 
   if (lower.includes("invalid_client")) {
     return {
       message:
         "Credenciais OAuth inválidas (invalid_client). Confirme Client ID/Secret e os domínios/redirects autorizados no Google.",
+    };
+  }
+
+  if (lower.includes("not configured")) {
+    return {
+      message:
+        "OAuth do Google não configurado. Configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET nos Secrets do backend.",
+      causes: [
+        "GOOGLE_CLIENT_ID não configurado",
+        "GOOGLE_CLIENT_SECRET não configurado",
+      ],
     };
   }
 
@@ -137,26 +138,22 @@ export function GoogleIntegration() {
     setCurrentStep("connecting");
 
     try {
-      // Mark flow as pending so we can finalize it after the OAuth redirect.
-      sessionStorage.setItem("google_connect_pending", "1");
+      const redirectUri = `${window.location.origin}/google-drive-callback`;
 
-      const { error } = await supabase.auth.linkIdentity({
-        provider: "google",
-        options: {
-          // Use origin only to avoid redirect allowlist issues; we'll route back to /settings after callback.
-          redirectTo: `${window.location.origin}`,
-          scopes:
-            "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/documents.readonly",
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
-        },
+      // Call edge function to get auth URL
+      const { data, error } = await supabase.functions.invoke('google-auth-url', {
+        body: { redirectUri }
       });
 
       if (error) throw error;
-    } catch (error: any) {
-      sessionStorage.removeItem("google_connect_pending");
+      if (data?.error) throw new Error(data.error);
+
+      // Store state for CSRF protection
+      sessionStorage.setItem('google_oauth_state', data.state);
+
+      // Redirect to Google OAuth
+      window.location.href = data.authUrl;
+    } catch (error: unknown) {
       console.error("Error connecting Google:", error);
 
       const friendly = toFriendlyGoogleConnectError(error);
