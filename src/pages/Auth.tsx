@@ -14,7 +14,7 @@ const passwordSchema = z.string().min(6, 'A senha deve ter pelo menos 6 caracter
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { user, signIn, signUp, loading } = useAuth();
+  const { user, signIn, loading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [loginEmail, setLoginEmail] = useState('');
@@ -102,18 +102,8 @@ export default function Auth() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Temporary signup enabled for initial admin */}
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              setIsSubmitting(true);
-              const { error } = await signUp(loginEmail, loginPassword, loginEmail);
-              setIsSubmitting(false);
-              if (error) {
-                toast.error(error.message);
-              } else {
-                toast.success('Conta criada! Faça login.');
-              }
-            }} className="space-y-4">
+            {/* Login Only - No self-signup */}
+            <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="login-email">Email</Label>
                 <div className="relative">
@@ -149,9 +139,12 @@ export default function Auth() {
                 className="w-full gradient-primary" 
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Criando...' : 'Criar Conta Admin'}
+                {isSubmitting ? 'Entrando...' : 'Entrar'}
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
+              <p className="text-center text-sm text-muted-foreground mt-4">
+                Não tem uma conta? Fale com seu administrador.
+              </p>
             </form>
           </CardContent>
         </Card>
