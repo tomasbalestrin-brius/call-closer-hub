@@ -11,7 +11,7 @@ import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
-import { GoogleConnectCallbackHandler } from "@/components/settings/GoogleConnectCallbackHandler";
+import GoogleDriveCallback from "./pages/GoogleDriveCallback";
 
 const queryClient = new QueryClient();
 
@@ -21,7 +21,6 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <GoogleConnectCallbackHandler />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
@@ -30,6 +29,7 @@ const App = () => (
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/google-drive-callback" element={<GoogleDriveCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
