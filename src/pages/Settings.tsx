@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { User, Mail, Phone, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { Profile } from '@/types';
+import { GoogleIntegration } from '@/components/settings/GoogleIntegration';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -151,6 +152,9 @@ export default function Settings() {
             )}
           </CardContent>
         </Card>
+
+        {/* Google Integration */}
+        <GoogleIntegration />
       </div>
     </MainLayout>
   );

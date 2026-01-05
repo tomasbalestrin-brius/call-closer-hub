@@ -9,6 +9,7 @@ import Calls from "./pages/Calls";
 import Clients from "./pages/Clients";
 import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/clients" element={<Clients />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
