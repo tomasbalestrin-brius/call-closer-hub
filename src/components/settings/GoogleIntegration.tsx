@@ -9,35 +9,56 @@ import {
   XCircle, 
   Loader2,
   Link as LinkIcon,
-  Mail
+  Mail,
+  FileText,
+  FolderOpen,
+  Shield,
+  ArrowRight,
+  ExternalLink,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Google Drive icon component
-function GoogleDriveIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M7.71 3.5L1.15 15l3.43 5.98 6.56-11.47L7.71 3.5zm8.58 0L4.84 21.5h6.86l11.45-18H16.29zm-3.67 6.42l-3.43 5.98 3.43 5.98L22.85 15l-10.23-5.08z"/>
-    </svg>
-  );
-}
+// Google Drive icon component using forwardRef to avoid ref warnings
+const GoogleDriveIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M7.71 3.5L1.15 15l3.43 5.98 6.56-11.47L7.71 3.5zm8.58 0L4.84 21.5h6.86l11.45-18H16.29zm-3.67 6.42l-3.43 5.98 3.43 5.98L22.85 15l-10.23-5.08z"/>
+  </svg>
+);
 
 interface GoogleProfile {
   google_connected: boolean;
   google_email: string | null;
 }
 
+type ConnectionStep = 'intro' | 'permissions' | 'connecting' | 'success' | 'error';
+
 export function GoogleIntegration() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [connecting, setConnecting] = useState(false);
   const [profile, setProfile] = useState<GoogleProfile | null>(null);
+  const [currentStep, setCurrentStep] = useState<ConnectionStep>('intro');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchGoogleStatus();
     }
   }, [user]);
+
+  // Check URL for OAuth callback errors
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get('error');
+    const errorDescription = params.get('error_description');
+    
+    if (error) {
+      setCurrentStep('error');
+      setErrorMessage(errorDescription || 'Erro ao conectar com Google. Verifique as configurações OAuth.');
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const fetchGoogleStatus = async () => {
     if (!user) return;
@@ -51,6 +72,10 @@ export function GoogleIntegration() {
 
       if (error) throw error;
       setProfile(data);
+      
+      if (data?.google_connected) {
+        setCurrentStep('success');
+      }
     } catch (error) {
       console.error('Error fetching Google status:', error);
     } finally {
@@ -58,12 +83,16 @@ export function GoogleIntegration() {
     }
   };
 
+  const handleStartConnection = () => {
+    setCurrentStep('permissions');
+    setErrorMessage(null);
+  };
+
   const handleConnectGoogle = async () => {
-    setConnecting(true);
+    setCurrentStep('connecting');
     
     try {
-      // Use Supabase OAuth with Google
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/settings`,
@@ -76,12 +105,10 @@ export function GoogleIntegration() {
       });
 
       if (error) throw error;
-      
-      // The user will be redirected to Google for authorization
     } catch (error: any) {
       console.error('Error connecting Google:', error);
-      toast.error('Erro ao conectar com Google. Tente novamente.');
-      setConnecting(false);
+      setCurrentStep('error');
+      setErrorMessage(error.message || 'Erro ao conectar com Google. Tente novamente.');
     }
   };
 
@@ -103,6 +130,7 @@ export function GoogleIntegration() {
       if (error) throw error;
 
       setProfile({ google_connected: false, google_email: null });
+      setCurrentStep('intro');
       toast.success('Google desconectado com sucesso');
     } catch (error) {
       console.error('Error disconnecting Google:', error);
@@ -110,86 +138,313 @@ export function GoogleIntegration() {
     }
   };
 
+  const handleRetry = () => {
+    setCurrentStep('intro');
+    setErrorMessage(null);
+  };
+
   if (loading) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <Card className="border-2">
+        <CardContent className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Carregando status da integração...</p>
+          </div>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-display flex items-center gap-2">
-          <GoogleDriveIcon className="w-5 h-5" />
-          Integração Google Drive
-        </CardTitle>
-        <CardDescription>
-          Conecte sua conta Google para importar transcrições automaticamente
-        </CardDescription>
+    <Card className="border-2 overflow-hidden">
+      <CardHeader className="bg-gradient-to-r from-blue-500/10 via-green-500/10 to-yellow-500/10 border-b">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-white rounded-lg shadow-sm">
+            <GoogleDriveIcon className="w-6 h-6 text-[#4285F4]" />
+          </div>
+          <div>
+            <CardTitle className="font-display text-lg">Integração Google Drive</CardTitle>
+            <CardDescription>
+              Conecte sua conta para importar transcrições automaticamente
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {profile?.google_connected ? (
-          <>
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-success/10 border border-success/20">
-              <CheckCircle className="w-6 h-6 text-success" />
-              <div className="flex-1">
-                <p className="font-medium text-success">Conta conectada</p>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Mail className="w-3 h-3" />
-                  {profile.google_email}
-                </p>
-              </div>
-              <Badge variant="default" className="bg-success">Ativo</Badge>
+      
+      <CardContent className="p-6">
+        {/* Step Indicator */}
+        {currentStep !== 'success' && currentStep !== 'error' && (
+          <div className="flex items-center justify-center mb-6 pb-6 border-b">
+            <StepIndicator 
+              steps={['Início', 'Permissões', 'Conectar']} 
+              currentStep={currentStep === 'intro' ? 0 : currentStep === 'permissions' ? 1 : 2} 
+            />
+          </div>
+        )}
+
+        {/* Intro Step */}
+        {currentStep === 'intro' && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Comece a importar suas transcrições</h3>
+              <p className="text-muted-foreground text-sm">
+                Conecte seu Google Drive para importar automaticamente os documentos de transcrição das suas calls.
+              </p>
             </div>
+
+            <div className="grid gap-3">
+              <FeatureItem 
+                icon={<FileText className="w-5 h-5 text-blue-500" />}
+                title="Importação Automática"
+                description="Detectamos novos documentos e importamos automaticamente"
+              />
+              <FeatureItem 
+                icon={<FolderOpen className="w-5 h-5 text-green-500" />}
+                title="Acesso Somente Leitura"
+                description="Nunca modificamos ou deletamos seus arquivos"
+              />
+              <FeatureItem 
+                icon={<Shield className="w-5 h-5 text-purple-500" />}
+                title="100% Seguro"
+                description="Você pode revogar o acesso a qualquer momento"
+              />
+            </div>
+
+            <Button 
+              onClick={handleStartConnection}
+              className="w-full h-12 text-base font-medium bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+            >
+              Começar Conexão
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
+          </div>
+        )}
+
+        {/* Permissions Step */}
+        {currentStep === 'permissions' && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Permissões Necessárias</h3>
+              <p className="text-muted-foreground text-sm">
+                Veja exatamente o que o aplicativo poderá acessar
+              </p>
+            </div>
+
+            <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+              <PermissionItem 
+                title="Ver arquivos do Google Drive"
+                description="Acesso apenas leitura aos seus arquivos"
+                allowed
+              />
+              <PermissionItem 
+                title="Ler documentos do Google Docs"
+                description="Para extrair o conteúdo das transcrições"
+                allowed
+              />
+              <PermissionItem 
+                title="Modificar ou deletar arquivos"
+                description="Nunca faremos alterações nos seus arquivos"
+                allowed={false}
+              />
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                <strong>Nota:</strong> Você será redirecionado para o Google para autorizar. 
+                Após autorizar, você voltará automaticamente para esta página.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setCurrentStep('intro')}
+                className="flex-1"
+              >
+                Voltar
+              </Button>
+              <Button 
+                onClick={handleConnectGoogle}
+                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Autorizar com Google
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Connecting Step */}
+        {currentStep === 'connecting' && (
+          <div className="py-8 text-center space-y-4">
+            <div className="relative mx-auto w-16 h-16">
+              <div className="absolute inset-0 rounded-full border-4 border-blue-100 dark:border-blue-900"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+              <GoogleDriveIcon className="absolute inset-0 m-auto w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Conectando ao Google...</h3>
+              <p className="text-muted-foreground text-sm">
+                Aguarde enquanto redirecionamos você
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Success Step */}
+        {currentStep === 'success' && (
+          <div className="space-y-6">
+            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-5">
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-green-100 dark:bg-green-900 rounded-full">
+                  <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-green-800 dark:text-green-200">
+                      Conta Conectada com Sucesso!
+                    </h3>
+                    <Badge className="bg-green-600 hover:bg-green-600">Ativo</Badge>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 text-sm text-green-700 dark:text-green-300">
+                    <Mail className="w-4 h-4" />
+                    <span>{profile?.google_email || 'Email não disponível'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-muted/50 rounded-lg p-4">
+              <h4 className="font-medium mb-3">O que acontece agora?</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  Suas transcrições serão importadas automaticamente
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  Novos documentos serão detectados em tempo real
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  Você pode desconectar a qualquer momento
+                </li>
+              </ul>
+            </div>
+
             <Button 
               variant="outline" 
               onClick={handleDisconnectGoogle}
-              className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              className="w-full text-destructive hover:bg-destructive hover:text-destructive-foreground"
             >
               <XCircle className="w-4 h-4 mr-2" />
-              Desconectar Google
+              Desconectar Google Drive
             </Button>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-muted border">
-              <XCircle className="w-6 h-6 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="font-medium">Conta não conectada</p>
-                <p className="text-sm text-muted-foreground">
-                  Conecte sua conta para começar a importar transcrições
-                </p>
-              </div>
-              <Badge variant="secondary">Pendente</Badge>
-            </div>
-            <Button 
-              onClick={handleConnectGoogle}
-              className="gradient-primary"
-              disabled={connecting}
-            >
-              {connecting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <LinkIcon className="w-4 h-4 mr-2" />
-              )}
-              {connecting ? 'Conectando...' : 'Conectar Google Drive'}
-            </Button>
-          </>
+          </div>
         )}
 
-        <div className="pt-4 border-t">
-          <h4 className="font-medium mb-2">Permissões solicitadas:</h4>
-          <ul className="text-sm text-muted-foreground space-y-1">
-            <li>• Ler arquivos do Google Drive</li>
-            <li>• Ler documentos do Google Docs</li>
-            <li>• Acesso apenas leitura (não modifica nada)</li>
-          </ul>
-        </div>
+        {/* Error Step */}
+        {currentStep === 'error' && (
+          <div className="space-y-6">
+            <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-5">
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-red-100 dark:bg-red-900 rounded-full">
+                  <XCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-red-800 dark:text-red-200">
+                    Erro na Conexão
+                  </h3>
+                  <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                    {errorMessage || 'Não foi possível conectar com o Google. Por favor, tente novamente.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <h4 className="font-medium text-amber-800 dark:text-amber-200 mb-2">Possíveis causas:</h4>
+              <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                <li>• Credenciais OAuth do Google não configuradas corretamente</li>
+                <li>• Domínio de redirecionamento não autorizado no Google Cloud</li>
+                <li>• Conexão cancelada durante a autorização</li>
+              </ul>
+            </div>
+
+            <Button 
+              onClick={handleRetry}
+              className="w-full"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Tentar Novamente
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+// Step Indicator Component
+function StepIndicator({ steps, currentStep }: { steps: string[]; currentStep: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      {steps.map((step, index) => (
+        <div key={step} className="flex items-center">
+          <div className={`
+            flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors
+            ${index <= currentStep 
+              ? 'bg-primary text-primary-foreground' 
+              : 'bg-muted text-muted-foreground'
+            }
+          `}>
+            {index < currentStep ? (
+              <CheckCircle className="w-4 h-4" />
+            ) : (
+              index + 1
+            )}
+          </div>
+          <span className={`ml-2 text-sm ${index <= currentStep ? 'font-medium' : 'text-muted-foreground'}`}>
+            {step}
+          </span>
+          {index < steps.length - 1 && (
+            <div className={`w-8 h-0.5 mx-2 ${index < currentStep ? 'bg-primary' : 'bg-muted'}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Feature Item Component
+function FeatureItem({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
+      <div className="mt-0.5">{icon}</div>
+      <div>
+        <h4 className="font-medium text-sm">{title}</h4>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+// Permission Item Component
+function PermissionItem({ title, description, allowed }: { title: string; description: string; allowed: boolean }) {
+  return (
+    <div className="flex items-start gap-3">
+      {allowed ? (
+        <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
+      ) : (
+        <XCircle className="w-5 h-5 text-red-500 mt-0.5" />
+      )}
+      <div>
+        <h4 className={`font-medium text-sm ${!allowed ? 'line-through text-muted-foreground' : ''}`}>
+          {title}
+        </h4>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+    </div>
   );
 }
