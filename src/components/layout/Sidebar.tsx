@@ -9,13 +9,15 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Bell
+  Bell,
+  Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
 
-const navigation = [
+const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Calls', href: '/calls', icon: Phone },
   { name: 'Clientes', href: '/clients', icon: Users },
@@ -23,10 +25,19 @@ const navigation = [
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
 
+const adminNavigation = [
+  { name: 'Admin', href: '/admin', icon: Shield },
+];
+
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { signOut } = useAuth();
+  const { isAdmin } = useUserRole();
+
+  const navigation = isAdmin 
+    ? [...baseNavigation, ...adminNavigation]
+    : baseNavigation;
 
   const handleSignOut = async () => {
     const { error } = await signOut();
