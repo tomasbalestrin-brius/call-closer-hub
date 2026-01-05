@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Calls from "./pages/Calls";
 import Clients from "./pages/Clients";
+import ClientDetail from "./pages/ClientDetail";
 import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
 import Admin from "./pages/Admin";
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/calls" element={<Calls />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="/clients/:id" element={<ClientDetail />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />

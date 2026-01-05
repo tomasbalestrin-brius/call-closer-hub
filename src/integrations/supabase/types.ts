@@ -16,59 +16,119 @@ export type Database = {
     Tables: {
       calls: {
         Row: {
+          ai_summary: string | null
+          analyzed_at: string | null
           call_date: string
           call_time: string | null
           client_id: string | null
           client_name: string
+          closer_classification:
+            | Database["public"]["Enums"]["closer_classification"]
+            | null
           closer_id: string
+          consciousness_level: string | null
           created_at: string
+          decision_reason: string | null
           duration_minutes: number | null
           entry_value: number | null
           google_doc_id: string | null
+          has_partner: boolean | null
           id: string
+          lead_classification:
+            | Database["public"]["Enums"]["lead_classification"]
+            | null
+          loss_point: string | null
+          main_difficulty: string | null
+          main_errors: string[] | null
+          main_pain: string | null
+          main_wins: string[] | null
+          next_contact_date: string | null
+          niche: string | null
           notes: string | null
           product: string | null
           sale_value: number | null
           score: number | null
+          source_file_id: string | null
           status: Database["public"]["Enums"]["call_status"]
+          technical_analysis: Json | null
           transcription: string | null
           updated_at: string
         }
         Insert: {
+          ai_summary?: string | null
+          analyzed_at?: string | null
           call_date?: string
           call_time?: string | null
           client_id?: string | null
           client_name: string
+          closer_classification?:
+            | Database["public"]["Enums"]["closer_classification"]
+            | null
           closer_id: string
+          consciousness_level?: string | null
           created_at?: string
+          decision_reason?: string | null
           duration_minutes?: number | null
           entry_value?: number | null
           google_doc_id?: string | null
+          has_partner?: boolean | null
           id?: string
+          lead_classification?:
+            | Database["public"]["Enums"]["lead_classification"]
+            | null
+          loss_point?: string | null
+          main_difficulty?: string | null
+          main_errors?: string[] | null
+          main_pain?: string | null
+          main_wins?: string[] | null
+          next_contact_date?: string | null
+          niche?: string | null
           notes?: string | null
           product?: string | null
           sale_value?: number | null
           score?: number | null
+          source_file_id?: string | null
           status?: Database["public"]["Enums"]["call_status"]
+          technical_analysis?: Json | null
           transcription?: string | null
           updated_at?: string
         }
         Update: {
+          ai_summary?: string | null
+          analyzed_at?: string | null
           call_date?: string
           call_time?: string | null
           client_id?: string | null
           client_name?: string
+          closer_classification?:
+            | Database["public"]["Enums"]["closer_classification"]
+            | null
           closer_id?: string
+          consciousness_level?: string | null
           created_at?: string
+          decision_reason?: string | null
           duration_minutes?: number | null
           entry_value?: number | null
           google_doc_id?: string | null
+          has_partner?: boolean | null
           id?: string
+          lead_classification?:
+            | Database["public"]["Enums"]["lead_classification"]
+            | null
+          loss_point?: string | null
+          main_difficulty?: string | null
+          main_errors?: string[] | null
+          main_pain?: string | null
+          main_wins?: string[] | null
+          next_contact_date?: string | null
+          niche?: string | null
           notes?: string | null
           product?: string | null
           sale_value?: number | null
           score?: number | null
+          source_file_id?: string | null
           status?: Database["public"]["Enums"]["call_status"]
+          technical_analysis?: Json | null
           transcription?: string | null
           updated_at?: string
         }
@@ -120,11 +180,16 @@ export type Database = {
           company: string | null
           created_at: string
           email: string | null
+          has_partner: boolean | null
           id: string
+          main_difficulty: string | null
+          main_pain: string | null
           name: string
+          niche: string | null
           notes: string | null
           phone: string | null
           revenue: number | null
+          source: Database["public"]["Enums"]["client_source"] | null
           updated_at: string
         }
         Insert: {
@@ -132,11 +197,16 @@ export type Database = {
           company?: string | null
           created_at?: string
           email?: string | null
+          has_partner?: boolean | null
           id?: string
+          main_difficulty?: string | null
+          main_pain?: string | null
           name: string
+          niche?: string | null
           notes?: string | null
           phone?: string | null
           revenue?: number | null
+          source?: Database["public"]["Enums"]["client_source"] | null
           updated_at?: string
         }
         Update: {
@@ -144,14 +214,63 @@ export type Database = {
           company?: string | null
           created_at?: string
           email?: string | null
+          has_partner?: boolean | null
           id?: string
+          main_difficulty?: string | null
+          main_pain?: string | null
           name?: string
+          niche?: string | null
           notes?: string | null
           phone?: string | null
           revenue?: number | null
+          source?: Database["public"]["Enums"]["client_source"] | null
           updated_at?: string
         }
         Relationships: []
+      }
+      imported_files: {
+        Row: {
+          call_id: string | null
+          created_at: string
+          drive_file_id: string
+          error_message: string | null
+          file_name: string
+          id: string
+          imported_at: string
+          status: Database["public"]["Enums"]["import_status"]
+          user_id: string
+        }
+        Insert: {
+          call_id?: string | null
+          created_at?: string
+          drive_file_id: string
+          error_message?: string | null
+          file_name: string
+          id?: string
+          imported_at?: string
+          status?: Database["public"]["Enums"]["import_status"]
+          user_id: string
+        }
+        Update: {
+          call_id?: string | null
+          created_at?: string
+          drive_file_id?: string
+          error_message?: string | null
+          file_name?: string
+          id?: string
+          imported_at?: string
+          status?: Database["public"]["Enums"]["import_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imported_files_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
@@ -187,6 +306,15 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          drive_auto_import: boolean | null
+          drive_file_types: Json | null
+          drive_folder_id: string | null
+          drive_folder_name: string | null
+          drive_import_frequency:
+            | Database["public"]["Enums"]["import_frequency"]
+            | null
+          drive_last_sync: string | null
+          drive_name_patterns: Json | null
           full_name: string
           google_access_token: string | null
           google_connected: boolean | null
@@ -202,6 +330,15 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          drive_auto_import?: boolean | null
+          drive_file_types?: Json | null
+          drive_folder_id?: string | null
+          drive_folder_name?: string | null
+          drive_import_frequency?:
+            | Database["public"]["Enums"]["import_frequency"]
+            | null
+          drive_last_sync?: string | null
+          drive_name_patterns?: Json | null
           full_name: string
           google_access_token?: string | null
           google_connected?: boolean | null
@@ -217,6 +354,15 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          drive_auto_import?: boolean | null
+          drive_file_types?: Json | null
+          drive_folder_id?: string | null
+          drive_folder_name?: string | null
+          drive_import_frequency?:
+            | Database["public"]["Enums"]["import_frequency"]
+            | null
+          drive_last_sync?: string | null
+          drive_name_patterns?: Json | null
           full_name?: string
           google_access_token?: string | null
           google_connected?: boolean | null
@@ -273,6 +419,16 @@ export type Database = {
         | "proposta_enviada"
         | "vendido"
         | "perdido"
+      client_source: "manual" | "google_drive"
+      closer_classification:
+        | "iniciante"
+        | "intermediario"
+        | "avancado"
+        | "alta_performance"
+        | "elite"
+      import_frequency: "manual" | "hourly" | "daily" | "realtime"
+      import_status: "pending" | "processing" | "completed" | "error"
+      lead_classification: "pos_venda" | "follow"
       user_role: "admin" | "closer"
     }
     CompositeTypes: {
@@ -409,6 +565,17 @@ export const Constants = {
         "vendido",
         "perdido",
       ],
+      client_source: ["manual", "google_drive"],
+      closer_classification: [
+        "iniciante",
+        "intermediario",
+        "avancado",
+        "alta_performance",
+        "elite",
+      ],
+      import_frequency: ["manual", "hourly", "daily", "realtime"],
+      import_status: ["pending", "processing", "completed", "error"],
+      lead_classification: ["pos_venda", "follow"],
       user_role: ["admin", "closer"],
     },
   },

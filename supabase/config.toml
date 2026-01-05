@@ -5,3 +5,21 @@ verify_jwt = false
 
 [functions.google-auth-callback]
 verify_jwt = false
+
+[functions.list-drive-files]
+verify_jwt = false
+
+[functions.fetch-drive-document]
+verify_jwt = false
+
+[functions.analyze-call]
+verify_jwt = false
+
+[functions.import-and-analyze]
+verify_jwt = false
+
+[functions.initial-import]
+verify_jwt = false
+
+[functions.sync-drive-files]
+verify_jwt = false
