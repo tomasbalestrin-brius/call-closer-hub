@@ -15,8 +15,10 @@ import {
   Shield,
   ArrowRight,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Settings,
 } from 'lucide-react';
+import { GoogleDriveImportSettings } from './GoogleDriveImportSettings';
 import { toast } from 'sonner';
 
 // Google Drive icon component using forwardRef to avoid ref warnings
@@ -34,6 +36,7 @@ interface GoogleProfile {
 type ConnectionStep = 'intro' | 'permissions' | 'connecting' | 'success' | 'error';
 
 export function GoogleIntegration() {
+  const [showImportSettings, setShowImportSettings] = useState(false);
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<GoogleProfile | null>(null);
@@ -321,16 +324,36 @@ export function GoogleIntegration() {
               </div>
             </div>
 
+            {/* Import Settings Button */}
+            <Button
+              variant="outline"
+              onClick={() => setShowImportSettings(!showImportSettings)}
+              className="w-full justify-between"
+            >
+              <span className="flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                Configurar Importação
+              </span>
+              <ArrowRight className={`w-4 h-4 transition-transform ${showImportSettings ? 'rotate-90' : ''}`} />
+            </Button>
+
+            {/* Import Settings Panel */}
+            {showImportSettings && (
+              <div className="animate-in slide-in-from-top-2">
+                <GoogleDriveImportSettings />
+              </div>
+            )}
+
             <div className="bg-muted/50 rounded-lg p-4">
               <h4 className="font-medium mb-3">O que acontece agora?</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500" />
-                  Suas transcrições serão importadas automaticamente
+                  Configure a pasta e padrões de importação acima
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500" />
-                  Novos documentos serão detectados em tempo real
+                  Suas transcrições serão importadas automaticamente
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500" />
