@@ -33,15 +33,53 @@ interface GoogleProfile {
   google_email: string | null;
 }
 
-type ConnectionStep = 'intro' | 'permissions' | 'connecting' | 'success' | 'error';
+type ConnectionStep = "intro" | "permissions" | "connecting" | "success" | "error";
+
+type FriendlyError = {
+  message: string;
+  causes?: string[];
+};
+
+function toFriendlyGoogleConnectError(err: unknown): FriendlyError {
+  const message =
+    typeof err === "string"
+      ? err
+      : (err as any)?.message || (err as any)?.error_description || "";
+
+  const lower = message.toLowerCase();
+
+  if (lower.includes("manual linking") && lower.includes("disabled")) {
+    return {
+      message:
+        "A vinculação manual de contas está desativada no backend. Para conectar o Google Drive, habilite \"Manual linking / Vinculação manual\" nas configurações de autenticação do Lovable Cloud e tente novamente.",
+      causes: [
+        "Vinculação manual de contas desativada (Manual linking)",
+        "Política de segurança do backend impedindo a conexão",
+      ],
+    };
+  }
+
+  if (lower.includes("invalid_client")) {
+    return {
+      message:
+        "Credenciais OAuth inválidas (invalid_client). Confirme Client ID/Secret e os domínios/redirects autorizados no Google.",
+    };
+  }
+
+  return {
+    message:
+      message || "Erro ao conectar com Google. Verifique as configurações OAuth e tente novamente.",
+  };
+}
 
 export function GoogleIntegration() {
   const [showImportSettings, setShowImportSettings] = useState(false);
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<GoogleProfile | null>(null);
-  const [currentStep, setCurrentStep] = useState<ConnectionStep>('intro');
+  const [currentStep, setCurrentStep] = useState<ConnectionStep>("intro");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorCauses, setErrorCauses] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -52,14 +90,17 @@ export function GoogleIntegration() {
   // Check URL for OAuth callback errors
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const error = params.get('error');
-    const errorDescription = params.get('error_description');
-    
+    const error = params.get("error");
+    const errorDescription = params.get("error_description");
+
     if (error) {
-      setCurrentStep('error');
-      setErrorMessage(errorDescription || 'Erro ao conectar com Google. Verifique as configurações OAuth.');
+      const friendly = toFriendlyGoogleConnectError(errorDescription || error);
+      setCurrentStep("error");
+      setErrorMessage(friendly.message);
+      setErrorCauses(friendly.causes ?? null);
+
       // Clean URL
-      window.history.replaceState({}, '', window.location.pathname);
+      window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 
@@ -68,56 +109,60 @@ export function GoogleIntegration() {
 
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('google_connected, google_email')
-        .eq('user_id', user.id)
+        .from("profiles")
+        .select("google_connected, google_email")
+        .eq("user_id", user.id)
         .maybeSingle();
 
       if (error) throw error;
       setProfile(data);
-      
+
       if (data?.google_connected) {
-        setCurrentStep('success');
+        setCurrentStep("success");
       }
     } catch (error) {
-      console.error('Error fetching Google status:', error);
+      console.error("Error fetching Google status:", error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleStartConnection = () => {
-    setCurrentStep('permissions');
+    setCurrentStep("permissions");
     setErrorMessage(null);
+    setErrorCauses(null);
   };
 
   const handleConnectGoogle = async () => {
-    setCurrentStep('connecting');
+    setCurrentStep("connecting");
 
     try {
       // Mark flow as pending so we can finalize it after the OAuth redirect.
-      sessionStorage.setItem('google_connect_pending', '1');
+      sessionStorage.setItem("google_connect_pending", "1");
 
       const { error } = await supabase.auth.linkIdentity({
-        provider: 'google',
+        provider: "google",
         options: {
           // Use origin only to avoid redirect allowlist issues; we'll route back to /settings after callback.
           redirectTo: `${window.location.origin}`,
           scopes:
-            'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/documents.readonly',
+            "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/documents.readonly",
           queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
+            access_type: "offline",
+            prompt: "consent",
           },
         },
       });
 
       if (error) throw error;
     } catch (error: any) {
-      sessionStorage.removeItem('google_connect_pending');
-      console.error('Error connecting Google:', error);
-      setCurrentStep('error');
-      setErrorMessage(error.message || 'Erro ao conectar com Google. Tente novamente.');
+      sessionStorage.removeItem("google_connect_pending");
+      console.error("Error connecting Google:", error);
+
+      const friendly = toFriendlyGoogleConnectError(error);
+      setCurrentStep("error");
+      setErrorMessage(friendly.message);
+      setErrorCauses(friendly.causes ?? null);
     }
   };
 
@@ -126,7 +171,7 @@ export function GoogleIntegration() {
 
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update({
           google_connected: false,
           google_email: null,
@@ -134,22 +179,23 @@ export function GoogleIntegration() {
           google_refresh_token: null,
           google_token_expires_at: null,
         })
-        .eq('user_id', user.id);
+        .eq("user_id", user.id);
 
       if (error) throw error;
 
       setProfile({ google_connected: false, google_email: null });
-      setCurrentStep('intro');
-      toast.success('Google desconectado com sucesso');
+      setCurrentStep("intro");
+      toast.success("Google desconectado com sucesso");
     } catch (error) {
-      console.error('Error disconnecting Google:', error);
-      toast.error('Erro ao desconectar Google');
+      console.error("Error disconnecting Google:", error);
+      toast.error("Erro ao desconectar Google");
     }
   };
 
   const handleRetry = () => {
-    setCurrentStep('intro');
+    setCurrentStep("intro");
     setErrorMessage(null);
+    setErrorCauses(null);
   };
 
   if (loading) {
@@ -395,10 +441,19 @@ export function GoogleIntegration() {
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
               <h4 className="font-medium text-amber-800 dark:text-amber-200 mb-2">Possíveis causas:</h4>
               <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
-                <li>• Credenciais OAuth do Google não configuradas corretamente</li>
-                <li>• Domínio de redirecionamento não autorizado no Google Cloud</li>
-                <li>• Conexão cancelada durante a autorização</li>
+                {(errorCauses ?? [
+                  'Credenciais OAuth do Google não configuradas corretamente',
+                  'Domínio de redirecionamento não autorizado no Google Cloud',
+                  'Conexão cancelada durante a autorização',
+                ]).map((cause) => (
+                  <li key={cause}>• {cause}</li>
+                ))}
               </ul>
+              {errorCauses && (
+                <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
+                  Dica: abra o backend do Lovable Cloud e procure por uma opção chamada “Manual linking / Vinculação manual”.
+                </p>
+              )}
             </div>
 
             <Button 
