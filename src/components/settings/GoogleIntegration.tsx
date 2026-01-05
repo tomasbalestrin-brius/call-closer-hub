@@ -90,13 +90,18 @@ export function GoogleIntegration() {
 
   const handleConnectGoogle = async () => {
     setCurrentStep('connecting');
-    
+
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      // Mark flow as pending so we can finalize it after the OAuth redirect.
+      sessionStorage.setItem('google_connect_pending', '1');
+
+      const { error } = await supabase.auth.linkIdentity({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/settings`,
-          scopes: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/documents.readonly',
+          // Use origin only to avoid redirect allowlist issues; we'll route back to /settings after callback.
+          redirectTo: `${window.location.origin}`,
+          scopes:
+            'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/documents.readonly',
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -106,6 +111,7 @@ export function GoogleIntegration() {
 
       if (error) throw error;
     } catch (error: any) {
+      sessionStorage.removeItem('google_connect_pending');
       console.error('Error connecting Google:', error);
       setCurrentStep('error');
       setErrorMessage(error.message || 'Erro ao conectar com Google. Tente novamente.');
