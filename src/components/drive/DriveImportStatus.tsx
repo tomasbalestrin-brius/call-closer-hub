@@ -4,14 +4,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { 
   RefreshCw, 
   FileText, 
   CheckCircle, 
   AlertCircle, 
   Clock,
-  Loader2
+  Loader2,
+  RotateCcw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -52,6 +52,7 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
+  const [reimportingFile, setReimportingFile] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -191,6 +192,42 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
     }
   };
 
+  const handleReimport = async (file: ImportedFile) => {
+    if (!user || reimportingFile) return;
+
+    setReimportingFile(file.id);
+    try {
+      // Delete the error record first
+      await supabase
+        .from('imported_files')
+        .delete()
+        .eq('id', file.id);
+
+      // Re-import the file
+      const response = await supabase.functions.invoke('import-and-analyze', {
+        body: { 
+          userId: user.id, 
+          fileId: file.drive_file_id,
+          fileName: file.file_name
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to reimport');
+      }
+
+      toast.success(`${file.file_name} reimportado com sucesso!`);
+      onImportComplete?.();
+      fetchImportStatus();
+    } catch (error) {
+      console.error('Error reimporting file:', error);
+      toast.error('Erro ao reimportar arquivo');
+      fetchImportStatus();
+    } finally {
+      setReimportingFile(null);
+    }
+  };
+
   const completedCount = imports.filter(i => i.status === 'completed').length;
   const errorCount = imports.filter(i => i.status === 'error').length;
   const pendingCount = imports.filter(i => i.status === 'pending' || i.status === 'processing').length;
@@ -274,18 +311,37 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
             <div className="max-h-[200px] overflow-y-auto space-y-2">
               {imports.map((file) => {
                 const config = statusConfig[file.status];
+                const isReimporting = reimportingFile === file.id;
                 return (
                   <div 
                     key={file.id} 
-                    className="flex items-center justify-between p-2 rounded-lg bg-secondary/30"
+                    className="flex items-center justify-between p-2 rounded-lg bg-secondary/30 gap-2"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       {config.icon}
                       <span className="text-sm truncate">{file.file_name}</span>
                     </div>
-                    <Badge className={config.className}>
-                      {config.label}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {file.status === 'error' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReimport(file)}
+                          disabled={isReimporting || syncing}
+                          className="h-7 px-2"
+                        >
+                          {isReimporting ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-3 h-3" />
+                          )}
+                          <span className="ml-1 text-xs">Reimportar</span>
+                        </Button>
+                      )}
+                      <Badge className={config.className}>
+                        {config.label}
+                      </Badge>
+                    </div>
                   </div>
                 );
               })}
