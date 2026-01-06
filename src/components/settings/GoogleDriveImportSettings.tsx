@@ -93,11 +93,12 @@ export function GoogleDriveImportSettings() {
   const [currentFolderId, setCurrentFolderId] = useState<string>('root');
   const [folderPath, setFolderPath] = useState<{ id: string; name: string }[]>([{ id: 'root', name: 'Meu Drive' }]);
 
+  // Load settings only once when user is available, not on every re-render
   useEffect(() => {
-    if (user) {
+    if (user && loading) {
       loadSettings();
     }
-  }, [user]);
+  }, [user, loading]);
 
   const loadSettings = async () => {
     if (!user) return;
