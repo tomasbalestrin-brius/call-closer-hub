@@ -28,8 +28,20 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  BadgeCheck
+  BadgeCheck,
+  Trash2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Client, Call, CallStatus, StageAnalysis } from '@/types';
@@ -132,6 +144,37 @@ export default function ClientDetail() {
     setSaleDialogOpen(true);
   };
 
+  const handleDeleteClient = async () => {
+    if (!client || !user) return;
+
+    try {
+      // Delete associated calls first
+      await supabase
+        .from('calls')
+        .delete()
+        .eq('client_id', client.id);
+
+      // Delete associated notes
+      await supabase
+        .from('client_notes')
+        .delete()
+        .eq('client_id', client.id);
+
+      // Delete the client
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', client.id)
+        .eq('closer_id', user.id);
+
+      if (error) throw error;
+
+      navigate('/clients');
+    } catch (error) {
+      console.error('Error deleting client:', error);
+    }
+  };
+
   if (loading) {
     return (
       <MainLayout>
@@ -198,6 +241,28 @@ export default function ClientDetail() {
               </label>
             </div>
             <ClientEditDialog client={client} onClientUpdated={fetchClientData} />
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="icon">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir cliente?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. Isso excluirá permanentemente o cliente 
+                    <strong> {client.name}</strong> e todas as calls e notas associadas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteClient} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
 
