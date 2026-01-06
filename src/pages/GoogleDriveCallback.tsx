@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, FileText } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-type CallbackStatus = 'processing' | 'success' | 'error';
+type CallbackStatus = 'processing' | 'importing' | 'success' | 'error';
 
 export default function GoogleDriveCallback() {
   const [searchParams] = useSearchParams();
@@ -14,6 +14,7 @@ export default function GoogleDriveCallback() {
   const { user } = useAuth();
   const [status, setStatus] = useState<CallbackStatus>('processing');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState<string>('');
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -77,12 +78,49 @@ export default function GoogleDriveCallback() {
         // Clean up
         sessionStorage.removeItem('google_oauth_state');
         
+        // Now start the initial import
+        setStatus('importing');
+        setImportProgress('Buscando arquivos do mês atual...');
+
+        try {
+          // Get folder settings from profile
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('drive_folder_id')
+            .eq('user_id', user.id)
+            .single();
+
+          console.log('Starting initial import for current month...');
+          
+          const { data: importData, error: importError } = await supabase.functions.invoke('initial-import', {
+            body: { 
+              userId: user.id,
+              folderId: profileData?.drive_folder_id || null
+            }
+          });
+
+          if (importError) {
+            console.error('Initial import error:', importError);
+            // Don't fail the whole process, just log the error
+          } else {
+            console.log('Initial import result:', importData);
+            if (importData?.imported > 0) {
+              setImportProgress(`${importData.imported} arquivos importados!`);
+            } else if (importData?.message === 'No files to import') {
+              setImportProgress('Nenhum arquivo encontrado no mês atual.');
+            }
+          }
+        } catch (importErr) {
+          console.error('Error during initial import:', importErr);
+          // Don't fail, continue to success
+        }
+
         setStatus('success');
 
         // Redirect to settings after a brief delay
         setTimeout(() => {
           navigate('/settings', { replace: true });
-        }, 2000);
+        }, 3000);
 
       } catch (err: unknown) {
         console.error('Callback error:', err);
@@ -110,6 +148,19 @@ export default function GoogleDriveCallback() {
             </div>
           )}
 
+          {status === 'importing' && (
+            <div className="text-center space-y-4">
+              <div className="relative mx-auto w-12 h-12">
+                <FileText className="w-12 h-12 text-primary" />
+                <Loader2 className="w-6 h-6 absolute -bottom-1 -right-1 animate-spin text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold">Importando arquivos...</h2>
+              <p className="text-muted-foreground">
+                {importProgress || 'Buscando transcrições do mês atual...'}
+              </p>
+            </div>
+          )}
+
           {status === 'success' && (
             <div className="text-center space-y-4">
               <div className="mx-auto w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
@@ -119,7 +170,7 @@ export default function GoogleDriveCallback() {
                 Google Drive Conectado!
               </h2>
               <p className="text-muted-foreground">
-                Redirecionando para configurações...
+                {importProgress || 'Redirecionando para configurações...'}
               </p>
             </div>
           )}

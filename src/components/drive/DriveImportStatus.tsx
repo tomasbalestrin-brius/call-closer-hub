@@ -51,12 +51,43 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchImportStatus();
+      checkAutoSyncSettings();
     }
   }, [user]);
+
+  // Auto-sync every 5 minutes when enabled
+  useEffect(() => {
+    if (!user || !autoSyncEnabled) return;
+
+    const interval = setInterval(() => {
+      console.log('Auto-sync triggered...');
+      handleSync();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [user, autoSyncEnabled]);
+
+  const checkAutoSyncSettings = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('google_connected')
+        .eq('user_id', user.id)
+        .single();
+      
+      // Enable auto-sync if Google is connected
+      setAutoSyncEnabled(!!profile?.google_connected);
+    } catch (error) {
+      console.error('Error checking auto-sync settings:', error);
+    }
+  };
 
   const fetchImportStatus = async () => {
     if (!user) return;
