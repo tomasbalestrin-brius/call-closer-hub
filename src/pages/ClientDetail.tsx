@@ -8,6 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
+import ClientEditDialog from '@/components/clients/ClientEditDialog';
+import ClientNotesSection from '@/components/clients/ClientNotesSection';
+import SaleFormDialog from '@/components/clients/SaleFormDialog';
 import { 
   ArrowLeft, 
   Building2, 
@@ -23,7 +27,8 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  BadgeCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -61,6 +66,7 @@ export default function ClientDetail() {
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
+  const [saleDialogOpen, setSaleDialogOpen] = useState(false);
 
   useEffect(() => {
     if (user && id) {
@@ -122,6 +128,10 @@ export default function ClientDetail() {
     return 'text-destructive';
   };
 
+  const handleSaleCheckbox = () => {
+    setSaleDialogOpen(true);
+  };
+
   if (loading) {
     return (
       <MainLayout>
@@ -150,20 +160,87 @@ export default function ClientDetail() {
     <MainLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/clients')}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-display font-bold">{client.name}</h1>
-            {client.company && (
-              <p className="text-muted-foreground flex items-center gap-1">
-                <Building2 className="w-4 h-4" />
-                {client.company}
-              </p>
-            )}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/clients')}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-display font-bold">{client.name}</h1>
+                {client.is_sold && (
+                  <Badge className="bg-success text-success-foreground">
+                    <BadgeCheck className="w-3 h-3 mr-1" />
+                    Vendido
+                  </Badge>
+                )}
+              </div>
+              {client.company && (
+                <p className="text-muted-foreground flex items-center gap-1">
+                  <Building2 className="w-4 h-4" />
+                  {client.company}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Checkbox 
+                id="sold" 
+                checked={client.is_sold || false}
+                onCheckedChange={handleSaleCheckbox}
+              />
+              <label 
+                htmlFor="sold" 
+                className="text-sm font-medium cursor-pointer"
+              >
+                Venda Realizada
+              </label>
+            </div>
+            <ClientEditDialog client={client} onClientUpdated={fetchClientData} />
           </div>
         </div>
+
+        {/* Sale Info Banner */}
+        {client.is_sold && (
+          <Card className="border-success/50 bg-success/5">
+            <CardContent className="py-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-6">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Valor da Venda</p>
+                    <p className="text-lg font-bold text-success">
+                      {formatCurrency(client.sale_value)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Entrada</p>
+                    <p className="text-lg font-semibold">
+                      {formatCurrency(client.entry_value)}
+                    </p>
+                  </div>
+                  {client.contract_validity && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Vigência</p>
+                      <p className="text-sm font-medium">{client.contract_validity}</p>
+                    </div>
+                  )}
+                  {client.sold_at && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Data da Venda</p>
+                      <p className="text-sm font-medium">
+                        {format(new Date(client.sold_at), "dd/MM/yyyy", { locale: ptBR })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setSaleDialogOpen(true)}>
+                  Editar Venda
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Client Info Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -247,6 +324,7 @@ export default function ClientDetail() {
             <TabsTrigger value="analysis" disabled={!selectedCall?.technical_analysis}>
               Análise Técnica
             </TabsTrigger>
+            <TabsTrigger value="notes">Notas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="calls" className="mt-4">
@@ -479,8 +557,20 @@ export default function ClientDetail() {
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="notes" className="mt-4">
+            <ClientNotesSection clientId={client.id} />
+          </TabsContent>
         </Tabs>
       </div>
+
+      {/* Sale Dialog */}
+      <SaleFormDialog
+        client={client}
+        open={saleDialogOpen}
+        onOpenChange={setSaleDialogOpen}
+        onSaleUpdated={fetchClientData}
+      />
     </MainLayout>
   );
 }

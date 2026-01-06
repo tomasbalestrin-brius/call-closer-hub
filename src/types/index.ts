@@ -45,6 +45,14 @@ export interface Client {
   main_difficulty: string | null;
   main_pain: string | null;
   source: ClientSource | null;
+  // Sale fields
+  is_sold: boolean | null;
+  sold_at: string | null;
+  sale_value: number | null;
+  entry_value: number | null;
+  negotiation_notes: string | null;
+  contract_validity: string | null;
+  sale_notes: string | null;
   created_at: string;
   updated_at: string;
 }

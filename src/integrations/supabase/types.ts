@@ -178,51 +178,72 @@ export type Database = {
         Row: {
           closer_id: string
           company: string | null
+          contract_validity: string | null
           created_at: string
           email: string | null
+          entry_value: number | null
           has_partner: boolean | null
           id: string
+          is_sold: boolean | null
           main_difficulty: string | null
           main_pain: string | null
           name: string
+          negotiation_notes: string | null
           niche: string | null
           notes: string | null
           phone: string | null
           revenue: number | null
+          sale_notes: string | null
+          sale_value: number | null
+          sold_at: string | null
           source: Database["public"]["Enums"]["client_source"] | null
           updated_at: string
         }
         Insert: {
           closer_id: string
           company?: string | null
+          contract_validity?: string | null
           created_at?: string
           email?: string | null
+          entry_value?: number | null
           has_partner?: boolean | null
           id?: string
+          is_sold?: boolean | null
           main_difficulty?: string | null
           main_pain?: string | null
           name: string
+          negotiation_notes?: string | null
           niche?: string | null
           notes?: string | null
           phone?: string | null
           revenue?: number | null
+          sale_notes?: string | null
+          sale_value?: number | null
+          sold_at?: string | null
           source?: Database["public"]["Enums"]["client_source"] | null
           updated_at?: string
         }
         Update: {
           closer_id?: string
           company?: string | null
+          contract_validity?: string | null
           created_at?: string
           email?: string | null
+          entry_value?: number | null
           has_partner?: boolean | null
           id?: string
+          is_sold?: boolean | null
           main_difficulty?: string | null
           main_pain?: string | null
           name?: string
+          negotiation_notes?: string | null
           niche?: string | null
           notes?: string | null
           phone?: string | null
           revenue?: number | null
+          sale_notes?: string | null
+          sale_value?: number | null
+          sold_at?: string | null
           source?: Database["public"]["Enums"]["client_source"] | null
           updated_at?: string
         }
@@ -403,6 +424,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_followup_notification: {
+        Args: { p_message: string; p_title: string; p_user_id: string }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["user_role"]
