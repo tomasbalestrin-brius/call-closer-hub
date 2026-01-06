@@ -197,6 +197,7 @@ export type Database = {
           sale_value: number | null
           sold_at: string | null
           source: Database["public"]["Enums"]["client_source"] | null
+          status: string | null
           updated_at: string
         }
         Insert: {
@@ -221,6 +222,7 @@ export type Database = {
           sale_value?: number | null
           sold_at?: string | null
           source?: Database["public"]["Enums"]["client_source"] | null
+          status?: string | null
           updated_at?: string
         }
         Update: {
@@ -245,6 +247,7 @@ export type Database = {
           sale_value?: number | null
           sold_at?: string | null
           source?: Database["public"]["Enums"]["client_source"] | null
+          status?: string | null
           updated_at?: string
         }
         Relationships: []

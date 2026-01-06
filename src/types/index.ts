@@ -31,6 +31,8 @@ export interface Profile {
   updated_at: string;
 }
 
+export type ClientStatus = 'call_realizada' | 'contato_agendado' | 'encaminhado_fechamento' | 'venda_realizada';
+
 export interface Client {
   id: string;
   closer_id: string;
@@ -45,6 +47,7 @@ export interface Client {
   main_difficulty: string | null;
   main_pain: string | null;
   source: ClientSource | null;
+  status: ClientStatus | null;
   // Sale fields
   is_sold: boolean | null;
   sold_at: string | null;
