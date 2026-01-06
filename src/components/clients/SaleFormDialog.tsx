@@ -62,6 +62,7 @@ export default function SaleFormDialog({
           negotiation_notes: negotiationNotes.trim() || null,
           contract_validity: contractValidity.trim() || null,
           sale_notes: saleNotes.trim() || null,
+          status: 'venda_realizada',
         })
         .eq('id', client.id);
 
@@ -91,6 +92,7 @@ export default function SaleFormDialog({
           negotiation_notes: null,
           contract_validity: null,
           sale_notes: null,
+          status: 'call_realizada',
         })
         .eq('id', client.id);
 

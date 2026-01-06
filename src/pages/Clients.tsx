@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import MainLayout from '@/components/layout/MainLayout';
-import ClientCard from '@/components/clients/ClientCard';
+import ClientKanban from '@/components/clients/ClientKanban';
 import NewClientDialog from '@/components/clients/NewClientDialog';
 import { Input } from '@/components/ui/input';
 import { Search, Users } from 'lucide-react';
@@ -54,7 +54,7 @@ export default function Clients() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-display font-bold">Clientes</h1>
-            <p className="text-muted-foreground mt-1">Gerencie sua base de clientes</p>
+            <p className="text-muted-foreground mt-1">Arraste os cards para atualizar o status</p>
           </div>
           <NewClientDialog onClientCreated={fetchClients} />
         </div>
@@ -70,15 +70,11 @@ export default function Clients() {
           />
         </div>
 
-        {/* Clients Grid */}
+        {/* Kanban Board */}
         {loading ? (
           <div className="text-muted-foreground">Carregando...</div>
         ) : filteredClients.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredClients.map((client) => (
-              <ClientCard key={client.id} client={client} />
-            ))}
-          </div>
+          <ClientKanban clients={filteredClients} onRefresh={fetchClients} />
         ) : (
           <div className="text-center py-12 bg-card rounded-xl border">
             <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
