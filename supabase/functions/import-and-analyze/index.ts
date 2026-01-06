@@ -176,6 +176,18 @@ serve(async (req) => {
       return isNaN(num) ? null : num;
     };
 
+    // Extract date from filename pattern: "xxx (2026-01-06 18:29 GMT-3) - Transcript"
+    const extractDateFromFileName = (name: string): string => {
+      const dateMatch = name.match(/\((\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}/);
+      if (dateMatch && dateMatch[1]) {
+        return dateMatch[1];
+      }
+      return new Date().toISOString().split("T")[0];
+    };
+
+    const callDate = extractDateFromFileName(fileName || "");
+    console.log(`Extracted call date: ${callDate} from file: ${fileName}`);
+
     // Create call record
     const { data: callRecord, error: callError } = await supabase
       .from("calls")
@@ -183,7 +195,7 @@ serve(async (req) => {
         closer_id: userId,
         client_id: clientId,
         client_name: analysis.client_name,
-        call_date: new Date().toISOString().split("T")[0],
+        call_date: callDate,
         status: callStatus,
         product: analysis.product,
         transcription: content,
