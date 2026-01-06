@@ -162,6 +162,20 @@ serve(async (req) => {
     // Determine status based on classification
     const callStatus = analysis.lead_classification === "pos_venda" ? "vendido" : "follow_up";
 
+    // Helper function to safely convert to integer
+    const toInt = (value: unknown): number | null => {
+      if (value === null || value === undefined) return null;
+      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+      return isNaN(num) ? null : Math.round(num);
+    };
+
+    // Helper function to safely convert to number
+    const toNumber = (value: unknown): number | null => {
+      if (value === null || value === undefined) return null;
+      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+      return isNaN(num) ? null : num;
+    };
+
     // Create call record
     const { data: callRecord, error: callError } = await supabase
       .from("calls")
@@ -173,7 +187,8 @@ serve(async (req) => {
         status: callStatus,
         product: analysis.product,
         transcription: content,
-        score: analysis.call_score,
+        score: toInt(analysis.call_score),
+        duration_minutes: toInt(analysis.duration_minutes),
         niche: analysis.niche,
         has_partner: analysis.has_partner,
         main_difficulty: analysis.main_difficulty,
@@ -188,6 +203,8 @@ serve(async (req) => {
         main_wins: analysis.main_wins,
         loss_point: analysis.loss_point,
         next_contact_date: analysis.next_contact_date,
+        entry_value: toNumber(analysis.entry_value),
+        sale_value: toNumber(analysis.sale_value),
         source_file_id: fileId,
         analyzed_at: new Date().toISOString(),
       })
