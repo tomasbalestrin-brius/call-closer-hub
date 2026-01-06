@@ -89,6 +89,18 @@ export function GoogleIntegration() {
     }
   }, [user]);
 
+  // Re-fetch when component becomes visible (after returning from callback)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        fetchGoogleStatus();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
+
   // Check URL for OAuth callback errors
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
