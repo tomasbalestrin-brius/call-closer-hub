@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.sync-drive-files]
 verify_jwt = false
+
+[functions.check-followups]
+verify_jwt = false
