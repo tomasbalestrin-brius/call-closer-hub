@@ -152,6 +152,45 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
     }
   };
 
+  const handleInitialImport = async () => {
+    if (!user || syncing) return;
+
+    setSyncing(true);
+    try {
+      toast.info('Iniciando importação do mês atual...');
+      
+      const response = await supabase.functions.invoke('initial-import', {
+        body: { userId: user.id },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to import');
+      }
+
+      const data = response.data;
+      
+      if (data.imported > 0) {
+        toast.success(`${data.imported} arquivos importados e analisados!`);
+        onImportComplete?.();
+      } else if (data.total === 0) {
+        toast.info('Nenhum arquivo encontrado no mês atual');
+      } else {
+        toast.info('Nenhum arquivo novo para importar');
+      }
+
+      if (data.errors > 0) {
+        toast.warning(`${data.errors} arquivos falharam na importação`);
+      }
+
+      fetchImportStatus();
+    } catch (error) {
+      console.error('Error on initial import:', error);
+      toast.error('Erro na importação inicial');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const completedCount = imports.filter(i => i.status === 'completed').length;
   const errorCount = imports.filter(i => i.status === 'error').length;
   const pendingCount = imports.filter(i => i.status === 'pending' || i.status === 'processing').length;
@@ -174,19 +213,34 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
             <FileText className="w-5 h-5" />
             Status de Importação
           </CardTitle>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleSync}
-            disabled={syncing}
-          >
-            {syncing ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4 mr-2" />
-            )}
-            Sincronizar
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="default" 
+              size="sm" 
+              onClick={handleInitialImport}
+              disabled={syncing}
+            >
+              {syncing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4 mr-2" />
+              )}
+              Importar Mês
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Sincronizar
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
