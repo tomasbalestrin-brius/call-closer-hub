@@ -78,12 +78,31 @@ serve(async (req) => {
       throw new Error("Server configuration error");
     }
 
-    const { userId, folderId, dateFrom, dateTo } = await req.json();
+    // Get userId from JWT token or body
+    const authHeader = req.headers.get("Authorization");
+    let userId: string | null = null;
+    
+    if (authHeader) {
+      const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+      if (!authError && user) {
+        userId = user.id;
+      }
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { folderId, dateFrom, dateTo, foldersOnly } = body;
+    
+    // Allow userId from body as fallback (for internal calls)
+    if (!userId && body.userId) {
+      userId = body.userId;
+    }
     
     if (!userId) {
       return new Response(
-        JSON.stringify({ error: "userId is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -111,24 +130,29 @@ serve(async (req) => {
     );
 
     // Build query for Google Drive API
-    const targetFolderId = folderId || profile.drive_folder_id || "root";
+    const targetFolderId = folderId || "root";
     let query = `'${targetFolderId}' in parents and trashed = false`;
     
-    // Add date filters if provided
-    if (dateFrom) {
-      query += ` and createdTime >= '${dateFrom}'`;
+    if (foldersOnly) {
+      // Only get folders
+      query += ` and mimeType = 'application/vnd.google-apps.folder'`;
+    } else {
+      // Add date filters if provided
+      if (dateFrom) {
+        query += ` and createdTime >= '${dateFrom}'`;
+      }
+      if (dateTo) {
+        query += ` and createdTime <= '${dateTo}'`;
+      }
+      
+      // Only get documents (Google Docs, text files, PDFs)
+      query += ` and (mimeType = 'application/vnd.google-apps.document' or mimeType = 'text/plain' or mimeType = 'application/pdf' or mimeType = 'application/vnd.google-apps.folder')`;
     }
-    if (dateTo) {
-      query += ` and createdTime <= '${dateTo}'`;
-    }
-    
-    // Only get documents (Google Docs, text files, PDFs)
-    query += ` and (mimeType = 'application/vnd.google-apps.document' or mimeType = 'text/plain' or mimeType = 'application/pdf')`;
 
     console.log("Fetching files with query:", query);
 
     const filesResponse = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,createdTime,modifiedTime)&orderBy=createdTime desc`,
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,createdTime,modifiedTime)&orderBy=name`,
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       }

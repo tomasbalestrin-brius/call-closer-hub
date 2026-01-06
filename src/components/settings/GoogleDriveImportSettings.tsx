@@ -16,6 +16,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   FolderOpen,
   FileText,
   Settings,
@@ -25,6 +31,8 @@ import {
   Plus,
   X,
   HelpCircle,
+  Folder,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -33,6 +41,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Database } from '@/integrations/supabase/types';
+
+type ImportFrequency = Database['public']['Enums']['import_frequency'];
 
 interface ImportSettings {
   folderId: string;
@@ -40,7 +51,13 @@ interface ImportSettings {
   fileTypes: string[];
   namePatterns: string[];
   autoImport: boolean;
-  importFrequency: 'manual' | 'hourly' | 'daily' | 'realtime';
+  importFrequency: ImportFrequency;
+}
+
+interface DriveFolder {
+  id: string;
+  name: string;
+  mimeType: string;
 }
 
 const FILE_TYPE_OPTIONS = [
@@ -70,6 +87,11 @@ export function GoogleDriveImportSettings() {
     importFrequency: 'daily',
   });
   const [newPattern, setNewPattern] = useState('');
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [folders, setFolders] = useState<DriveFolder[]>([]);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+  const [currentFolderId, setCurrentFolderId] = useState<string>('root');
+  const [folderPath, setFolderPath] = useState<{ id: string; name: string }[]>([{ id: 'root', name: 'Meu Drive' }]);
 
   useEffect(() => {
     if (user) {
@@ -78,23 +100,52 @@ export function GoogleDriveImportSettings() {
   }, [user]);
 
   const loadSettings = async () => {
-    // For now, we'll use localStorage since we haven't added these fields to the profiles table yet
-    const saved = localStorage.getItem(`drive_import_settings_${user?.id}`);
-    if (saved) {
-      try {
-        setSettings(JSON.parse(saved));
-      } catch (e) {
-        console.error('Error loading settings:', e);
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('drive_folder_id, drive_folder_name, drive_file_types, drive_name_patterns, drive_auto_import, drive_import_frequency')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setSettings({
+          folderId: data.drive_folder_id || '',
+          folderName: data.drive_folder_name || '',
+          fileTypes: (data.drive_file_types as string[]) || ['google-docs'],
+          namePatterns: (data.drive_name_patterns as string[]) || [],
+          autoImport: data.drive_auto_import ?? true,
+          importFrequency: data.drive_import_frequency || 'daily',
+        });
       }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleSave = async () => {
+    if (!user) return;
+    
     setSaving(true);
     try {
-      // Save to localStorage for now
-      localStorage.setItem(`drive_import_settings_${user?.id}`, JSON.stringify(settings));
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          drive_folder_id: settings.folderId || null,
+          drive_folder_name: settings.folderName || null,
+          drive_file_types: settings.fileTypes,
+          drive_name_patterns: settings.namePatterns,
+          drive_auto_import: settings.autoImport,
+          drive_import_frequency: settings.importFrequency,
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
       toast.success('Configurações salvas com sucesso!');
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -102,6 +153,72 @@ export function GoogleDriveImportSettings() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const loadFolders = async (parentId: string = 'root') => {
+    setLoadingFolders(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) throw new Error('Não autenticado');
+
+      const response = await supabase.functions.invoke('list-drive-files', {
+        body: { 
+          folderId: parentId,
+          foldersOnly: true 
+        },
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (response.error) throw response.error;
+      
+      setFolders(response.data.files || []);
+      setCurrentFolderId(parentId);
+    } catch (error) {
+      console.error('Error loading folders:', error);
+      toast.error('Erro ao carregar pastas do Drive');
+    } finally {
+      setLoadingFolders(false);
+    }
+  };
+
+  const openFolderDialog = () => {
+    setFolderDialogOpen(true);
+    setFolderPath([{ id: 'root', name: 'Meu Drive' }]);
+    loadFolders('root');
+  };
+
+  const navigateToFolder = (folder: DriveFolder) => {
+    setFolderPath(prev => [...prev, { id: folder.id, name: folder.name }]);
+    loadFolders(folder.id);
+  };
+
+  const navigateToPath = (index: number) => {
+    const newPath = folderPath.slice(0, index + 1);
+    setFolderPath(newPath);
+    loadFolders(newPath[newPath.length - 1].id);
+  };
+
+  const selectFolder = (folder: DriveFolder) => {
+    setSettings(prev => ({
+      ...prev,
+      folderId: folder.id,
+      folderName: folder.name,
+    }));
+    setFolderDialogOpen(false);
+    toast.success(`Pasta "${folder.name}" selecionada`);
+  };
+
+  const selectCurrentFolder = () => {
+    const current = folderPath[folderPath.length - 1];
+    setSettings(prev => ({
+      ...prev,
+      folderId: current.id === 'root' ? '' : current.id,
+      folderName: current.name,
+    }));
+    setFolderDialogOpen(false);
+    toast.success(`Pasta "${current.name}" selecionada`);
   };
 
   const addPattern = () => {
@@ -194,11 +311,75 @@ export function GoogleDriveImportSettings() {
                 </span>
               </div>
             </div>
-            <Button variant="outline" className="shrink-0">
+            <Button variant="outline" className="shrink-0" onClick={openFolderDialog}>
               <FolderOpen className="w-4 h-4 mr-2" />
               Selecionar Pasta
             </Button>
           </div>
+
+          {/* Folder Selection Dialog */}
+          <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Selecionar Pasta do Drive</DialogTitle>
+              </DialogHeader>
+              
+              {/* Breadcrumb */}
+              <div className="flex items-center gap-1 text-sm overflow-x-auto pb-2">
+                {folderPath.map((item, index) => (
+                  <div key={item.id} className="flex items-center">
+                    {index > 0 && <ChevronRight className="w-4 h-4 text-muted-foreground mx-1" />}
+                    <button
+                      onClick={() => navigateToPath(index)}
+                      className="hover:text-primary hover:underline whitespace-nowrap"
+                    >
+                      {item.name}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Folder List */}
+              <div className="border rounded-lg max-h-64 overflow-y-auto">
+                {loadingFolders ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : folders.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    Nenhuma subpasta encontrada
+                  </div>
+                ) : (
+                  folders.map((folder) => (
+                    <div
+                      key={folder.id}
+                      className="flex items-center justify-between p-3 hover:bg-muted/50 border-b last:border-b-0"
+                    >
+                      <button
+                        onClick={() => navigateToFolder(folder)}
+                        className="flex items-center gap-2 flex-1 text-left"
+                      >
+                        <Folder className="w-5 h-5 text-amber-500" />
+                        <span className="text-sm truncate">{folder.name}</span>
+                      </button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => selectFolder(folder)}
+                      >
+                        Selecionar
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Select current folder */}
+              <Button onClick={selectCurrentFolder} className="w-full">
+                Usar pasta atual: {folderPath[folderPath.length - 1].name}
+              </Button>
+            </DialogContent>
+          </Dialog>
           
           <div className="text-xs text-muted-foreground">
             Ou insira o ID da pasta diretamente:
