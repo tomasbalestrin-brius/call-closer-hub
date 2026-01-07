@@ -72,7 +72,7 @@ export default function Auth() {
             <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center">
               <Phone className="w-6 h-6 text-accent-foreground" />
             </div>
-            <h1 className="text-3xl font-display font-bold">CallsOrg</h1>
+            <h1 className="text-3xl font-display font-bold">BethelClose</h1>
           </div>
           <h2 className="text-4xl font-display font-bold mb-4">
             Organize suas calls.
@@ -94,7 +94,7 @@ export default function Auth() {
               <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
                 <Phone className="w-5 h-5 text-primary-foreground" />
               </div>
-              <span className="text-xl font-display font-bold">CallsOrg</span>
+              <span className="text-xl font-display font-bold">BethelClose</span>
             </div>
             <CardTitle className="text-2xl font-display">Bem-vindo</CardTitle>
             <CardDescription>
