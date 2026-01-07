@@ -52,6 +52,7 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
+  const [importFrequency, setImportFrequency] = useState<string | null>(null);
   const [reimportingFile, setReimportingFile] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,30 +62,19 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
     }
   }, [user]);
 
-  // Auto-sync every 5 minutes when enabled
-  useEffect(() => {
-    if (!user || !autoSyncEnabled) return;
-
-    const interval = setInterval(() => {
-      console.log('Auto-sync triggered...');
-      handleSync();
-    }, 5 * 60 * 1000); // 5 minutes
-
-    return () => clearInterval(interval);
-  }, [user, autoSyncEnabled]);
-
   const checkAutoSyncSettings = async () => {
     if (!user) return;
     
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('google_connected')
+        .select('google_connected, drive_auto_import, drive_import_frequency')
         .eq('user_id', user.id)
         .single();
       
-      // Enable auto-sync if Google is connected
-      setAutoSyncEnabled(!!profile?.google_connected);
+      // Check if auto-sync is configured on server
+      setAutoSyncEnabled(!!profile?.google_connected && !!profile?.drive_auto_import);
+      setImportFrequency(profile?.drive_import_frequency || null);
     } catch (error) {
       console.error('Error checking auto-sync settings:', error);
     }
@@ -297,12 +287,22 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
           </div>
         </div>
 
-        {/* Last sync */}
-        {lastSync && (
-          <div className="text-sm text-muted-foreground text-center">
-            Última sincronização: {format(new Date(lastSync), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-          </div>
-        )}
+        {/* Last sync and auto-sync status */}
+        <div className="text-sm text-muted-foreground text-center space-y-1">
+          {lastSync && (
+            <div>
+              Última sincronização: {format(new Date(lastSync), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+            </div>
+          )}
+          {autoSyncEnabled && importFrequency && (
+            <div className="flex items-center justify-center gap-2 text-xs">
+              <Badge variant="secondary" className="bg-success/10 text-success border-success/20">
+                <Clock className="w-3 h-3 mr-1" />
+                Sync automático: {importFrequency === 'hourly' ? 'A cada hora' : importFrequency === 'daily' ? 'Diário' : importFrequency}
+              </Badge>
+            </div>
+          )}
+        </div>
 
         {/* Recent imports */}
         {imports.length > 0 && (
