@@ -8,9 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Search, Users } from 'lucide-react';
 import { Client } from '@/types';
 
+interface ClientWithLastCall extends Client {
+  lastCallDate?: string | null;
+}
+
 export default function Clients() {
   const { user } = useAuth();
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<ClientWithLastCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -24,14 +28,44 @@ export default function Clients() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      // Fetch clients
+      const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*')
         .eq('closer_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setClients((data || []) as Client[]);
+      if (clientsError) throw clientsError;
+
+      // Fetch last call date for each client
+      const clientIds = (clientsData || []).map(c => c.id);
+      
+      let lastCallDates: Record<string, string> = {};
+      
+      if (clientIds.length > 0) {
+        const { data: callsData } = await supabase
+          .from('calls')
+          .select('client_id, call_date')
+          .in('client_id', clientIds)
+          .order('call_date', { ascending: false });
+        
+        // Get the most recent call date for each client
+        if (callsData) {
+          callsData.forEach(call => {
+            if (call.client_id && !lastCallDates[call.client_id]) {
+              lastCallDates[call.client_id] = call.call_date;
+            }
+          });
+        }
+      }
+
+      // Merge last call dates with clients
+      const clientsWithLastCall: ClientWithLastCall[] = (clientsData || []).map(client => ({
+        ...client,
+        lastCallDate: lastCallDates[client.id] || null,
+      })) as ClientWithLastCall[];
+
+      setClients(clientsWithLastCall);
     } catch (error) {
       console.error('Error fetching clients:', error);
     } finally {

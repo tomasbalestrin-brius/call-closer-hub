@@ -180,6 +180,22 @@ export default function SquadReports() {
       
       const { data: calls, error: callsError } = await callsQuery;
       if (callsError) throw callsError;
+
+      // Fetch client sales for all members in date range
+      let clientsQuery = supabase
+        .from('clients')
+        .select('*')
+        .in('closer_id', userIds)
+        .eq('is_sold', true);
+      
+      if (dateRange?.from) {
+        clientsQuery = clientsQuery.gte('sold_at', format(dateRange.from, 'yyyy-MM-dd'));
+      }
+      if (dateRange?.to) {
+        clientsQuery = clientsQuery.lte('sold_at', format(dateRange.to, 'yyyy-MM-dd'));
+      }
+      
+      const { data: soldClients } = await clientsQuery;
       
       // Calculate stats per member
       const statsMap: Record<string, MemberStats> = {};
@@ -188,22 +204,33 @@ export default function SquadReports() {
         const profile = profiles?.find(p => p.user_id === userId);
         const role = roles?.find(r => r.user_id === userId);
         const memberCalls = calls?.filter(c => c.closer_id === userId) || [];
-        const soldCalls = memberCalls.filter(c => c.status === 'vendido');
+        const soldCallsFromCalls = memberCalls.filter(c => c.status === 'vendido');
+        const memberSoldClients = soldClients?.filter(c => c.closer_id === userId) || [];
         const callsWithScore = memberCalls.filter(c => c.score !== null);
+        
+        // Combine sales from calls and clients (avoid duplicates by using client sales as primary)
+        const totalSalesFromClients = memberSoldClients.length;
+        const totalSaleValueFromClients = memberSoldClients.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
+        const totalEntryValueFromClients = memberSoldClients.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
+        
+        // Use client sales if available, otherwise fallback to call sales
+        const totalSales = totalSalesFromClients > 0 ? totalSalesFromClients : soldCallsFromCalls.length;
+        const totalSaleValue = totalSalesFromClients > 0 ? totalSaleValueFromClients : soldCallsFromCalls.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
+        const totalEntryValue = totalSalesFromClients > 0 ? totalEntryValueFromClients : soldCallsFromCalls.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
         
         statsMap[userId] = {
           user_id: userId,
           full_name: profile?.full_name || 'Usuário',
           role: role?.role || 'closer',
           totalCalls: memberCalls.length,
-          totalSales: soldCalls.length,
-          totalSaleValue: soldCalls.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0),
-          totalEntryValue: soldCalls.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0),
+          totalSales,
+          totalSaleValue,
+          totalEntryValue,
           averageScore: callsWithScore.length 
             ? Math.round((callsWithScore.reduce((acc, c) => acc + (c.score || 0), 0) / callsWithScore.length) * 10) / 10
             : 0,
           conversionRate: memberCalls.length > 0 
-            ? Math.round((soldCalls.length / memberCalls.length) * 100) 
+            ? Math.round((totalSales / memberCalls.length) * 100) 
             : 0,
         };
       });
@@ -213,20 +240,29 @@ export default function SquadReports() {
       
       // Calculate aggregated squad stats
       const allCalls = calls || [];
-      const allSoldCalls = allCalls.filter(c => c.status === 'vendido');
+      const allSoldClients = soldClients || [];
       const allCallsWithScore = allCalls.filter(c => c.score !== null);
+      
+      // Use client sales for totals
+      const totalSales = allSoldClients.length > 0 ? allSoldClients.length : allCalls.filter(c => c.status === 'vendido').length;
+      const totalSaleValue = allSoldClients.length > 0 
+        ? allSoldClients.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0)
+        : allCalls.filter(c => c.status === 'vendido').reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
+      const totalEntryValue = allSoldClients.length > 0
+        ? allSoldClients.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0)
+        : allCalls.filter(c => c.status === 'vendido').reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
       
       setSquadStats({
         totalMembers: userIds.length,
         totalCalls: allCalls.length,
-        totalSales: allSoldCalls.length,
-        totalSaleValue: allSoldCalls.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0),
-        totalEntryValue: allSoldCalls.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0),
+        totalSales,
+        totalSaleValue,
+        totalEntryValue,
         averageScore: allCallsWithScore.length 
           ? Math.round((allCallsWithScore.reduce((acc, c) => acc + (c.score || 0), 0) / allCallsWithScore.length) * 10) / 10
           : 0,
         conversionRate: allCalls.length > 0 
-          ? Math.round((allSoldCalls.length / allCalls.length) * 100) 
+          ? Math.round((totalSales / allCalls.length) * 100) 
           : 0,
       });
       
