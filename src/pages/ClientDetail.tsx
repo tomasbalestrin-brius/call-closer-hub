@@ -575,9 +575,10 @@ export default function ClientDetail() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {Object.entries(selectedCall.technical_analysis).map(([key, stage]) => {
+                      {stageOrder.map((key) => {
+                        const stage = (selectedCall.technical_analysis as Record<string, unknown>)[key];
+                        if (!stage) return null;
                         const stageData = stage as StageAnalysis;
-                        if (!stageData) return null;
                         return (
                           <div key={key} className="border rounded-lg p-4">
                             <div className="flex items-center justify-between mb-2">
