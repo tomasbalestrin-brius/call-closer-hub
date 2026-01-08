@@ -1,15 +1,27 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import type { CallStatus } from '@/types';
+import { CallStatus } from '@/types';
 
 interface NewCallDialogProps {
   onCallCreated: () => void;
@@ -20,61 +32,79 @@ export default function NewCallDialog({ onCallCreated }: NewCallDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   
+  // Client data
   const [clientName, setClientName] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [revenue, setRevenue] = useState('');
+  const [niche, setNiche] = useState('');
+  const [mainPain, setMainPain] = useState('');
+  
+  // Call data
   const [callDate, setCallDate] = useState(new Date().toISOString().split('T')[0]);
   const [callTime, setCallTime] = useState('');
   const [product, setProduct] = useState('');
   const [status, setStatus] = useState<CallStatus>('pendente');
-  const [score, setScore] = useState('');
-  const [notes, setNotes] = useState('');
+  const [callConclusion, setCallConclusion] = useState('');
+  const [observation, setObservation] = useState('');
+
+  const resetForm = () => {
+    setClientName('');
+    setCompanyName('');
+    setPhone('');
+    setRevenue('');
+    setNiche('');
+    setMainPain('');
+    setCallDate(new Date().toISOString().split('T')[0]);
+    setCallTime('');
+    setProduct('');
+    setStatus('pendente');
+    setCallConclusion('');
+    setObservation('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user) {
-      toast.error('Você precisa estar logado');
-      return;
-    }
-
     if (!clientName.trim()) {
       toast.error('Nome do cliente é obrigatório');
       return;
     }
 
+    if (!user) {
+      toast.error('Você precisa estar logado');
+      return;
+    }
+
     setLoading(true);
 
-    const { error } = await supabase.from('calls').insert({
-      closer_id: user.id,
-      client_name: clientName.trim(),
-      call_date: callDate,
-      call_time: callTime || null,
-      product: product || null,
-      status,
-      score: score ? parseInt(score) : null,
-      notes: notes || null,
-    });
+    try {
+      const { error } = await supabase.from('calls').insert({
+        closer_id: user.id,
+        client_name: clientName.trim(),
+        company_name: companyName.trim() || null,
+        call_date: callDate,
+        call_time: callTime || null,
+        product: product.trim() || null,
+        status,
+        niche: niche.trim() || null,
+        main_pain: mainPain.trim() || null,
+        call_conclusion: callConclusion.trim() || null,
+        observation: observation.trim() || null,
+      });
 
-    setLoading(false);
+      if (error) throw error;
 
-    if (error) {
-      toast.error('Erro ao criar call');
-      console.error(error);
-    } else {
       toast.success('Call criada com sucesso!');
-      setOpen(false);
       resetForm();
+      setOpen(false);
       onCallCreated();
+    } catch (error) {
+      console.error('Error creating call:', error);
+      toast.error('Erro ao criar call');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const resetForm = () => {
-    setClientName('');
-    setCallDate(new Date().toISOString().split('T')[0]);
-    setCallTime('');
-    setProduct('');
-    setStatus('pendente');
-    setScore('');
-    setNotes('');
   };
 
   return (
@@ -85,96 +115,146 @@ export default function NewCallDialog({ onCallCreated }: NewCallDialogProps) {
           Nova Call
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display">Nova Call</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="clientName">Nome do Cliente *</Label>
-              <Input
-                id="clientName"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                placeholder="Ex: João Silva"
-                required
-              />
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Dados do Cliente */}
+          <div className="space-y-4">
+            <h3 className="font-medium text-sm text-muted-foreground">Dados do Cliente</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="clientName">Nome do Cliente *</Label>
+                <Input
+                  id="clientName"
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  placeholder="Nome completo"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="companyName">Nome da Empresa</Label>
+                <Input
+                  id="companyName"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Empresa do cliente"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Telefone</Label>
+                <Input
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="revenue">Faturamento</Label>
+                <Input
+                  id="revenue"
+                  type="number"
+                  value={revenue}
+                  onChange={(e) => setRevenue(e.target.value)}
+                  placeholder="Faturamento mensal"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="niche">Nicho</Label>
+                <Input
+                  id="niche"
+                  value={niche}
+                  onChange={(e) => setNiche(e.target.value)}
+                  placeholder="Nicho de atuação"
+                />
+              </div>
             </div>
-            
             <div className="space-y-2">
-              <Label htmlFor="callDate">Data</Label>
-              <Input
-                id="callDate"
-                type="date"
-                value={callDate}
-                onChange={(e) => setCallDate(e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="callTime">Horário</Label>
-              <Input
-                id="callTime"
-                type="time"
-                value={callTime}
-                onChange={(e) => setCallTime(e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="product">Produto</Label>
-              <Input
-                id="product"
-                value={product}
-                onChange={(e) => setProduct(e.target.value)}
-                placeholder="Ex: Mentoria Premium"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as CallStatus)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pendente">Pendente</SelectItem>
-                  <SelectItem value="em_andamento">Em andamento</SelectItem>
-                  <SelectItem value="follow_up">Follow-up</SelectItem>
-                  <SelectItem value="proposta_enviada">Proposta enviada</SelectItem>
-                  <SelectItem value="vendido">Vendido</SelectItem>
-                  <SelectItem value="perdido">Perdido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="score">Nota (1-10)</Label>
-              <Input
-                id="score"
-                type="number"
-                min="1"
-                max="10"
-                value={score}
-                onChange={(e) => setScore(e.target.value)}
-                placeholder="Avaliação da call"
-              />
-            </div>
-            
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="notes">Observações</Label>
+              <Label htmlFor="mainPain">Dor Principal</Label>
               <Textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Anotações sobre a call..."
-                rows={3}
+                id="mainPain"
+                value={mainPain}
+                onChange={(e) => setMainPain(e.target.value)}
+                placeholder="Principal dor do cliente"
+                rows={2}
               />
             </div>
           </div>
-          
-          <div className="flex justify-end gap-2 pt-4">
+
+          {/* Dados da Call */}
+          <div className="space-y-4">
+            <h3 className="font-medium text-sm text-muted-foreground">Dados da Call</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="callDate">Data</Label>
+                <Input
+                  id="callDate"
+                  type="date"
+                  value={callDate}
+                  onChange={(e) => setCallDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="callTime">Horário</Label>
+                <Input
+                  id="callTime"
+                  type="time"
+                  value={callTime}
+                  onChange={(e) => setCallTime(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product">Produto</Label>
+                <Input
+                  id="product"
+                  value={product}
+                  onChange={(e) => setProduct(e.target.value)}
+                  placeholder="Produto oferecido"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select value={status} onValueChange={(value) => setStatus(value as CallStatus)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="em_andamento">Em Andamento</SelectItem>
+                    <SelectItem value="follow_up">Follow Up</SelectItem>
+                    <SelectItem value="proposta_enviada">Proposta Enviada</SelectItem>
+                    <SelectItem value="vendido">Vendido</SelectItem>
+                    <SelectItem value="perdido">Perdido</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="callConclusion">Conclusão da Call</Label>
+              <Textarea
+                id="callConclusion"
+                value={callConclusion}
+                onChange={(e) => setCallConclusion(e.target.value)}
+                placeholder="Como foi a conclusão da call"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="observation">Observação</Label>
+              <Textarea
+                id="observation"
+                value={observation}
+                onChange={(e) => setObservation(e.target.value)}
+                placeholder="Observações adicionais"
+                rows={2}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancelar
             </Button>

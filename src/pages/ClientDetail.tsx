@@ -458,44 +458,15 @@ export default function ClientDetail() {
           <TabsContent value="analysis" className="mt-4">
             {selectedCall?.technical_analysis && (
               <div className="space-y-6">
-                {/* Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <Card>
-                    <CardContent className="pt-4 text-center">
-                      <div className={cn("text-4xl font-bold", getScoreColor(selectedCall.score || 0))}>
-                        {selectedCall.score || 0}
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">Nota Geral</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-4 text-center">
-                      <div className="text-xl font-semibold capitalize">
-                        {selectedCall.closer_classification?.replace('_', ' ') || '-'}
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">Classificação</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-4 text-center">
-                      <div className="text-xl font-semibold">
-                        {selectedCall.lead_classification === 'pos_venda' ? 'Pós-venda' : 'Follow-up'}
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">Status do Lead</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-4 text-center">
-                      <div className="text-xl font-semibold">
-                        {selectedCall.next_contact_date 
-                          ? format(new Date(selectedCall.next_contact_date), "dd/MM")
-                          : '-'
-                        }
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">Próximo Contato</p>
-                    </CardContent>
-                  </Card>
-                </div>
+                {/* Overview - Apenas Nota Geral */}
+                <Card className="max-w-xs">
+                  <CardContent className="pt-6 text-center">
+                    <div className={cn("text-5xl font-bold", getScoreColor(selectedCall.score || 0))}>
+                      {selectedCall.score || 0}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">Nota Geral</p>
+                  </CardContent>
+                </Card>
 
                 {/* Errors and Wins */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

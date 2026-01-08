@@ -1,22 +1,28 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Client } from '@/types';
-import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Pencil, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Client, FUNNEL_SOURCES, SDR_NAMES, PRODUCTS_OFFERED } from '@/types';
 
 interface ClientEditDialogProps {
   client: Client;
@@ -27,29 +33,40 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   
+  // Client data
   const [name, setName] = useState(client.name);
+  const [company, setCompany] = useState(client.company || '');
   const [email, setEmail] = useState(client.email || '');
   const [phone, setPhone] = useState(client.phone || '');
-  const [company, setCompany] = useState(client.company || '');
   const [niche, setNiche] = useState(client.niche || '');
   const [revenue, setRevenue] = useState(client.revenue?.toString() || '');
   const [hasPartner, setHasPartner] = useState(client.has_partner || false);
   const [mainPain, setMainPain] = useState(client.main_pain || '');
   const [mainDifficulty, setMainDifficulty] = useState(client.main_difficulty || '');
   const [notes, setNotes] = useState(client.notes || '');
+  
+  // New fields
+  const [funnelSource, setFunnelSource] = useState(client.funnel_source || '');
+  const [sdrName, setSdrName] = useState(client.sdr_name || '');
+  const [productOffered, setProductOffered] = useState(client.product_offered || '');
+  const [followupDate, setFollowupDate] = useState(client.followup_date || '');
 
   useEffect(() => {
     if (open) {
       setName(client.name);
+      setCompany(client.company || '');
       setEmail(client.email || '');
       setPhone(client.phone || '');
-      setCompany(client.company || '');
       setNiche(client.niche || '');
       setRevenue(client.revenue?.toString() || '');
       setHasPartner(client.has_partner || false);
       setMainPain(client.main_pain || '');
       setMainDifficulty(client.main_difficulty || '');
       setNotes(client.notes || '');
+      setFunnelSource(client.funnel_source || '');
+      setSdrName(client.sdr_name || '');
+      setProductOffered(client.product_offered || '');
+      setFollowupDate(client.followup_date || '');
     }
   }, [open, client]);
 
@@ -57,31 +74,36 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
     e.preventDefault();
     
     if (!name.trim()) {
-      toast.error('Nome é obrigatório');
+      toast.error('Nome do cliente é obrigatório');
       return;
     }
 
     setLoading(true);
+
     try {
       const { error } = await supabase
         .from('clients')
         .update({
           name: name.trim(),
+          company: company.trim() || null,
           email: email.trim() || null,
           phone: phone.trim() || null,
-          company: company.trim() || null,
           niche: niche.trim() || null,
           revenue: revenue ? parseFloat(revenue) : null,
           has_partner: hasPartner,
           main_pain: mainPain.trim() || null,
           main_difficulty: mainDifficulty.trim() || null,
           notes: notes.trim() || null,
+          funnel_source: funnelSource || null,
+          sdr_name: sdrName || null,
+          product_offered: productOffered || null,
+          followup_date: followupDate || null,
         })
         .eq('id', client.id);
 
       if (error) throw error;
 
-      toast.success('Cliente atualizado!');
+      toast.success('Cliente atualizado com sucesso!');
       setOpen(false);
       onClientUpdated();
     } catch (error) {
@@ -103,102 +125,179 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Cliente</DialogTitle>
-          <DialogDescription>
-            Atualize as informações do cliente
-          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome *</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company">Empresa</Label>
-              <Input
-                id="company"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefone</Label>
-              <Input
-                id="phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="niche">Nicho</Label>
-              <Input
-                id="niche"
-                value={niche}
-                onChange={(e) => setNiche(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="revenue">Faturamento Mensal (R$)</Label>
-              <Input
-                id="revenue"
-                type="number"
-                value={revenue}
-                onChange={(e) => setRevenue(e.target.value)}
-              />
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Dados de Contato */}
+          <div className="space-y-4">
+            <h3 className="font-medium text-sm text-muted-foreground">Contato</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome *</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Nome completo"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Telefone</Label>
+                <Input
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="email">E-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="hasPartner"
-              checked={hasPartner}
-              onCheckedChange={setHasPartner}
-            />
-            <Label htmlFor="hasPartner">Tem sócio</Label>
+          {/* Dados do Negócio */}
+          <div className="space-y-4">
+            <h3 className="font-medium text-sm text-muted-foreground">Negócio</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="company">Empresa</Label>
+                <Input
+                  id="company"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  placeholder="Nome da empresa"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="niche">Nicho</Label>
+                <Input
+                  id="niche"
+                  value={niche}
+                  onChange={(e) => setNiche(e.target.value)}
+                  placeholder="Nicho de atuação"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="revenue">Faturamento Mensal</Label>
+                <Input
+                  id="revenue"
+                  type="number"
+                  value={revenue}
+                  onChange={(e) => setRevenue(e.target.value)}
+                  placeholder="Faturamento mensal"
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-6">
+                <Switch
+                  id="hasPartner"
+                  checked={hasPartner}
+                  onCheckedChange={setHasPartner}
+                />
+                <Label htmlFor="hasPartner">Tem Sócio</Label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="funnelSource">Funil de Origem</Label>
+                <Select value={funnelSource} onValueChange={setFunnelSource}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o funil" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum</SelectItem>
+                    {FUNNEL_SOURCES.map((source) => (
+                      <SelectItem key={source} value={source}>
+                        {source}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sdrName">SDR que Agendou</Label>
+                <Select value={sdrName} onValueChange={setSdrName}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o SDR" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum</SelectItem>
+                    {SDR_NAMES.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="productOffered">Produto Ofertado</Label>
+                <Select value={productOffered} onValueChange={setProductOffered}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o produto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum</SelectItem>
+                    {PRODUCTS_OFFERED.map((product) => (
+                      <SelectItem key={product} value={product}>
+                        {product}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="followupDate">Data do Follow-up</Label>
+                <Input
+                  id="followupDate"
+                  type="date"
+                  value={followupDate}
+                  onChange={(e) => setFollowupDate(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="mainPain">Dor Principal</Label>
-            <Textarea
-              id="mainPain"
-              value={mainPain}
-              onChange={(e) => setMainPain(e.target.value)}
-              rows={2}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="mainDifficulty">Maior Dificuldade</Label>
-            <Textarea
-              id="mainDifficulty"
-              value={mainDifficulty}
-              onChange={(e) => setMainDifficulty(e.target.value)}
-              rows={2}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notas Gerais</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-            />
+          {/* Dores e Dificuldades */}
+          <div className="space-y-4">
+            <h3 className="font-medium text-sm text-muted-foreground">Dores e Dificuldades</h3>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="mainPain">Dor Principal</Label>
+                <Textarea
+                  id="mainPain"
+                  value={mainPain}
+                  onChange={(e) => setMainPain(e.target.value)}
+                  placeholder="Principal dor do cliente"
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="mainDifficulty">Dificuldade Principal</Label>
+                <Textarea
+                  id="mainDifficulty"
+                  value={mainDifficulty}
+                  onChange={(e) => setMainDifficulty(e.target.value)}
+                  placeholder="Principal dificuldade"
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Observações Gerais</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Anotações adicionais"
+                  rows={3}
+                />
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
