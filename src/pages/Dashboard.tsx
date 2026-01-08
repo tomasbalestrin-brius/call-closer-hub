@@ -4,8 +4,11 @@ import { useAuth } from '@/hooks/useAuth';
 import MainLayout from '@/components/layout/MainLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
 import CallCard from '@/components/calls/CallCard';
+import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
 import { Phone, Star, TrendingUp, DollarSign, Wallet, Target } from 'lucide-react';
 import { DashboardStats, Call } from '@/types';
+import { DateRange } from 'react-day-picker';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -19,22 +22,37 @@ export default function Dashboard() {
   });
   const [recentCalls, setRecentCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
 
   useEffect(() => {
     if (user) {
       fetchDashboardData();
     }
-  }, [user]);
+  }, [user, dateRange]);
 
   const fetchDashboardData = async () => {
     if (!user) return;
 
     try {
-      // Fetch all calls for stats
-      const { data: calls, error: callsError } = await supabase
+      setLoading(true);
+      
+      // Build query with date filter
+      let query = supabase
         .from('calls')
         .select('*')
         .eq('closer_id', user.id);
+
+      if (dateRange?.from) {
+        query = query.gte('call_date', format(dateRange.from, 'yyyy-MM-dd'));
+      }
+      if (dateRange?.to) {
+        query = query.lte('call_date', format(dateRange.to, 'yyyy-MM-dd'));
+      }
+
+      const { data: calls, error: callsError } = await query;
 
       if (callsError) throw callsError;
 
@@ -83,9 +101,15 @@ export default function Dashboard() {
     <MainLayout>
       <div className="space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-display font-bold">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Visão geral do seu desempenho</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-display font-bold">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">Visão geral do seu desempenho</p>
+          </div>
+          <DateRangePicker 
+            dateRange={dateRange} 
+            onDateRangeChange={setDateRange} 
+          />
         </div>
 
         {/* Stats Grid */}

@@ -56,18 +56,34 @@ const statusConfig: Record<CallStatus, { label: string; className: string }> = {
   perdido: { label: 'Perdido', className: 'bg-destructive text-destructive-foreground' },
 };
 
+// Nova ordem do Framework Julia Ottoni
+const stageOrder = [
+  'conexao',
+  'abertura',
+  'mapeamento_negocio',
+  'mapeamento_problemas',
+  'consultoria',
+  'problematizacao',
+  'solucao_imaginada',
+  'pitch',
+  'contorno_objecoes',
+  'fechamento'
+];
+
 const stageLabels: Record<string, string> = {
   conexao: 'Conexão',
   abertura: 'Abertura',
-  mapeamento_negocio: 'Mapeamento - Negócio',
-  mapeamento_problemas: 'Mapeamento - Problemas',
+  mapeamento_negocio: 'Mapeamento do Negócio',
+  mapeamento_problemas: 'Mapeamento do Problema',
   consultoria: 'Consultoria',
   problematizacao: 'Problematização',
   solucao_imaginada: 'Solução Imaginada',
-  transicao: 'Transição',
   pitch: 'Pitch',
-  perguntas_compromisso: 'Perguntas de Compromisso',
   contorno_objecoes: 'Contorno de Objeções',
+  fechamento: 'Fechamento',
+  // Legado (para compatibilidade)
+  transicao: 'Transição',
+  perguntas_compromisso: 'Perguntas de Compromisso',
 };
 
 export default function ClientDetail() {
