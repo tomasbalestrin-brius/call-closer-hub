@@ -1,9 +1,7 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Client } from '@/types';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Filter, Package } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { Phone, DollarSign, Package } from 'lucide-react';
 
 interface ClientCardProps {
   client: Client;
@@ -22,13 +20,14 @@ export default function ClientCard({ client, lastCallDate, onClick }: ClientCard
     }
   };
 
-  const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '-';
-    try {
-      return format(new Date(dateStr), "dd 'de' MMM", { locale: ptBR });
-    } catch {
-      return '-';
-    }
+  const formatCurrency = (value: number | null | undefined) => {
+    if (!value) return '-';
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
   };
 
   return (
@@ -41,12 +40,12 @@ export default function ClientCard({ client, lastCallDate, onClick }: ClientCard
       </CardHeader>
       <CardContent className="space-y-2 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 shrink-0" />
-          <span className="truncate">{formatDate(lastCallDate || client.created_at)}</span>
+          <Phone className="w-4 h-4 shrink-0" />
+          <span className="truncate">{client.phone || '-'}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 shrink-0" />
-          <span className="truncate">{client.funnel_source || '-'}</span>
+          <DollarSign className="w-4 h-4 shrink-0" />
+          <span className="truncate">{formatCurrency(client.revenue)}</span>
         </div>
         <div className="flex items-center gap-2">
           <Package className="w-4 h-4 shrink-0" />
