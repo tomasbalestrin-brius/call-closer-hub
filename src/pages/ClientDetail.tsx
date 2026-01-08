@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import ClientEditDialog from '@/components/clients/ClientEditDialog';
-import ClientNotesSection from '@/components/clients/ClientNotesSection';
+
 import SaleFormDialog from '@/components/clients/SaleFormDialog';
 import { 
   ArrowLeft, 
@@ -407,7 +407,7 @@ export default function ClientDetail() {
             <TabsTrigger value="analysis" disabled={!selectedCall?.technical_analysis}>
               Análise Técnica
             </TabsTrigger>
-            <TabsTrigger value="notes">Notas</TabsTrigger>
+            
           </TabsList>
 
           <TabsContent value="calls" className="mt-4">
@@ -618,9 +618,6 @@ export default function ClientDetail() {
             )}
           </TabsContent>
 
-          <TabsContent value="notes" className="mt-4">
-            <ClientNotesSection clientId={client.id} />
-          </TabsContent>
         </Tabs>
       </div>
 
