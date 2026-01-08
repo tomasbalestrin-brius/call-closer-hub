@@ -326,28 +326,25 @@ export default function ClientDetail() {
         )}
 
         {/* Client Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Contact Info */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Contato</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {client.email && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Mail className="w-4 h-4" />
-                  <span>{client.email}</span>
-                </div>
-              )}
-              {client.phone && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Phone className="w-4 h-4" />
-                  <span>{client.phone}</span>
-                </div>
-              )}
-              {!client.email && !client.phone && (
-                <p className="text-muted-foreground text-xs">Nenhum contato cadastrado</p>
-              )}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Users className="w-4 h-4 flex-shrink-0" />
+                <span>{client.name || <span className="text-muted-foreground/50 italic">Nome não informado</span>}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Phone className="w-4 h-4 flex-shrink-0" />
+                <span>{client.phone || <span className="text-muted-foreground/50 italic">Telefone não informado</span>}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Mail className="w-4 h-4 flex-shrink-0" />
+                <span>{client.email || <span className="text-muted-foreground/50 italic">E-mail não informado</span>}</span>
+              </div>
             </CardContent>
           </Card>
 
@@ -357,33 +354,56 @@ export default function ClientDetail() {
               <CardTitle className="text-base">Negócio</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {client.niche && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Briefcase className="w-4 h-4" />
-                  <span>{client.niche}</span>
-                </div>
-              )}
-              {client.revenue && (
-                <div className="flex items-center gap-2 text-success font-medium">
-                  <DollarSign className="w-4 h-4" />
-                  <span>{formatCurrency(client.revenue)}</span>
-                </div>
-              )}
-              {client.has_partner !== null && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Users className="w-4 h-4" />
-                  <span>{client.has_partner ? 'Com sócio' : 'Sem sócio'}</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Briefcase className="w-4 h-4 flex-shrink-0" />
+                <span>{client.niche || <span className="text-muted-foreground/50 italic">Nicho não informado</span>}</span>
+              </div>
+              <div className="flex items-center gap-2 text-success font-medium">
+                <DollarSign className="w-4 h-4 flex-shrink-0" />
+                <span>{client.revenue ? formatCurrency(client.revenue) : <span className="text-muted-foreground/50 italic font-normal">Faturamento não informado</span>}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Users className="w-4 h-4 flex-shrink-0" />
+                <span>{client.has_partner !== null ? (client.has_partner ? 'Com sócio' : 'Sem sócio') : <span className="text-muted-foreground/50 italic">Sócio não informado</span>}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Target className="w-4 h-4 flex-shrink-0" />
+                <span>{client.funnel_source || <span className="text-muted-foreground/50 italic">Funil não informado</span>}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Users className="w-4 h-4 flex-shrink-0" />
+                <span>{client.sdr_name ? `SDR: ${client.sdr_name}` : <span className="text-muted-foreground/50 italic">SDR não informado</span>}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Briefcase className="w-4 h-4 flex-shrink-0" />
+                <span>{client.product_offered ? `Produto: ${client.product_offered}` : <span className="text-muted-foreground/50 italic">Produto não informado</span>}</span>
+              </div>
             </CardContent>
           </Card>
+        </div>
 
-          {/* Pain Points */}
+        {/* Follow-up Date */}
+        {client.followup_date && (
+          <Card className="border-warning/50 bg-warning/5">
+            <CardContent className="py-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-warning" />
+                <span className="text-sm font-medium">Follow-up agendado para: </span>
+                <span className="text-sm text-warning font-semibold">
+                  {format(new Date(client.followup_date), "dd/MM/yyyy", { locale: ptBR })}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pain Points Card */}
+        {(client.main_pain || client.main_difficulty) && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Perfil</CardTitle>
+              <CardTitle className="text-base">Perfil do Cliente</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               {client.main_pain && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Dor principal:</p>
@@ -398,7 +418,7 @@ export default function ClientDetail() {
               )}
             </CardContent>
           </Card>
-        </div>
+        )}
 
         {/* Tabs */}
         <Tabs defaultValue="calls" className="w-full">
