@@ -39,50 +39,71 @@ export default function Dashboard() {
     try {
       setLoading(true);
       
-      // Build query with date filter
-      let query = supabase
+      // Build calls query with date filter
+      let callsQuery = supabase
         .from('calls')
         .select('*')
         .eq('closer_id', user.id);
 
       if (dateRange?.from) {
-        query = query.gte('call_date', format(dateRange.from, 'yyyy-MM-dd'));
+        callsQuery = callsQuery.gte('call_date', format(dateRange.from, 'yyyy-MM-dd'));
       }
       if (dateRange?.to) {
-        query = query.lte('call_date', format(dateRange.to, 'yyyy-MM-dd'));
+        callsQuery = callsQuery.lte('call_date', format(dateRange.to, 'yyyy-MM-dd'));
       }
 
-      const { data: calls, error: callsError } = await query;
+      // Build clients query with date filter for sales
+      let clientsQuery = supabase
+        .from('clients')
+        .select('*')
+        .eq('closer_id', user.id)
+        .eq('is_sold', true);
 
-      if (callsError) throw callsError;
-
-      if (calls) {
-        const totalCalls = calls.length;
-        const callsWithScore = calls.filter(c => c.score !== null);
-        const averageScore = callsWithScore.length 
-          ? callsWithScore.reduce((acc, c) => acc + (c.score || 0), 0) / callsWithScore.length 
-          : 0;
-        const soldCalls = calls.filter(c => c.status === 'vendido');
-        const totalSales = soldCalls.length;
-        const totalSaleValue = soldCalls.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
-        const totalEntryValue = soldCalls.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
-        const conversionRate = totalCalls > 0 ? (totalSales / totalCalls) * 100 : 0;
-
-        setStats({
-          totalCalls,
-          averageScore: Math.round(averageScore * 10) / 10,
-          totalSales,
-          totalSaleValue,
-          totalEntryValue,
-          conversionRate: Math.round(conversionRate),
-        });
-
-        // Get recent calls
-        const recent = [...calls]
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-          .slice(0, 5) as Call[];
-        setRecentCalls(recent);
+      if (dateRange?.from) {
+        clientsQuery = clientsQuery.gte('sold_at', format(dateRange.from, 'yyyy-MM-dd'));
       }
+      if (dateRange?.to) {
+        clientsQuery = clientsQuery.lte('sold_at', format(dateRange.to, 'yyyy-MM-dd') + 'T23:59:59');
+      }
+
+      const [callsResult, clientsResult] = await Promise.all([
+        callsQuery,
+        clientsQuery
+      ]);
+
+      if (callsResult.error) throw callsResult.error;
+      if (clientsResult.error) throw clientsResult.error;
+
+      const calls = callsResult.data || [];
+      const soldClients = clientsResult.data || [];
+
+      // Calculate call-based stats
+      const totalCalls = calls.length;
+      const callsWithScore = calls.filter(c => c.score !== null);
+      const averageScore = callsWithScore.length 
+        ? callsWithScore.reduce((acc, c) => acc + (c.score || 0), 0) / callsWithScore.length 
+        : 0;
+
+      // Calculate sales from clients (manual sales)
+      const totalSales = soldClients.length;
+      const totalSaleValue = soldClients.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
+      const totalEntryValue = soldClients.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
+      const conversionRate = totalCalls > 0 ? (totalSales / totalCalls) * 100 : 0;
+
+      setStats({
+        totalCalls,
+        averageScore: Math.round(averageScore * 10) / 10,
+        totalSales,
+        totalSaleValue,
+        totalEntryValue,
+        conversionRate: Math.round(conversionRate),
+      });
+
+      // Get recent calls
+      const recent = [...calls]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5) as Call[];
+      setRecentCalls(recent);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
