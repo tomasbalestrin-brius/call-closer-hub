@@ -1,3 +1,4 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -106,25 +107,26 @@ Responda APENAS com um JSON válido no seguinte formato:
   "justificativa_classificacao": "string"
 }`;
 
-async function callLovableAI(systemPrompt: string, transcription: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+async function callOpenAI(systemPrompt: string, transcription: string): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY not configured");
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
   }
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}` },
       ],
+      max_tokens: 4000,
     }),
   });
 
@@ -132,12 +134,12 @@ async function callLovableAI(systemPrompt: string, transcription: string): Promi
     if (response.status === 429) {
       throw new Error("Rate limit exceeded. Please try again later.");
     }
-    if (response.status === 402) {
-      throw new Error("Payment required. Please add credits.");
+    if (response.status === 402 || response.status === 401) {
+      throw new Error("Invalid API key or payment required.");
     }
     const errorText = await response.text();
-    console.error("AI gateway error:", response.status, errorText);
-    throw new Error(`AI gateway error: ${response.status}`);
+    console.error("OpenAI API error:", response.status, errorText);
+    throw new Error(`OpenAI API error: ${response.status}`);
   }
 
   const data = await response.json();
@@ -177,8 +179,8 @@ serve(async (req) => {
 
     // Run both analyses in parallel for efficiency
     const [bethelResponse, masterResponse] = await Promise.all([
-      callLovableAI(BETHEL_PROMPT, transcription),
-      callLovableAI(MASTER_PROMPT, transcription),
+      callOpenAI(BETHEL_PROMPT, transcription),
+      callOpenAI(MASTER_PROMPT, transcription),
     ]);
 
     console.log("Both AI analyses completed");
