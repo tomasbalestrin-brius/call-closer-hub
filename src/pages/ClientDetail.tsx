@@ -29,8 +29,10 @@ import {
   XCircle,
   Clock,
   BadgeCheck,
-  Trash2
+  Trash2,
+  Merge
 } from 'lucide-react';
+import { MergeCallDialog } from '@/components/calls/MergeCallDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -456,6 +458,12 @@ export default function ClientDetail() {
                                 {formatCurrency(call.sale_value)}
                               </span>
                             )}
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <MergeCallDialog 
+                                currentCall={call} 
+                                onMergeComplete={fetchClientData} 
+                              />
+                            </div>
                           </div>
                         </div>
                         {call.ai_summary && (
