@@ -205,12 +205,12 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
               </div>
               <div className="space-y-2">
                 <Label htmlFor="funnelSource">Funil de Origem</Label>
-                <Select value={funnelSource} onValueChange={setFunnelSource}>
+                <Select value={funnelSource || "none"} onValueChange={(val) => setFunnelSource(val === "none" ? "" : val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o funil" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="none">Nenhum</SelectItem>
                     {FUNNEL_SOURCES.map((source) => (
                       <SelectItem key={source} value={source}>
                         {source}
@@ -221,15 +221,15 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
               </div>
               <div className="space-y-2">
                 <Label htmlFor="sdrName">SDR que Agendou</Label>
-                <Select value={sdrName} onValueChange={setSdrName}>
+                <Select value={sdrName || "none"} onValueChange={(val) => setSdrName(val === "none" ? "" : val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o SDR" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    {SDR_NAMES.map((name) => (
-                      <SelectItem key={name} value={name}>
-                        {name}
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {SDR_NAMES.map((sdr) => (
+                      <SelectItem key={sdr} value={sdr}>
+                        {sdr}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -237,12 +237,12 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
               </div>
               <div className="space-y-2">
                 <Label htmlFor="productOffered">Produto Ofertado</Label>
-                <Select value={productOffered} onValueChange={setProductOffered}>
+                <Select value={productOffered || "none"} onValueChange={(val) => setProductOffered(val === "none" ? "" : val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o produto" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="none">Nenhum</SelectItem>
                     {PRODUCTS_OFFERED.map((product) => (
                       <SelectItem key={product} value={product}>
                         {product}

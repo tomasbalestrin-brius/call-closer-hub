@@ -10,52 +10,11 @@ import { Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { FUNNEL_SOURCES, SDR_NAMES, PRODUCTS_OFFERED } from '@/types';
 
 interface NewClientDialogProps {
   onClientCreated: () => void;
 }
-
-const FUNNEL_SOURCES = [
-  'YouTube - Orgânico',
-  'YouTube - Ads',
-  'Instagram - Orgânico',
-  'Instagram - Ads',
-  'Facebook - Orgânico',
-  'Facebook - Ads',
-  'TikTok - Orgânico',
-  'TikTok - Ads',
-  'Google - Orgânico',
-  'Google - Ads',
-  'LinkedIn - Orgânico',
-  'LinkedIn - Ads',
-  'Indicação',
-  'Podcast',
-  'Evento Presencial',
-  'Evento Online',
-  'Webinar',
-  'E-book/Lead Magnet',
-  'Blog',
-  'E-mail Marketing',
-  'WhatsApp',
-  'Outro'
-];
-
-const SDR_OPTIONS = [
-  'Thalita',
-  'Letícia',
-  'Julia',
-  'Larissa',
-  'Outro'
-];
-
-const PRODUCT_OPTIONS = [
-  'Elite',
-  'Elite VIP',
-  'Start',
-  'Imersão',
-  'Mentoria Individual',
-  'Outro'
-];
 
 export default function NewClientDialog({ onClientCreated }: NewClientDialogProps) {
   const { user } = useAuth();
@@ -244,11 +203,12 @@ export default function NewClientDialog({ onClientCreated }: NewClientDialogProp
               
               <div className="space-y-2">
                 <Label htmlFor="funnelSource">Funil de Origem</Label>
-                <Select value={funnelSource} onValueChange={setFunnelSource}>
+                <Select value={funnelSource || "none"} onValueChange={(val) => setFunnelSource(val === "none" ? "" : val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
                     {FUNNEL_SOURCES.map((source) => (
                       <SelectItem key={source} value={source}>
                         {source}
@@ -260,12 +220,13 @@ export default function NewClientDialog({ onClientCreated }: NewClientDialogProp
               
               <div className="space-y-2">
                 <Label htmlFor="sdrName">SDR</Label>
-                <Select value={sdrName} onValueChange={setSdrName}>
+                <Select value={sdrName || "none"} onValueChange={(val) => setSdrName(val === "none" ? "" : val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {SDR_OPTIONS.map((sdr) => (
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {SDR_NAMES.map((sdr) => (
                       <SelectItem key={sdr} value={sdr}>
                         {sdr}
                       </SelectItem>
@@ -276,12 +237,13 @@ export default function NewClientDialog({ onClientCreated }: NewClientDialogProp
               
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="productOffered">Produto Ofertado</Label>
-                <Select value={productOffered} onValueChange={setProductOffered}>
+                <Select value={productOffered || "none"} onValueChange={(val) => setProductOffered(val === "none" ? "" : val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {PRODUCT_OPTIONS.map((product) => (
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {PRODUCTS_OFFERED.map((product) => (
                       <SelectItem key={product} value={product}>
                         {product}
                       </SelectItem>
