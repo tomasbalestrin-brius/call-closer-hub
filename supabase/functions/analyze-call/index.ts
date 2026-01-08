@@ -49,18 +49,17 @@ const MASTER_PROMPT = `Você é um Especialista Máximo em Vendas High Ticket, N
 
 Seu papel é analisar a transcrição de uma call de vendas usando o Framework de Closer – Julia Ottoni.
 
-AVALIE CADA ETAPA DO FRAMEWORK:
+AVALIE CADA ETAPA DO FRAMEWORK (na ordem correta):
 1. Conexão
 2. Abertura
-3. Mapeamento – Negócio
-4. Mapeamento – Problemas
-5. Consultoria (Análise e Conscientização)
-6. Problematização (Consequência)
+3. Mapeamento do Negócio
+4. Mapeamento do Problema
+5. Consultoria
+6. Problematização
 7. Solução Imaginada
-8. Transição
-9. Pitch
-10. Perguntas de Compromisso
-11. Contorno de Objeções
+8. Pitch
+9. Contorno de Objeções
+10. Fechamento
 
 Para CADA etapa, avalie:
 - aconteceu: sim/parcial/nao
@@ -92,10 +91,9 @@ Responda APENAS com um JSON válido no seguinte formato:
     "consultoria": { ... },
     "problematizacao": { ... },
     "solucao_imaginada": { ... },
-    "transicao": { ... },
     "pitch": { ... },
-    "perguntas_compromisso": { ... },
-    "contorno_objecoes": { ... }
+    "contorno_objecoes": { ... },
+    "fechamento": { ... }
   },
   "nota_geral": 0-10,
   "taxa_conversao_estimada": "XX%",

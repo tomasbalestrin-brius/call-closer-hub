@@ -35,8 +35,6 @@ export default function NewCallDialog({ onCallCreated }: NewCallDialogProps) {
   // Client data
   const [clientName, setClientName] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [revenue, setRevenue] = useState('');
   const [niche, setNiche] = useState('');
   const [mainPain, setMainPain] = useState('');
   
@@ -51,8 +49,6 @@ export default function NewCallDialog({ onCallCreated }: NewCallDialogProps) {
   const resetForm = () => {
     setClientName('');
     setCompanyName('');
-    setPhone('');
-    setRevenue('');
     setNiche('');
     setMainPain('');
     setCallDate(new Date().toISOString().split('T')[0]);
@@ -141,25 +137,6 @@ export default function NewCallDialog({ onCallCreated }: NewCallDialogProps) {
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder="Empresa do cliente"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Telefone</Label>
-                <Input
-                  id="phone"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="(00) 00000-0000"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="revenue">Faturamento</Label>
-                <Input
-                  id="revenue"
-                  type="number"
-                  value={revenue}
-                  onChange={(e) => setRevenue(e.target.value)}
-                  placeholder="Faturamento mensal"
                 />
               </div>
               <div className="space-y-2">

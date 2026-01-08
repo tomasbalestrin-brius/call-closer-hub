@@ -34,15 +34,19 @@ const KANBAN_COLUMNS = [
   },
 ];
 
+interface ClientWithLastCall extends Client {
+  lastCallDate?: string | null;
+}
+
 interface ClientKanbanProps {
-  clients: Client[];
+  clients: ClientWithLastCall[];
   onRefresh: () => void;
 }
 
 export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) {
-  const [draggedClient, setDraggedClient] = useState<Client | null>(null);
+  const [draggedClient, setDraggedClient] = useState<ClientWithLastCall | null>(null);
   const [saleDialogOpen, setSaleDialogOpen] = useState(false);
-  const [clientForSale, setClientForSale] = useState<Client | null>(null);
+  const [clientForSale, setClientForSale] = useState<ClientWithLastCall | null>(null);
 
   const getClientsForColumn = (columnId: string) => {
     if (columnId === 'venda_realizada') {
@@ -51,7 +55,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
     return clients.filter(c => !c.is_sold && (c.status || 'call_realizada') === columnId);
   };
 
-  const handleDragStart = (e: React.DragEvent, client: Client) => {
+  const handleDragStart = (e: React.DragEvent, client: ClientWithLastCall) => {
     setDraggedClient(client);
     e.dataTransfer.effectAllowed = 'move';
   };
@@ -135,7 +139,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
                       draggedClient?.id === client.id && "opacity-50"
                     )}
                   >
-                    <ClientCard client={client} />
+                    <ClientCard client={client} lastCallDate={client.lastCallDate} />
                   </div>
                 ))}
                 
