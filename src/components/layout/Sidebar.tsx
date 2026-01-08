@@ -10,7 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
-  Shield
+  Shield,
+  BarChart3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,6 +26,10 @@ const baseNavigation = [
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
 
+const leaderNavigation = [
+  { name: 'Relatórios', href: '/squad-reports', icon: BarChart3 },
+];
+
 const adminNavigation = [
   { name: 'Admin', href: '/admin', icon: Shield },
 ];
@@ -33,11 +38,13 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { signOut } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isLeader } = useUserRole();
 
-  const navigation = isAdmin 
-    ? [...baseNavigation, ...adminNavigation]
-    : baseNavigation;
+  const navigation = [
+    ...baseNavigation,
+    ...(isAdmin || isLeader ? leaderNavigation : []),
+    ...(isAdmin ? adminNavigation : []),
+  ];
 
   const handleSignOut = async () => {
     const { error } = await signOut();

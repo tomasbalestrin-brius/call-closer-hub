@@ -11,6 +11,7 @@ import ClientDetail from "./pages/ClientDetail";
 import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
 import Admin from "./pages/Admin";
+import SquadReports from "./pages/SquadReports";
 import NotFound from "./pages/NotFound";
 import GoogleDriveCallback from "./pages/GoogleDriveCallback";
 
@@ -31,6 +32,7 @@ const App = () => (
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/squad-reports" element={<SquadReports />} />
           <Route path="/google-drive-callback" element={<GoogleDriveCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
