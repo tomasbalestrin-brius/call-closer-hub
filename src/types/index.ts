@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'closer';
+export type UserRole = 'admin' | 'lider' | 'closer';
 
 export type CallStatus = 
   | 'pendente' 
@@ -15,6 +15,49 @@ export type CloserClassification = 'iniciante' | 'intermediario' | 'avancado' | 
 export type ClientSource = 'manual' | 'google_drive';
 
 export type ImportStatus = 'pending' | 'processing' | 'completed' | 'error';
+
+// Constantes para selects
+export const FUNNEL_SOURCES = [
+  '50 scripts',
+  'Teste dos Arquetipos',
+  'MPM',
+  'Implementacao de IA da Julia',
+  'Social Selling Julia',
+  'Social Selling Cleiton',
+  'Social Selling Bethel',
+  'Social Selling Kennedy',
+  'Formulario Instagram Cleiton',
+  'Formulario Instagram Julia',
+  'Formulario Instagram Bethel',
+  'Formulario Instagram Kennedy',
+  'Formulario Youtube',
+  'Indicacao de Aluno',
+  'Indicacao de Mentorado',
+  'Indicacao de Vendedor',
+  'Indicacao Elite Premium',
+  'Implementacao Comercial',
+  'Implementacao Personalizada IA',
+  'Mentoria Julia',
+  'Elite Premium',
+  'Bethel Club'
+] as const;
+
+export const SDR_NAMES = [
+  'Jaque',
+  'Dienifer',
+  'Nathali',
+  'Thalita',
+  'Maria'
+] as const;
+
+export const PRODUCTS_OFFERED = [
+  'Mentoria Premium',
+  'Mentoria Elite Premium',
+  'Implementacao Comercial',
+  'Bethel Club',
+  'Intensivo da Alta Performance',
+  'Implementacao de IA'
+] as const;
 
 export interface Profile {
   id: string;
@@ -56,6 +99,11 @@ export interface Client {
   negotiation_notes: string | null;
   contract_validity: string | null;
   sale_notes: string | null;
+  // New fields
+  funnel_source: string | null;
+  sdr_name: string | null;
+  product_offered: string | null;
+  followup_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -81,6 +129,7 @@ export interface TechnicalAnalysis {
   pitch?: StageAnalysis;
   perguntas_compromisso?: StageAnalysis;
   contorno_objecoes?: StageAnalysis;
+  fechamento?: StageAnalysis;
 }
 
 export interface Call {
@@ -116,6 +165,11 @@ export interface Call {
   next_contact_date: string | null;
   source_file_id: string | null;
   analyzed_at: string | null;
+  // New fields
+  company_name: string | null;
+  call_conclusion: string | null;
+  observation: string | null;
+  merged_with_call_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -157,4 +211,19 @@ export interface DashboardStats {
   totalSaleValue: number;
   totalEntryValue: number;
   conversionRate: number;
+}
+
+export interface Squad {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SquadMember {
+  id: string;
+  squad_id: string;
+  user_id: string;
+  created_at: string;
 }

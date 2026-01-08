@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           ai_summary: string | null
           analyzed_at: string | null
+          call_conclusion: string | null
           call_date: string
           call_time: string | null
           client_id: string | null
@@ -26,6 +27,7 @@ export type Database = {
             | Database["public"]["Enums"]["closer_classification"]
             | null
           closer_id: string
+          company_name: string | null
           consciousness_level: string | null
           created_at: string
           decision_reason: string | null
@@ -42,9 +44,11 @@ export type Database = {
           main_errors: string[] | null
           main_pain: string | null
           main_wins: string[] | null
+          merged_with_call_id: string | null
           next_contact_date: string | null
           niche: string | null
           notes: string | null
+          observation: string | null
           product: string | null
           sale_value: number | null
           score: number | null
@@ -57,6 +61,7 @@ export type Database = {
         Insert: {
           ai_summary?: string | null
           analyzed_at?: string | null
+          call_conclusion?: string | null
           call_date?: string
           call_time?: string | null
           client_id?: string | null
@@ -65,6 +70,7 @@ export type Database = {
             | Database["public"]["Enums"]["closer_classification"]
             | null
           closer_id: string
+          company_name?: string | null
           consciousness_level?: string | null
           created_at?: string
           decision_reason?: string | null
@@ -81,9 +87,11 @@ export type Database = {
           main_errors?: string[] | null
           main_pain?: string | null
           main_wins?: string[] | null
+          merged_with_call_id?: string | null
           next_contact_date?: string | null
           niche?: string | null
           notes?: string | null
+          observation?: string | null
           product?: string | null
           sale_value?: number | null
           score?: number | null
@@ -96,6 +104,7 @@ export type Database = {
         Update: {
           ai_summary?: string | null
           analyzed_at?: string | null
+          call_conclusion?: string | null
           call_date?: string
           call_time?: string | null
           client_id?: string | null
@@ -104,6 +113,7 @@ export type Database = {
             | Database["public"]["Enums"]["closer_classification"]
             | null
           closer_id?: string
+          company_name?: string | null
           consciousness_level?: string | null
           created_at?: string
           decision_reason?: string | null
@@ -120,9 +130,11 @@ export type Database = {
           main_errors?: string[] | null
           main_pain?: string | null
           main_wins?: string[] | null
+          merged_with_call_id?: string | null
           next_contact_date?: string | null
           niche?: string | null
           notes?: string | null
+          observation?: string | null
           product?: string | null
           sale_value?: number | null
           score?: number | null
@@ -138,6 +150,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_merged_with_call_id_fkey"
+            columns: ["merged_with_call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
             referencedColumns: ["id"]
           },
         ]
@@ -182,6 +201,8 @@ export type Database = {
           created_at: string
           email: string | null
           entry_value: number | null
+          followup_date: string | null
+          funnel_source: string | null
           has_partner: boolean | null
           id: string
           is_sold: boolean | null
@@ -192,9 +213,11 @@ export type Database = {
           niche: string | null
           notes: string | null
           phone: string | null
+          product_offered: string | null
           revenue: number | null
           sale_notes: string | null
           sale_value: number | null
+          sdr_name: string | null
           sold_at: string | null
           source: Database["public"]["Enums"]["client_source"] | null
           status: string | null
@@ -207,6 +230,8 @@ export type Database = {
           created_at?: string
           email?: string | null
           entry_value?: number | null
+          followup_date?: string | null
+          funnel_source?: string | null
           has_partner?: boolean | null
           id?: string
           is_sold?: boolean | null
@@ -217,9 +242,11 @@ export type Database = {
           niche?: string | null
           notes?: string | null
           phone?: string | null
+          product_offered?: string | null
           revenue?: number | null
           sale_notes?: string | null
           sale_value?: number | null
+          sdr_name?: string | null
           sold_at?: string | null
           source?: Database["public"]["Enums"]["client_source"] | null
           status?: string | null
@@ -232,6 +259,8 @@ export type Database = {
           created_at?: string
           email?: string | null
           entry_value?: number | null
+          followup_date?: string | null
+          funnel_source?: string | null
           has_partner?: boolean | null
           id?: string
           is_sold?: boolean | null
@@ -242,9 +271,11 @@ export type Database = {
           niche?: string | null
           notes?: string | null
           phone?: string | null
+          product_offered?: string | null
           revenue?: number | null
           sale_notes?: string | null
           sale_value?: number | null
+          sdr_name?: string | null
           sold_at?: string | null
           source?: Database["public"]["Enums"]["client_source"] | null
           status?: string | null
@@ -401,6 +432,59 @@ export type Database = {
         }
         Relationships: []
       }
+      squad_members: {
+        Row: {
+          created_at: string | null
+          id: string
+          squad_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          squad_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          squad_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "squad_members_squad_id_fkey"
+            columns: ["squad_id"]
+            isOneToOne: false
+            referencedRelation: "squads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      squads: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -438,6 +522,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_squad_leader: {
+        Args: { _squad_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       call_status:
@@ -457,7 +545,7 @@ export type Database = {
       import_frequency: "manual" | "hourly" | "daily" | "realtime"
       import_status: "pending" | "processing" | "completed" | "error"
       lead_classification: "pos_venda" | "follow"
-      user_role: "admin" | "closer"
+      user_role: "admin" | "closer" | "lider"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -604,7 +692,7 @@ export const Constants = {
       import_frequency: ["manual", "hourly", "daily", "realtime"],
       import_status: ["pending", "processing", "completed", "error"],
       lead_classification: ["pos_venda", "follow"],
-      user_role: ["admin", "closer"],
+      user_role: ["admin", "closer", "lider"],
     },
   },
 } as const

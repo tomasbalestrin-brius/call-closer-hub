@@ -8,6 +8,7 @@ export function useUserRole() {
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLeader, setIsLeader] = useState(false);
 
   useEffect(() => {
     // Wait for auth to finish loading
@@ -20,6 +21,7 @@ export function useUserRole() {
     } else {
       setRole(null);
       setIsAdmin(false);
+      setIsLeader(false);
       setLoading(false);
     }
   }, [user, authLoading]);
@@ -41,14 +43,16 @@ export function useUserRole() {
       const userRole = (data?.role as UserRole) || 'closer';
       setRole(userRole);
       setIsAdmin(userRole === 'admin');
+      setIsLeader(userRole === 'lider');
     } catch (error) {
       console.error('Error fetching role:', error);
       setRole('closer');
       setIsAdmin(false);
+      setIsLeader(false);
     } finally {
       setLoading(false);
     }
   };
 
-  return { role, isAdmin, loading };
+  return { role, isAdmin, isLeader, loading };
 }
