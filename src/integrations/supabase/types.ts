@@ -289,6 +289,33 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_verses: {
+        Row: {
+          category: string
+          created_at: string
+          day_of_year: number
+          id: string
+          reference: string
+          verse_text: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          day_of_year: number
+          id?: string
+          reference: string
+          verse_text: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          day_of_year?: number
+          id?: string
+          reference?: string
+          verse_text?: string
+        }
+        Relationships: []
+      }
       imported_files: {
         Row: {
           call_id: string | null
@@ -333,6 +360,39 @@ export type Database = {
           },
         ]
       }
+      monthly_goals: {
+        Row: {
+          closer_id: string
+          created_at: string
+          goal_value: number
+          id: string
+          month: number
+          set_by_user_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          closer_id: string
+          created_at?: string
+          goal_value: number
+          id?: string
+          month: number
+          set_by_user_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          closer_id?: string
+          created_at?: string
+          goal_value?: number
+          id?: string
+          month?: number
+          set_by_user_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -366,6 +426,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          closer_level: Database["public"]["Enums"]["closer_level"]
           created_at: string
           drive_auto_import: boolean | null
           drive_file_types: Json | null
@@ -390,6 +451,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          closer_level?: Database["public"]["Enums"]["closer_level"]
           created_at?: string
           drive_auto_import?: boolean | null
           drive_file_types?: Json | null
@@ -414,6 +476,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          closer_level?: Database["public"]["Enums"]["closer_level"]
           created_at?: string
           drive_auto_import?: boolean | null
           drive_file_types?: Json | null
@@ -561,6 +624,14 @@ export type Database = {
         | "avancado"
         | "alta_performance"
         | "elite"
+      closer_level:
+        | "assessor"
+        | "executivo"
+        | "pro"
+        | "elite"
+        | "especialista"
+        | "especialista_pro"
+        | "especialista_elite"
       import_frequency: "manual" | "hourly" | "daily" | "realtime"
       import_status: "pending" | "processing" | "completed" | "error"
       lead_classification: "pos_venda" | "follow"
@@ -707,6 +778,15 @@ export const Constants = {
         "avancado",
         "alta_performance",
         "elite",
+      ],
+      closer_level: [
+        "assessor",
+        "executivo",
+        "pro",
+        "elite",
+        "especialista",
+        "especialista_pro",
+        "especialista_elite",
       ],
       import_frequency: ["manual", "hourly", "daily", "realtime"],
       import_status: ["pending", "processing", "completed", "error"],
