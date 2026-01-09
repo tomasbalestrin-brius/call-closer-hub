@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { User, Mail, Lock, Phone, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { CloserLevelSelect, type CloserLevel } from './CloserLevelSelect';
 
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string().min(6, 'A senha deve ter pelo menos 6 caracteres');
@@ -31,6 +32,7 @@ export function NewCloserDialog({ open, onOpenChange, onSuccess }: NewCloserDial
     email: '',
     password: '',
     phone: '',
+    closerLevel: 'assessor' as CloserLevel,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,15 +71,21 @@ export function NewCloserDialog({ open, onOpenChange, onSuccess }: NewCloserDial
 
       if (authError) throw authError;
 
-      // Update profile with phone if provided
-      if (authData.user && formData.phone) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ phone: formData.phone })
-          .eq('user_id', authData.user.id);
+      // Update profile with phone and level if provided
+      if (authData.user) {
+        const updateData: { phone?: string; closer_level?: CloserLevel } = {};
+        if (formData.phone) updateData.phone = formData.phone;
+        if (formData.closerLevel) updateData.closer_level = formData.closerLevel;
 
-        if (profileError) {
-          console.error('Error updating phone:', profileError);
+        if (Object.keys(updateData).length > 0) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update(updateData)
+            .eq('user_id', authData.user.id);
+
+          if (profileError) {
+            console.error('Error updating profile:', profileError);
+          }
         }
       }
 
@@ -92,6 +100,7 @@ export function NewCloserDialog({ open, onOpenChange, onSuccess }: NewCloserDial
         email: '',
         password: '',
         phone: '',
+        closerLevel: 'assessor',
       });
       
       onSuccess();
@@ -181,6 +190,14 @@ export function NewCloserDialog({ open, onOpenChange, onSuccess }: NewCloserDial
                   onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Nível Inicial</Label>
+              <CloserLevelSelect
+                value={formData.closerLevel}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, closerLevel: value }))}
+              />
             </div>
           </div>
           <DialogFooter>

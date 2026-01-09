@@ -3,6 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import MainLayout from '@/components/layout/MainLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
+import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import DailyVerse from '@/components/dashboard/DailyVerse';
+import QuotaProgressBar from '@/components/dashboard/QuotaProgressBar';
+import MonthlyGoalBar from '@/components/dashboard/MonthlyGoalBar';
 import CallCard from '@/components/calls/CallCard';
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
 import { Phone, Star, TrendingUp, DollarSign, Wallet, Target } from 'lucide-react';
@@ -123,14 +127,20 @@ export default function Dashboard() {
       <div className="space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-display font-bold">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Visão geral do seu desempenho</p>
-          </div>
+          <DashboardHeader />
           <DateRangePicker 
             dateRange={dateRange} 
             onDateRangeChange={setDateRange} 
           />
+        </div>
+
+        {/* Daily Verse */}
+        <DailyVerse />
+
+        {/* Progress Bars */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <QuotaProgressBar />
+          <MonthlyGoalBar />
         </div>
 
         {/* Stats Grid */}

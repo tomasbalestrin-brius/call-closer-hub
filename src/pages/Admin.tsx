@@ -16,11 +16,14 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  Users2
+  Users2,
+  Target
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
 import { SquadManagement } from '@/components/admin/SquadManagement';
+import { CloserLevelSelect, LEVEL_CONFIG, type CloserLevel } from '@/components/admin/CloserLevelSelect';
+import { SetMonthlyGoalDialog } from '@/components/admin/SetMonthlyGoalDialog';
 import { Navigate } from 'react-router-dom';
 
 interface CloserWithProfile {
@@ -31,6 +34,7 @@ interface CloserWithProfile {
   google_connected: boolean;
   google_email: string | null;
   status: string;
+  closer_level: CloserLevel;
   created_at: string;
 }
 
@@ -40,6 +44,7 @@ export default function Admin() {
   const [closers, setClosers] = useState<CloserWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [goalDialogOpen, setGoalDialogOpen] = useState(false);
 
   useEffect(() => {
     if (isAdmin) {
@@ -55,12 +60,34 @@ export default function Admin() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setClosers(data as CloserWithProfile[]);
+      setClosers((data || []).map(c => ({
+        ...c,
+        closer_level: c.closer_level || 'assessor'
+      })) as CloserWithProfile[]);
     } catch (error) {
       console.error('Error fetching closers:', error);
       toast.error('Erro ao carregar closers');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateCloserLevel = async (closerId: string, newLevel: CloserLevel) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ closer_level: newLevel })
+        .eq('id', closerId);
+
+      if (error) throw error;
+      
+      setClosers(prev => prev.map(c => 
+        c.id === closerId ? { ...c, closer_level: newLevel } : c
+      ));
+      toast.success('Nível atualizado com sucesso');
+    } catch (error) {
+      console.error('Error updating closer level:', error);
+      toast.error('Erro ao atualizar nível');
     }
   };
 
@@ -159,20 +186,28 @@ export default function Admin() {
               </Card>
             </div>
 
-            {/* Closers List */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
                     <CardTitle className="font-display">Closers Cadastrados</CardTitle>
                     <CardDescription>
                       Lista de todos os closers registrados no sistema
                     </CardDescription>
                   </div>
-                  <Button onClick={() => setDialogOpen(true)} className="gradient-primary">
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Novo Closer
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => setGoalDialogOpen(true)} 
+                      variant="outline"
+                    >
+                      <Target className="w-4 h-4 mr-2" />
+                      Definir Meta
+                    </Button>
+                    <Button onClick={() => setDialogOpen(true)} className="gradient-primary">
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Novo Closer
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -213,7 +248,11 @@ export default function Admin() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <CloserLevelSelect
+                            value={closer.closer_level}
+                            onValueChange={(newLevel) => updateCloserLevel(closer.id, newLevel)}
+                          />
                           {closer.google_connected ? (
                             <Badge variant="default" className="bg-success">
                               <CheckCircle className="w-3 h-3 mr-1" />
@@ -259,6 +298,15 @@ export default function Admin() {
           fetchClosers();
           setDialogOpen(false);
         }}
+      />
+
+      <SetMonthlyGoalDialog
+        open={goalDialogOpen}
+        onOpenChange={setGoalDialogOpen}
+        onSuccess={() => {
+          setGoalDialogOpen(false);
+        }}
+        closers={closers}
       />
     </MainLayout>
   );

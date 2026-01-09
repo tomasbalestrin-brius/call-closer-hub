@@ -16,6 +16,15 @@ export type ClientSource = 'manual' | 'google_drive';
 
 export type ImportStatus = 'pending' | 'processing' | 'completed' | 'error';
 
+export type CloserLevel = 
+  | 'assessor' 
+  | 'executivo' 
+  | 'pro' 
+  | 'elite' 
+  | 'especialista' 
+  | 'especialista_pro' 
+  | 'especialista_elite';
+
 // Constantes para selects
 export const FUNNEL_SOURCES = [
   '50 scripts',
@@ -70,8 +79,29 @@ export interface Profile {
   drive_folder_id: string | null;
   drive_folder_name: string | null;
   drive_last_sync: string | null;
+  closer_level: CloserLevel;
   created_at: string;
   updated_at: string;
+}
+
+export interface MonthlyGoal {
+  id: string;
+  closer_id: string;
+  month: number;
+  year: number;
+  goal_value: number;
+  set_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyVerse {
+  id: string;
+  day_of_year: number;
+  verse_text: string;
+  reference: string;
+  category: string;
+  created_at: string;
 }
 
 export type ClientStatus = 'call_realizada' | 'contato_agendado' | 'encaminhado_fechamento' | 'venda_realizada';
