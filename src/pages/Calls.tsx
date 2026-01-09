@@ -7,6 +7,7 @@ import CallCard from '@/components/calls/CallCard';
 import NewCallDialog from '@/components/calls/NewCallDialog';
 import CallStatsBar from '@/components/calls/CallStatsBar';
 import ActiveFiltersChips from '@/components/calls/ActiveFiltersChips';
+import PeriodSummary from '@/components/calls/PeriodSummary';
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -129,6 +130,9 @@ export default function Calls() {
           onStatusFilter={setStatusFilter} 
           activeStatus={statusFilter} 
         />
+
+        {/* Period Summary */}
+        <PeriodSummary calls={filteredCalls} />
 
         {/* Filters */}
         <div className="flex flex-col lg:flex-row gap-4">
