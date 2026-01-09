@@ -22,14 +22,10 @@ const LEVEL_CONFIG: Record<CloserLevel, { label: string; color: string }> = {
   especialista_elite: { label: 'Especialista Elite', color: 'bg-emerald-500' },
 };
 
-interface DashboardHeaderProps {
-  userName?: string;
-}
-
-export default function DashboardHeader({ userName }: DashboardHeaderProps) {
+export default function DashboardHeader() {
   const { user } = useAuth();
   const [closerLevel, setCloserLevel] = useState<CloserLevel>('assessor');
-  const [displayName, setDisplayName] = useState(userName || '');
+  const [displayName, setDisplayName] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -58,14 +54,32 @@ export default function DashboardHeader({ userName }: DashboardHeaderProps) {
     }
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  const getFirstName = () => {
+    return displayName.split(' ')[0] || displayName;
+  };
+
   const levelConfig = LEVEL_CONFIG[closerLevel];
 
   return (
-    <div className="flex items-center gap-3">
-      <h1 className="text-2xl font-display font-bold">{displayName}</h1>
-      <Badge className={`${levelConfig.color} text-white`}>
-        {levelConfig.label}
-      </Badge>
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-display font-bold">
+          {getGreeting()}, {getFirstName()}! 👋
+        </h1>
+        <Badge className={`${levelConfig.color} text-white`}>
+          {levelConfig.label}
+        </Badge>
+      </div>
+      <p className="text-muted-foreground text-sm">
+        Confira seu desempenho e acompanhe suas metas
+      </p>
     </div>
   );
 }
