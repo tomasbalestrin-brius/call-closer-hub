@@ -5,32 +5,90 @@ import SaleFormDialog from './SaleFormDialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Phone, Calendar, TrendingUp, CheckCircle2 } from 'lucide-react';
+import { 
+  Phone, 
+  RefreshCw, 
+  MessageCircle, 
+  Gift, 
+  Star, 
+  Zap, 
+  ThumbsUp, 
+  CheckCircle2, 
+  XCircle, 
+  Archive 
+} from 'lucide-react';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 const KANBAN_COLUMNS = [
   { 
     id: 'call_realizada', 
     title: 'Call Realizada', 
+    subtitle: 'Preencher dados',
     icon: Phone,
     color: 'bg-blue-500/10 border-blue-500/30 text-blue-600' 
   },
   { 
-    id: 'contato_agendado', 
-    title: 'Contato Agendado', 
-    icon: Calendar,
+    id: 'repitch', 
+    title: 'RePitch', 
+    subtitle: null,
+    icon: RefreshCw,
+    color: 'bg-orange-500/10 border-orange-500/30 text-orange-600' 
+  },
+  { 
+    id: 'pos_call_0_2', 
+    title: 'Pós Call 0-2 dias', 
+    subtitle: 'Depoimentos e Conexão',
+    icon: MessageCircle,
+    color: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-600' 
+  },
+  { 
+    id: 'pos_call_3_7', 
+    title: 'Pós Call 3-7 dias', 
+    subtitle: 'Presente e Mentoria',
+    icon: Gift,
+    color: 'bg-green-500/10 border-green-500/30 text-green-600' 
+  },
+  { 
+    id: 'pos_call_8_15', 
+    title: 'Pós Call 8-15 dias', 
+    subtitle: 'Feedback e Oferta',
+    icon: Star,
     color: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600' 
   },
   { 
-    id: 'encaminhado_fechamento', 
-    title: 'Encaminhado Fechamento', 
-    icon: TrendingUp,
+    id: 'pos_call_16_21', 
+    title: 'Pós Call 16-21 dias', 
+    subtitle: 'Convite Intensivo',
+    icon: Zap,
     color: 'bg-purple-500/10 border-purple-500/30 text-purple-600' 
+  },
+  { 
+    id: 'sinal_compromisso', 
+    title: 'Sinal de Compromisso', 
+    subtitle: null,
+    icon: ThumbsUp,
+    color: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-600' 
   },
   { 
     id: 'venda_realizada', 
     title: 'Venda Realizada', 
+    subtitle: null,
     icon: CheckCircle2,
-    color: 'bg-green-500/10 border-green-500/30 text-green-600' 
+    color: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600' 
+  },
+  { 
+    id: 'aluno_nao_fit', 
+    title: 'Aluno Não Fit', 
+    subtitle: null,
+    icon: XCircle,
+    color: 'bg-red-500/10 border-red-500/30 text-red-600' 
+  },
+  { 
+    id: 'pos_21_carterizacao', 
+    title: 'Pós 21 dias', 
+    subtitle: 'Carterização',
+    icon: Archive,
+    color: 'bg-slate-500/10 border-slate-500/30 text-slate-600' 
   },
 ];
 
@@ -103,56 +161,68 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 min-h-[600px]">
-        {KANBAN_COLUMNS.map((column) => {
-          const columnClients = getClientsForColumn(column.id);
-          const Icon = column.icon;
-          
-          return (
-            <div
-              key={column.id}
-              className="flex flex-col bg-muted/30 rounded-xl border border-border/50"
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, column.id)}
-            >
-              {/* Column Header */}
-              <div className={cn(
-                "flex items-center gap-2 px-4 py-3 border-b rounded-t-xl",
-                column.color
-              )}>
-                <Icon className="w-4 h-4" />
-                <span className="font-medium text-sm">{column.title}</span>
-                <span className="ml-auto bg-background/80 text-foreground px-2 py-0.5 rounded-full text-xs font-medium">
-                  {columnClients.length}
-                </span>
-              </div>
+      <ScrollArea className="w-full pb-4">
+        <div className="flex gap-4 min-h-[600px] pb-4">
+          {KANBAN_COLUMNS.map((column) => {
+            const columnClients = getClientsForColumn(column.id);
+            const Icon = column.icon;
+            
+            return (
+              <div
+                key={column.id}
+                className="flex flex-col bg-muted/30 rounded-xl border border-border/50 min-w-[280px] w-[280px] shrink-0"
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, column.id)}
+              >
+                {/* Column Header */}
+                <div className={cn(
+                  "flex flex-col px-3 py-3 border-b rounded-t-xl",
+                  column.color
+                )}>
+                  <div className="flex items-center gap-2">
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="font-medium text-sm truncate">{column.title}</span>
+                    <span className="ml-auto bg-background/80 text-foreground px-2 py-0.5 rounded-full text-xs font-medium shrink-0">
+                      {columnClients.length}
+                    </span>
+                  </div>
+                  {column.subtitle && (
+                    <span className="text-xs opacity-80 mt-0.5 pl-6">{column.subtitle}</span>
+                  )}
+                </div>
 
-              {/* Column Content */}
-              <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-300px)]">
-                {columnClients.map((client) => (
-                  <div
-                    key={client.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, client)}
-                    className={cn(
-                      "cursor-grab active:cursor-grabbing transition-opacity",
-                      draggedClient?.id === client.id && "opacity-50"
-                    )}
-                  >
-                    <ClientCard client={client} lastCallDate={client.lastCallDate} />
-                  </div>
-                ))}
-                
-                {columnClients.length === 0 && (
-                  <div className="flex items-center justify-center h-24 text-muted-foreground text-sm border-2 border-dashed border-border/50 rounded-lg">
-                    Arraste clientes aqui
-                  </div>
-                )}
+                {/* Column Content */}
+                <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-300px)]">
+                  {columnClients.map((client) => (
+                    <div
+                      key={client.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, client)}
+                      className={cn(
+                        "cursor-grab active:cursor-grabbing transition-opacity",
+                        draggedClient?.id === client.id && "opacity-50"
+                      )}
+                    >
+                      <ClientCard 
+                        client={client} 
+                        lastCallDate={client.lastCallDate} 
+                        onUpdate={onRefresh}
+                      />
+                    </div>
+                  ))}
+                  
+                  {columnClients.length === 0 && (
+                    <div className="flex items-center justify-center h-24 text-muted-foreground text-xs border-2 border-dashed border-border/50 rounded-lg">
+                      Arraste clientes aqui
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
 
       {/* Sale Dialog */}
       {clientForSale && (

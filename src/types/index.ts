@@ -104,7 +104,17 @@ export interface DailyVerse {
   created_at: string;
 }
 
-export type ClientStatus = 'call_realizada' | 'contato_agendado' | 'encaminhado_fechamento' | 'venda_realizada';
+export type ClientStatus = 
+  | 'call_realizada'
+  | 'repitch'
+  | 'pos_call_0_2'
+  | 'pos_call_3_7'
+  | 'pos_call_8_15'
+  | 'pos_call_16_21'
+  | 'sinal_compromisso'
+  | 'venda_realizada'
+  | 'aluno_nao_fit'
+  | 'pos_21_carterizacao';
 
 export interface Client {
   id: string;
@@ -121,6 +131,7 @@ export interface Client {
   main_pain: string | null;
   source: ClientSource | null;
   status: ClientStatus | null;
+  is_super_hot: boolean | null;
   // Sale fields
   is_sold: boolean | null;
   sold_at: string | null;
@@ -134,6 +145,23 @@ export interface Client {
   sdr_name: string | null;
   product_offered: string | null;
   followup_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type IndicationType = 'call' | 'intensivo';
+export type IndicationStatus = 'pendente' | 'contatado' | 'convertido' | 'perdido';
+
+export interface Indication {
+  id: string;
+  client_id: string | null;
+  indicated_by: string;
+  indicated_name: string;
+  indicated_phone: string;
+  indicated_email: string | null;
+  indication_type: IndicationType;
+  notes: string | null;
+  status: IndicationStatus;
   created_at: string;
   updated_at: string;
 }
