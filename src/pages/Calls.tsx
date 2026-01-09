@@ -5,9 +5,10 @@ import { useUserPermissions } from '@/hooks/useUserPermissions';
 import MainLayout from '@/components/layout/MainLayout';
 import CallCard from '@/components/calls/CallCard';
 import NewCallDialog from '@/components/calls/NewCallDialog';
+import CallStatsBar from '@/components/calls/CallStatsBar';
+import ActiveFiltersChips from '@/components/calls/ActiveFiltersChips';
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Search, Phone, Trash2 } from 'lucide-react';
 import { Call, CallStatus } from '@/types';
@@ -122,6 +123,13 @@ export default function Calls() {
           </div>
         </div>
 
+        {/* Stats Bar */}
+        <CallStatsBar 
+          calls={calls} 
+          onStatusFilter={setStatusFilter} 
+          activeStatus={statusFilter} 
+        />
+
         {/* Filters */}
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="relative flex-1">
@@ -133,25 +141,26 @@ export default function Calls() {
               className="pl-10"
             />
           </div>
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as CallStatus | 'all')}>
-            <SelectTrigger className="w-full sm:w-[200px]">
-              <SelectValue placeholder="Filtrar por status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              <SelectItem value="pendente">Pendente</SelectItem>
-              <SelectItem value="em_andamento">Em andamento</SelectItem>
-              <SelectItem value="follow_up">Follow-up</SelectItem>
-              <SelectItem value="proposta_enviada">Proposta enviada</SelectItem>
-              <SelectItem value="vendido">Vendido</SelectItem>
-              <SelectItem value="perdido">Perdido</SelectItem>
-            </SelectContent>
-          </Select>
           <DateRangePicker 
             dateRange={dateRange} 
             onDateRangeChange={setDateRange} 
           />
         </div>
+
+        {/* Active Filters Chips */}
+        <ActiveFiltersChips
+          searchQuery={searchQuery}
+          statusFilter={statusFilter}
+          dateRange={dateRange}
+          onClearSearch={() => setSearchQuery('')}
+          onClearStatus={() => setStatusFilter('all')}
+          onClearDateRange={() => setDateRange(undefined)}
+          onClearAll={() => {
+            setSearchQuery('');
+            setStatusFilter('all');
+            setDateRange(undefined);
+          }}
+        />
 
         {/* Calls Grid */}
         {loading ? (
