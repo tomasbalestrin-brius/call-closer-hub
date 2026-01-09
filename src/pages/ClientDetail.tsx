@@ -210,7 +210,7 @@ export default function ClientDetail() {
           <p className="text-muted-foreground">Cliente não encontrado</p>
           <Button onClick={() => navigate('/clients')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar para Clientes
+            Voltar para CRM Calls
           </Button>
         </div>
       </MainLayout>

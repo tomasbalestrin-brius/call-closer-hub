@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Calls', href: '/calls', icon: Phone },
-  { name: 'Clientes', href: '/clients', icon: Users },
+  { name: 'CRM Calls', href: '/clients', icon: Users },
   { name: 'Notificações', href: '/notifications', icon: Bell },
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
