@@ -7,10 +7,9 @@ import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import DailyVerse from '@/components/dashboard/DailyVerse';
 import QuotaProgressBar from '@/components/dashboard/QuotaProgressBar';
 import MonthlyGoalBar from '@/components/dashboard/MonthlyGoalBar';
-import CallCard from '@/components/calls/CallCard';
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
 import { Phone, Star, TrendingUp, DollarSign, Wallet, Target } from 'lucide-react';
-import { DashboardStats, Call } from '@/types';
+import { DashboardStats } from '@/types';
 import { DateRange } from 'react-day-picker';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
@@ -24,7 +23,6 @@ export default function Dashboard() {
     totalEntryValue: 0,
     conversionRate: 0,
   });
-  const [recentCalls, setRecentCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
@@ -103,11 +101,6 @@ export default function Dashboard() {
         conversionRate: Math.round(conversionRate),
       });
 
-      // Get recent calls
-      const recent = [...calls]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 5) as Call[];
-      setRecentCalls(recent);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -184,27 +177,6 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Recent Calls */}
-        <div>
-          <h2 className="text-xl font-display font-semibold mb-4">Calls Recentes</h2>
-          {loading ? (
-            <div className="text-muted-foreground">Carregando...</div>
-          ) : recentCalls.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {recentCalls.map((call) => (
-                <CallCard key={call.id} call={call} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-card rounded-xl border">
-              <Phone className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">Nenhuma call registrada ainda</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Vá para a página de Calls para adicionar sua primeira call
-              </p>
-            </div>
-          )}
-        </div>
       </div>
     </MainLayout>
   );
