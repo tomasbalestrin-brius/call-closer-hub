@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.check-followups]
 verify_jwt = false
+
+[functions.check-incomplete-clients]
+verify_jwt = false
+
+[functions.notify-client-completed]
+verify_jwt = false

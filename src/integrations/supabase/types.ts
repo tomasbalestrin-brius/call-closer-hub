@@ -199,12 +199,14 @@ export type Database = {
           company: string | null
           contract_validity: string | null
           created_at: string
+          data_completed_at: string | null
           email: string | null
           entry_value: number | null
           followup_date: string | null
           funnel_source: string | null
           has_partner: boolean | null
           id: string
+          incomplete_notification_sent: boolean | null
           is_sold: boolean | null
           main_difficulty: string | null
           main_pain: string | null
@@ -228,12 +230,14 @@ export type Database = {
           company?: string | null
           contract_validity?: string | null
           created_at?: string
+          data_completed_at?: string | null
           email?: string | null
           entry_value?: number | null
           followup_date?: string | null
           funnel_source?: string | null
           has_partner?: boolean | null
           id?: string
+          incomplete_notification_sent?: boolean | null
           is_sold?: boolean | null
           main_difficulty?: string | null
           main_pain?: string | null
@@ -257,12 +261,14 @@ export type Database = {
           company?: string | null
           contract_validity?: string | null
           created_at?: string
+          data_completed_at?: string | null
           email?: string | null
           entry_value?: number | null
           followup_date?: string | null
           funnel_source?: string | null
           has_partner?: boolean | null
           id?: string
+          incomplete_notification_sent?: boolean | null
           is_sold?: boolean | null
           main_difficulty?: string | null
           main_pain?: string | null
@@ -511,9 +517,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_client_notification: {
+        Args: {
+          p_message: string
+          p_title: string
+          p_type?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       create_followup_notification: {
         Args: { p_message: string; p_title: string; p_user_id: string }
         Returns: undefined
+      }
+      get_squad_leader_for_closer: {
+        Args: { p_closer_id: string }
+        Returns: string
       }
       has_role: {
         Args: {
