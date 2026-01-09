@@ -208,6 +208,7 @@ export type Database = {
           id: string
           incomplete_notification_sent: boolean | null
           is_sold: boolean | null
+          is_super_hot: boolean | null
           main_difficulty: string | null
           main_pain: string | null
           name: string
@@ -239,6 +240,7 @@ export type Database = {
           id?: string
           incomplete_notification_sent?: boolean | null
           is_sold?: boolean | null
+          is_super_hot?: boolean | null
           main_difficulty?: string | null
           main_pain?: string | null
           name: string
@@ -270,6 +272,7 @@ export type Database = {
           id?: string
           incomplete_notification_sent?: boolean | null
           is_sold?: boolean | null
+          is_super_hot?: boolean | null
           main_difficulty?: string | null
           main_pain?: string | null
           name?: string
@@ -356,6 +359,56 @@ export type Database = {
             columns: ["call_id"]
             isOneToOne: false
             referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      indications: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          id: string
+          indicated_by: string
+          indicated_email: string | null
+          indicated_name: string
+          indicated_phone: string
+          indication_type: string
+          notes: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          id?: string
+          indicated_by: string
+          indicated_email?: string | null
+          indicated_name: string
+          indicated_phone: string
+          indication_type: string
+          notes?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          id?: string
+          indicated_by?: string
+          indicated_email?: string | null
+          indicated_name?: string
+          indicated_phone?: string
+          indication_type?: string
+          notes?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indications_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
