@@ -80,6 +80,9 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
 
     setLoading(true);
 
+    // Verificar se dados estavam incompletos antes
+    const wasIncomplete = !client.phone || !client.revenue || !client.product_offered;
+
     try {
       const { error } = await supabase
         .from('clients')
@@ -102,6 +105,19 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
         .eq('id', client.id);
 
       if (error) throw error;
+
+      // Se dados estavam incompletos e agora estão completos, notificar líder
+      const nowComplete = phone.trim() && revenue && productOffered;
+      if (wasIncomplete && nowComplete) {
+        try {
+          await supabase.functions.invoke('notify-client-completed', {
+            body: { clientId: client.id }
+          });
+        } catch (notifyError) {
+          console.error('Error notifying leader:', notifyError);
+          // Não bloqueia o fluxo principal
+        }
+      }
 
       toast.success('Cliente atualizado com sucesso!');
       setOpen(false);
