@@ -4,9 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { ChevronDown, ChevronUp, BarChart3, CheckCircle2, AlertTriangle, Phone, Star, Info } from 'lucide-react';
+import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
+import { DateRange } from 'react-day-picker';
 
 interface PeriodSummaryProps {
   calls: Call[];
+  dateRange: DateRange | undefined;
+  onDateRangeChange: (range: DateRange | undefined) => void;
 }
 
 interface AggregatedItem {
@@ -14,7 +18,7 @@ interface AggregatedItem {
   count: number;
 }
 
-export default function PeriodSummary({ calls }: PeriodSummaryProps) {
+export default function PeriodSummary({ calls, dateRange, onDateRangeChange }: PeriodSummaryProps) {
   const [isOpen, setIsOpen] = useState(true);
 
   const summary = useMemo(() => {
@@ -92,24 +96,30 @@ export default function PeriodSummary({ calls }: PeriodSummaryProps) {
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-        <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors rounded-t-lg py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+        <CardHeader className="py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
                 <BarChart3 className="w-5 h-5 text-primary" />
                 <CardTitle className="text-lg font-semibold">Resumo do Período</CardTitle>
                 <Badge variant="secondary" className="ml-2">
                   {summary.totalCalls} calls
                 </Badge>
+                {isOpen ? (
+                  <ChevronUp className="w-5 h-5 text-muted-foreground ml-2" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-muted-foreground ml-2" />
+                )}
               </div>
-              {isOpen ? (
-                <ChevronUp className="w-5 h-5 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="w-5 h-5 text-muted-foreground" />
-              )}
+            </CollapsibleTrigger>
+            <div onClick={(e) => e.stopPropagation()}>
+              <DateRangePicker 
+                dateRange={dateRange}
+                onDateRangeChange={onDateRangeChange}
+              />
             </div>
-          </CardHeader>
-        </CollapsibleTrigger>
+          </div>
+        </CardHeader>
 
         <CollapsibleContent>
           <CardContent className="pt-0 pb-4">

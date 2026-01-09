@@ -8,7 +8,6 @@ import NewCallDialog from '@/components/calls/NewCallDialog';
 import CallStatsBar from '@/components/calls/CallStatsBar';
 import ActiveFiltersChips from '@/components/calls/ActiveFiltersChips';
 import PeriodSummary from '@/components/calls/PeriodSummary';
-import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Phone, Trash2 } from 'lucide-react';
@@ -132,7 +131,11 @@ export default function Calls() {
         />
 
         {/* Period Summary */}
-        <PeriodSummary calls={filteredCalls} />
+        <PeriodSummary 
+          calls={filteredCalls} 
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+        />
 
         {/* Filters */}
         <div className="flex flex-col lg:flex-row gap-4">
@@ -145,10 +148,6 @@ export default function Calls() {
               className="pl-10"
             />
           </div>
-          <DateRangePicker 
-            dateRange={dateRange} 
-            onDateRangeChange={setDateRange} 
-          />
         </div>
 
         {/* Active Filters Chips */}
