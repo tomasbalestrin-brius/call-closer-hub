@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useState } from "react";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar as CalendarIcon, Check } from "lucide-react";
 import { DateRange } from "react-day-picker";
@@ -39,6 +39,24 @@ export function DateRangePicker({
     setOpen(false);
   };
 
+  const setToday = () => {
+    const today = new Date();
+    setTempRange({ from: startOfDay(today), to: endOfDay(today) });
+  };
+
+  const setThisWeek = () => {
+    const today = new Date();
+    setTempRange({ 
+      from: startOfWeek(today, { locale: ptBR }), 
+      to: endOfWeek(today, { locale: ptBR }) 
+    });
+  };
+
+  const setThisMonth = () => {
+    const today = new Date();
+    setTempRange({ from: startOfMonth(today), to: endOfMonth(today) });
+  };
+
   return (
     <div className={cn("grid gap-2", className)}>
       <Popover open={open} onOpenChange={handleOpen}>
@@ -67,6 +85,17 @@ export function DateRangePicker({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
+          <div className="flex gap-2 p-3 border-b">
+            <Button variant="outline" size="sm" onClick={setToday}>
+              Hoje
+            </Button>
+            <Button variant="outline" size="sm" onClick={setThisWeek}>
+              Esta Semana
+            </Button>
+            <Button variant="outline" size="sm" onClick={setThisMonth}>
+              Este Mês
+            </Button>
+          </div>
           <Calendar
             initialFocus
             mode="range"
