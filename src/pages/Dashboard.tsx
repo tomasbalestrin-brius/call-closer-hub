@@ -145,17 +145,16 @@ export default function Dashboard() {
             variant="default"
           />
           <StatsCard
-            title="Nota Média"
-            value={stats.averageScore ? `${stats.averageScore}/10` : '-'}
-            icon={Star}
-            variant="warning"
-          />
-          <StatsCard
             title="Vendas Fechadas"
             value={stats.totalSales}
-            subtitle={`${stats.conversionRate}% de conversão`}
             icon={Target}
             variant="success"
+          />
+          <StatsCard
+            title="Taxa de Conversão"
+            value={`${stats.conversionRate}%`}
+            icon={TrendingUp}
+            variant="default"
           />
           <StatsCard
             title="Valor Total Vendido"
@@ -170,10 +169,10 @@ export default function Dashboard() {
             variant="success"
           />
           <StatsCard
-            title="Taxa de Conversão"
-            value={`${stats.conversionRate}%`}
-            icon={TrendingUp}
-            variant="default"
+            title="Nota Média de Calls"
+            value={stats.averageScore ? `${stats.averageScore}/10` : '-'}
+            icon={Star}
+            variant="warning"
           />
         </div>
 
