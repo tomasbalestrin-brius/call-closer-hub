@@ -1,7 +1,8 @@
 import * as React from "react";
+import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Check } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,9 +24,24 @@ export function DateRangePicker({
   onDateRangeChange,
   className,
 }: DateRangePickerProps) {
+  const [open, setOpen] = useState(false);
+  const [tempRange, setTempRange] = useState<DateRange | undefined>(dateRange);
+
+  const handleOpen = (isOpen: boolean) => {
+    if (isOpen) {
+      setTempRange(dateRange);
+    }
+    setOpen(isOpen);
+  };
+
+  const handleConfirm = () => {
+    onDateRangeChange(tempRange);
+    setOpen(false);
+  };
+
   return (
     <div className={cn("grid gap-2", className)}>
-      <Popover>
+      <Popover open={open} onOpenChange={handleOpen}>
         <PopoverTrigger asChild>
           <Button
             id="date"
@@ -54,12 +70,19 @@ export function DateRangePicker({
           <Calendar
             initialFocus
             mode="range"
-            defaultMonth={dateRange?.from}
-            selected={dateRange}
-            onSelect={onDateRangeChange}
+            defaultMonth={tempRange?.from}
+            selected={tempRange}
+            onSelect={setTempRange}
             numberOfMonths={2}
             locale={ptBR}
+            className="pointer-events-auto"
           />
+          <div className="p-3 border-t flex justify-end">
+            <Button size="sm" onClick={handleConfirm}>
+              <Check className="mr-2 h-4 w-4" />
+              Confirmar
+            </Button>
+          </div>
         </PopoverContent>
       </Popover>
     </div>
