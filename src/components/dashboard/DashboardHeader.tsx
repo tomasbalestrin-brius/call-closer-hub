@@ -71,7 +71,7 @@ export default function DashboardHeader() {
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <h1 className="text-2xl font-display font-bold">
-          {getGreeting()}, {getFirstName()}! 👋
+          {getGreeting()}, {getFirstName()}!
         </h1>
         <Badge className={`${levelConfig.color} text-white`}>
           {levelConfig.label}
