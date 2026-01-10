@@ -10,13 +10,18 @@ import { Tag, Plus, Settings } from 'lucide-react';
 interface TagSelectorProps {
   clientId: string;
   onTagsChange?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export default function TagSelector({ clientId, onTagsChange }: TagSelectorProps) {
+export default function TagSelector({ clientId, onTagsChange, open: controlledOpen, onOpenChange }: TagSelectorProps) {
   const { tags, loading: tagsLoading } = useClientTags();
   const { assignments, toggleTag, loading: assignmentsLoading } = useClientTagAssignments(clientId);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
+
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = onOpenChange || setInternalOpen;
 
   const handleToggle = async (tagId: string) => {
     const success = await toggleTag(tagId);

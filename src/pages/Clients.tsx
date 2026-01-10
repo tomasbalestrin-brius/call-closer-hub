@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import MainLayout from '@/components/layout/MainLayout';
 import ClientKanban from '@/components/clients/ClientKanban';
 import NewClientDialog from '@/components/clients/NewClientDialog';
+import CRMSettingsButton from '@/components/clients/settings/CRMSettingsButton';
 import { Input } from '@/components/ui/input';
 import { Search, Users } from 'lucide-react';
 import { Client } from '@/types';
@@ -90,7 +91,10 @@ export default function Clients() {
             <h1 className="text-3xl font-display font-bold">CRM Calls</h1>
             <p className="text-muted-foreground mt-1">Arraste os cards para atualizar o status</p>
           </div>
-          <NewClientDialog onClientCreated={fetchClients} />
+          <div className="flex items-center gap-2">
+            <CRMSettingsButton />
+            <NewClientDialog onClientCreated={fetchClients} />
+          </div>
         </div>
 
         {/* Search */}
