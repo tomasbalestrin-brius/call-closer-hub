@@ -70,7 +70,7 @@ export default function Sidebar() {
               <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
                 <Phone className="w-4 h-4 text-sidebar-primary-foreground" />
               </div>
-              <span className="font-display font-bold text-sidebar-foreground">BethelClose</span>
+              <span className="font-display font-bold text-sidebar-foreground">Bethel Closer</span>
             </div>
           )}
           <Button
