@@ -354,3 +354,68 @@ export interface SquadMember {
   user_id: string;
   created_at: string;
 }
+
+// Portfolio (Carteira) Types
+export type TicketType = '29_90' | '12k' | '80k';
+export type StudentActivityType = 'intensivo' | 'mentoria' | 'evento';
+
+export interface PortfolioStudent {
+  id: string;
+  client_id: string | null;
+  closer_id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  current_ticket: TicketType;
+  entry_date: string;
+  niche: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TicketUpgrade {
+  id: string;
+  student_id: string;
+  from_ticket: TicketType;
+  to_ticket: TicketType;
+  upgrade_date: string;
+  sale_value: number | null;
+  entry_value: number | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface StudentActivity {
+  id: string;
+  student_id: string;
+  activity_type: StudentActivityType;
+  activity_name: string;
+  activity_date: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface PortfolioMetrics {
+  totalStudents: number;
+  studentsByTicket: { '29_90': number; '12k': number; '80k': number };
+  ascensionRate29to12k: number;
+  ascensionRate12kto80k: number;
+  totalAscensions: number;
+  totalIntensivos: number;
+  totalMentorias: number;
+  totalEventos: number;
+  totalIndicacoes: number;
+}
+
+export const TICKET_LABELS: Record<TicketType, string> = {
+  '29_90': '29,90',
+  '12k': '12K',
+  '80k': '80K'
+};
+
+export const ACTIVITY_TYPE_LABELS: Record<StudentActivityType, string> = {
+  'intensivo': 'Intensivo',
+  'mentoria': 'Mentoria',
+  'evento': 'Evento'
+};
