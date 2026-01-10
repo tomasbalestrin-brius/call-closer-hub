@@ -561,6 +561,7 @@ export type Database = {
           indication_type: string
           notes: string | null
           status: string | null
+          student_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -574,6 +575,7 @@ export type Database = {
           indication_type: string
           notes?: string | null
           status?: string | null
+          student_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -587,6 +589,7 @@ export type Database = {
           indication_type?: string
           notes?: string | null
           status?: string | null
+          student_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -595,6 +598,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indications_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_students"
             referencedColumns: ["id"]
           },
         ]
@@ -661,6 +671,59 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      portfolio_students: {
+        Row: {
+          client_id: string | null
+          closer_id: string
+          created_at: string
+          current_ticket: Database["public"]["Enums"]["ticket_type"]
+          email: string | null
+          entry_date: string
+          id: string
+          name: string
+          niche: string | null
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          closer_id: string
+          created_at?: string
+          current_ticket?: Database["public"]["Enums"]["ticket_type"]
+          email?: string | null
+          entry_date?: string
+          id?: string
+          name: string
+          niche?: string | null
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          closer_id?: string
+          created_at?: string
+          current_ticket?: Database["public"]["Enums"]["ticket_type"]
+          email?: string | null
+          entry_date?: string
+          id?: string
+          name?: string
+          niche?: string | null
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_students_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -793,6 +856,88 @@ export type Database = {
         }
         Relationships: []
       }
+      student_activities: {
+        Row: {
+          activity_date: string
+          activity_name: string
+          activity_type: Database["public"]["Enums"]["student_activity_type"]
+          created_at: string
+          id: string
+          notes: string | null
+          student_id: string
+        }
+        Insert: {
+          activity_date?: string
+          activity_name: string
+          activity_type: Database["public"]["Enums"]["student_activity_type"]
+          created_at?: string
+          id?: string
+          notes?: string | null
+          student_id: string
+        }
+        Update: {
+          activity_date?: string
+          activity_name?: string
+          activity_type?: Database["public"]["Enums"]["student_activity_type"]
+          created_at?: string
+          id?: string
+          notes?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_activities_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_upgrades: {
+        Row: {
+          created_at: string
+          entry_value: number | null
+          from_ticket: Database["public"]["Enums"]["ticket_type"]
+          id: string
+          notes: string | null
+          sale_value: number | null
+          student_id: string
+          to_ticket: Database["public"]["Enums"]["ticket_type"]
+          upgrade_date: string
+        }
+        Insert: {
+          created_at?: string
+          entry_value?: number | null
+          from_ticket: Database["public"]["Enums"]["ticket_type"]
+          id?: string
+          notes?: string | null
+          sale_value?: number | null
+          student_id: string
+          to_ticket: Database["public"]["Enums"]["ticket_type"]
+          upgrade_date?: string
+        }
+        Update: {
+          created_at?: string
+          entry_value?: number | null
+          from_ticket?: Database["public"]["Enums"]["ticket_type"]
+          id?: string
+          notes?: string | null
+          sale_value?: number | null
+          student_id?: string
+          to_ticket?: Database["public"]["Enums"]["ticket_type"]
+          upgrade_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_upgrades_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -874,6 +1019,8 @@ export type Database = {
       import_frequency: "manual" | "hourly" | "daily" | "realtime"
       import_status: "pending" | "processing" | "completed" | "error"
       lead_classification: "pos_venda" | "follow"
+      student_activity_type: "intensivo" | "mentoria" | "evento"
+      ticket_type: "29_90" | "12k" | "80k"
       user_role: "admin" | "closer" | "lider"
     }
     CompositeTypes: {
@@ -1030,6 +1177,8 @@ export const Constants = {
       import_frequency: ["manual", "hourly", "daily", "realtime"],
       import_status: ["pending", "processing", "completed", "error"],
       lead_classification: ["pos_venda", "follow"],
+      student_activity_type: ["intensivo", "mentoria", "evento"],
+      ticket_type: ["29_90", "12k", "80k"],
       user_role: ["admin", "closer", "lider"],
     },
   },
