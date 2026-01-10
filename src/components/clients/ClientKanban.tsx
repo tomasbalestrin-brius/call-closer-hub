@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Client } from '@/types';
 import ClientCard from './ClientCard';
 import SaleFormDialog from './SaleFormDialog';
+import ColumnSettingsDialog from './settings/ColumnSettingsDialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useColumnSettings } from '@/hooks/useColumnSettings';
 import { 
   Phone, 
   RefreshCw, 
@@ -15,9 +17,11 @@ import {
   ThumbsUp, 
   CheckCircle2, 
   XCircle, 
-  Archive 
+  Archive,
+  Settings
 } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 
 const KANBAN_COLUMNS = [
   { 
@@ -105,6 +109,18 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
   const [draggedClient, setDraggedClient] = useState<ClientWithLastCall | null>(null);
   const [saleDialogOpen, setSaleDialogOpen] = useState(false);
   const [clientForSale, setClientForSale] = useState<ClientWithLastCall | null>(null);
+  const [editingColumn, setEditingColumn] = useState<string | null>(null);
+  const { settings, getColumnSettings, fetchSettings } = useColumnSettings();
+
+  const getColumnDisplay = (column: typeof KANBAN_COLUMNS[0]) => {
+    const customSettings = getColumnSettings(column.id);
+    return {
+      title: customSettings?.custom_title || column.title,
+      subtitle: customSettings?.custom_subtitle !== undefined 
+        ? customSettings.custom_subtitle 
+        : column.subtitle
+    };
+  };
 
   const getClientsForColumn = (columnId: string) => {
     if (columnId === 'venda_realizada') {
@@ -175,21 +191,37 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
                 onDrop={(e) => handleDrop(e, column.id)}
               >
                 {/* Column Header */}
-                <div className={cn(
-                  "flex flex-col px-3 py-3 border-b rounded-t-xl",
-                  column.color
-                )}>
-                  <div className="flex items-center gap-2">
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="font-medium text-sm truncate">{column.title}</span>
-                    <span className="ml-auto bg-background/80 text-foreground px-2 py-0.5 rounded-full text-xs font-medium shrink-0">
-                      {columnClients.length}
-                    </span>
-                  </div>
-                  {column.subtitle && (
-                    <span className="text-xs opacity-80 mt-0.5 pl-6">{column.subtitle}</span>
-                  )}
-                </div>
+                {(() => {
+                  const display = getColumnDisplay(column);
+                  return (
+                    <div className={cn(
+                      "flex flex-col px-3 py-3 border-b rounded-t-xl",
+                      column.color
+                    )}>
+                      <div className="flex items-center gap-2">
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="font-medium text-sm truncate">{display.title}</span>
+                        <span className="bg-background/80 text-foreground px-2 py-0.5 rounded-full text-xs font-medium shrink-0">
+                          {columnClients.length}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 ml-auto opacity-60 hover:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingColumn(column.id);
+                          }}
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                      {display.subtitle && (
+                        <span className="text-xs opacity-80 mt-0.5 pl-6">{display.subtitle}</span>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Column Content */}
                 <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-300px)]">
@@ -236,6 +268,22 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
           onSaleUpdated={handleSaleComplete}
         />
       )}
+
+      {/* Column Settings Dialog */}
+      {editingColumn && (() => {
+        const column = KANBAN_COLUMNS.find(c => c.id === editingColumn);
+        if (!column) return null;
+        return (
+          <ColumnSettingsDialog
+            open={!!editingColumn}
+            onOpenChange={(open) => !open && setEditingColumn(null)}
+            columnId={column.id}
+            defaultTitle={column.title}
+            defaultSubtitle={column.subtitle}
+            onSave={fetchSettings}
+          />
+        );
+      })()}
     </>
   );
 }
