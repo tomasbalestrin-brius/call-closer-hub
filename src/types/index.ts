@@ -131,6 +131,7 @@ export interface Client {
   main_pain: string | null;
   source: ClientSource | null;
   status: ClientStatus | null;
+  status_changed_at: string | null;
   is_super_hot: boolean | null;
   // Sale fields
   is_sold: boolean | null;
@@ -164,6 +165,74 @@ export interface Indication {
   status: IndicationStatus;
   created_at: string;
   updated_at: string;
+}
+
+// Tags System
+export interface ClientTag {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  icon: string;
+  created_at: string;
+}
+
+export interface ClientTagAssignment {
+  id: string;
+  client_id: string;
+  tag_id: string;
+  created_at: string;
+}
+
+// Column Settings
+export interface CRMColumnSettings {
+  id: string;
+  user_id: string;
+  column_id: string;
+  custom_title: string | null;
+  custom_subtitle: string | null;
+  custom_color: string | null;
+  display_order: number | null;
+  is_visible: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Automations System
+export type AutomationTriggerType = 
+  | 'days_in_column'
+  | 'followup_date_reached'
+  | 'tag_added'
+  | 'data_completed'
+  | 'no_interaction';
+
+export type AutomationActionType = 
+  | 'move_to_column'
+  | 'add_tag'
+  | 'remove_tag'
+  | 'send_notification'
+  | 'mark_super_hot';
+
+export interface CRMAutomation {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  trigger_type: AutomationTriggerType;
+  trigger_config: Record<string, unknown>;
+  action_type: AutomationActionType;
+  action_config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationLog {
+  id: string;
+  automation_id: string;
+  client_id: string;
+  executed_at: string;
+  result: Record<string, unknown> | null;
 }
 
 export interface StageAnalysis {

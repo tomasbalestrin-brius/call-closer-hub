@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_logs: {
+        Row: {
+          automation_id: string
+          client_id: string
+          executed_at: string | null
+          id: string
+          result: Json | null
+        }
+        Insert: {
+          automation_id: string
+          client_id: string
+          executed_at?: string | null
+          id?: string
+          result?: Json | null
+        }
+        Update: {
+          automation_id?: string
+          client_id?: string
+          executed_at?: string | null
+          id?: string
+          result?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "crm_automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calls: {
         Row: {
           ai_summary: string | null
@@ -193,6 +232,69 @@ export type Database = {
           },
         ]
       }
+      client_tag_assignments: {
+        Row: {
+          client_id: string
+          created_at: string | null
+          id: string
+          tag_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string | null
+          id?: string
+          tag_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string | null
+          id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_tag_assignments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_tag_assignments_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "client_tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_tags: {
+        Row: {
+          color: string
+          created_at: string | null
+          icon: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           closer_id: string
@@ -224,6 +326,7 @@ export type Database = {
           sold_at: string | null
           source: Database["public"]["Enums"]["client_source"] | null
           status: string | null
+          status_changed_at: string | null
           updated_at: string
         }
         Insert: {
@@ -256,6 +359,7 @@ export type Database = {
           sold_at?: string | null
           source?: Database["public"]["Enums"]["client_source"] | null
           status?: string | null
+          status_changed_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -288,7 +392,89 @@ export type Database = {
           sold_at?: string | null
           source?: Database["public"]["Enums"]["client_source"] | null
           status?: string | null
+          status_changed_at?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_automations: {
+        Row: {
+          action_config: Json
+          action_type: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          trigger_config: Json
+          trigger_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          action_config?: Json
+          action_type: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          trigger_config?: Json
+          trigger_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          action_config?: Json
+          action_type?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      crm_column_settings: {
+        Row: {
+          column_id: string
+          created_at: string | null
+          custom_color: string | null
+          custom_subtitle: string | null
+          custom_title: string | null
+          display_order: number | null
+          id: string
+          is_visible: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          column_id: string
+          created_at?: string | null
+          custom_color?: string | null
+          custom_subtitle?: string | null
+          custom_title?: string | null
+          display_order?: number | null
+          id?: string
+          is_visible?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          column_id?: string
+          created_at?: string | null
+          custom_color?: string | null
+          custom_subtitle?: string | null
+          custom_title?: string | null
+          display_order?: number | null
+          id?: string
+          is_visible?: boolean | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
