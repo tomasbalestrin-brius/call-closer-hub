@@ -82,6 +82,28 @@ export function usePortfolioMetrics() {
   const { data: activities } = useStudentActivities();
   const { data: indications } = useStudentIndications();
   
+  // Indicações por tipo
+  const indicacoesCall = indications?.filter(i => i.indication_type === 'call').length || 0;
+  const indicacoesIntensivo = indications?.filter(i => i.indication_type === 'intensivo').length || 0;
+  const totalIndicacoes = indications?.length || 0;
+  
+  // Fechadas (status = 'convertido') por tipo
+  const indicacoesFechadasCall = indications?.filter(i => 
+    i.indication_type === 'call' && i.status === 'convertido'
+  ).length || 0;
+  
+  const indicacoesFechadasIntensivo = indications?.filter(i => 
+    i.indication_type === 'intensivo' && i.status === 'convertido'
+  ).length || 0;
+  
+  // Taxas de conversão
+  const taxaConversaoCall = indicacoesCall > 0 
+    ? (indicacoesFechadasCall / indicacoesCall) * 100 : 0;
+  const taxaConversaoIntensivo = indicacoesIntensivo > 0 
+    ? (indicacoesFechadasIntensivo / indicacoesIntensivo) * 100 : 0;
+  const taxaConversaoGeral = totalIndicacoes > 0 
+    ? ((indicacoesFechadasCall + indicacoesFechadasIntensivo) / totalIndicacoes) * 100 : 0;
+  
   const metrics: PortfolioMetrics = {
     totalStudents: students?.length || 0,
     studentsByTicket: {
@@ -95,7 +117,15 @@ export function usePortfolioMetrics() {
     totalIntensivos: activities?.filter(a => a.activity_type === 'intensivo').length || 0,
     totalMentorias: activities?.filter(a => a.activity_type === 'mentoria').length || 0,
     totalEventos: activities?.filter(a => a.activity_type === 'evento').length || 0,
-    totalIndicacoes: indications?.length || 0,
+    // Indicações detalhadas
+    totalIndicacoes,
+    indicacoesCall,
+    indicacoesIntensivo,
+    indicacoesFechadasCall,
+    indicacoesFechadasIntensivo,
+    taxaConversaoCall,
+    taxaConversaoIntensivo,
+    taxaConversaoGeral,
   };
   
   // Calculate ascension rates
