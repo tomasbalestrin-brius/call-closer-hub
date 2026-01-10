@@ -17,13 +17,15 @@ import {
   XCircle,
   Loader2,
   Users2,
-  Target
+  Target,
+  Key
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
 import { SquadManagement } from '@/components/admin/SquadManagement';
 import { CloserLevelSelect, LEVEL_CONFIG, type CloserLevel } from '@/components/admin/CloserLevelSelect';
 import { SetMonthlyGoalDialog } from '@/components/admin/SetMonthlyGoalDialog';
+import { ResetPasswordDialog } from '@/components/admin/ResetPasswordDialog';
 import { Navigate } from 'react-router-dom';
 
 interface CloserWithProfile {
@@ -45,6 +47,8 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [selectedCloserForReset, setSelectedCloserForReset] = useState<{ user_id: string; full_name: string } | null>(null);
 
   useEffect(() => {
     if (isAdmin) {
@@ -272,6 +276,17 @@ export default function Admin() {
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => {
+                              setSelectedCloserForReset({ user_id: closer.user_id, full_name: closer.full_name });
+                              setResetPasswordDialogOpen(true);
+                            }}
+                          >
+                            <Key className="w-4 h-4 mr-1" />
+                            Senha
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => toggleCloserStatus(closer.id, closer.status)}
                           >
                             {closer.status === 'active' ? 'Desativar' : 'Ativar'}
@@ -307,6 +322,12 @@ export default function Admin() {
           setGoalDialogOpen(false);
         }}
         closers={closers}
+      />
+
+      <ResetPasswordDialog
+        open={resetPasswordDialogOpen}
+        onOpenChange={setResetPasswordDialogOpen}
+        closer={selectedCloserForReset}
       />
     </MainLayout>
   );
