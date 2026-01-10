@@ -50,9 +50,9 @@ export function useAutomations() {
           name,
           description,
           trigger_type: triggerType,
-          trigger_config: triggerConfig as unknown,
+          trigger_config: triggerConfig as any,
           action_type: actionType,
-          action_config: actionConfig as unknown
+          action_config: actionConfig as any
         }])
         .select()
         .single();
