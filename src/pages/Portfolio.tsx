@@ -6,6 +6,7 @@ import { Plus, Search } from 'lucide-react';
 import AscensionMetrics from '@/components/portfolio/AscensionMetrics';
 import TicketCounter from '@/components/portfolio/TicketCounter';
 import ActivityMetrics from '@/components/portfolio/ActivityMetrics';
+import IndicationMetrics from '@/components/portfolio/IndicationMetrics';
 import PortfolioFilters from '@/components/portfolio/PortfolioFilters';
 import StudentList from '@/components/portfolio/StudentList';
 import NewStudentDialog from '@/components/portfolio/NewStudentDialog';
@@ -109,6 +110,9 @@ export default function Portfolio() {
         
         {/* Metrics Row 3: Activities */}
         <ActivityMetrics metrics={metrics} />
+        
+        {/* Metrics Row 4: Indications */}
+        <IndicationMetrics metrics={metrics} />
         
         {/* Filters */}
         <PortfolioFilters filters={filters} onFiltersChange={setFilters} />

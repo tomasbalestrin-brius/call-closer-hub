@@ -405,7 +405,15 @@ export interface PortfolioMetrics {
   totalIntensivos: number;
   totalMentorias: number;
   totalEventos: number;
+  // Indicações detalhadas
   totalIndicacoes: number;
+  indicacoesCall: number;
+  indicacoesIntensivo: number;
+  indicacoesFechadasCall: number;
+  indicacoesFechadasIntensivo: number;
+  taxaConversaoCall: number;
+  taxaConversaoIntensivo: number;
+  taxaConversaoGeral: number;
 }
 
 export const TICKET_LABELS: Record<TicketType, string> = {
