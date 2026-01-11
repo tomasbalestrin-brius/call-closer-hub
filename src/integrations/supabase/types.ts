@@ -200,6 +200,44 @@ export type Database = {
           },
         ]
       }
+      client_activities: {
+        Row: {
+          activity_date: string
+          activity_name: string
+          activity_type: string
+          client_id: string
+          created_at: string | null
+          id: string
+          notes: string | null
+        }
+        Insert: {
+          activity_date?: string
+          activity_name: string
+          activity_type: string
+          client_id: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+        }
+        Update: {
+          activity_date?: string
+          activity_name?: string
+          activity_type?: string
+          client_id?: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_activities_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_notes: {
         Row: {
           client_id: string
@@ -309,6 +347,8 @@ export type Database = {
           has_partner: boolean | null
           id: string
           incomplete_notification_sent: boolean | null
+          indication_source_id: string | null
+          is_from_indication: boolean | null
           is_sold: boolean | null
           is_super_hot: boolean | null
           main_difficulty: string | null
@@ -342,6 +382,8 @@ export type Database = {
           has_partner?: boolean | null
           id?: string
           incomplete_notification_sent?: boolean | null
+          indication_source_id?: string | null
+          is_from_indication?: boolean | null
           is_sold?: boolean | null
           is_super_hot?: boolean | null
           main_difficulty?: string | null
@@ -375,6 +417,8 @@ export type Database = {
           has_partner?: boolean | null
           id?: string
           incomplete_notification_sent?: boolean | null
+          indication_source_id?: string | null
+          is_from_indication?: boolean | null
           is_sold?: boolean | null
           is_super_hot?: boolean | null
           main_difficulty?: string | null
@@ -395,7 +439,15 @@ export type Database = {
           status_changed_at?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_indication_source_id_fkey"
+            columns: ["indication_source_id"]
+            isOneToOne: false
+            referencedRelation: "indications"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       crm_automations: {
         Row: {
