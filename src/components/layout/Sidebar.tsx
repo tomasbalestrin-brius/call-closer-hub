@@ -12,7 +12,8 @@ import {
   Bell,
   Shield,
   BarChart3,
-  Briefcase
+  Briefcase,
+  Flame
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,6 +24,7 @@ const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Calls', href: '/calls', icon: Phone },
   { name: 'CRM Calls', href: '/clients', icon: Users },
+  { name: 'CRM Intensivo', href: '/intensivo-crm', icon: Flame },
   { name: 'Carteira', href: '/portfolio', icon: Briefcase },
   { name: 'Notificações', href: '/notifications', icon: Bell },
   { name: 'Configurações', href: '/settings', icon: Settings },
