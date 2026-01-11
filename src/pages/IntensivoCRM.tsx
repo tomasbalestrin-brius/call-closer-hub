@@ -36,7 +36,7 @@ export default function IntensivoCRM() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<IntensiveLeadStatus | 'all'>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'kanban'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'kanban'>('kanban');
   const [showNewEditionDialog, setShowNewEditionDialog] = useState(false);
   const [showNewLeadDialog, setShowNewLeadDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<IntensiveLead | null>(null);
