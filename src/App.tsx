@@ -13,6 +13,7 @@ import Settings from "./pages/Settings";
 import Admin from "./pages/Admin";
 import SquadReports from "./pages/SquadReports";
 import Portfolio from "./pages/Portfolio";
+import IntensivoCRM from "./pages/IntensivoCRM";
 import NotFound from "./pages/NotFound";
 import GoogleDriveCallback from "./pages/GoogleDriveCallback";
 
@@ -35,6 +36,7 @@ const App = () => (
           <Route path="/admin" element={<Admin />} />
           <Route path="/squad-reports" element={<SquadReports />} />
           <Route path="/portfolio" element={<Portfolio />} />
+          <Route path="/intensivo-crm" element={<IntensivoCRM />} />
           <Route path="/google-drive-callback" element={<GoogleDriveCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

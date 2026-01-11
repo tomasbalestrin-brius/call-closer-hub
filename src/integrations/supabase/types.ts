@@ -661,6 +661,172 @@ export type Database = {
           },
         ]
       }
+      intensive_editions: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          description: string | null
+          event_date: string
+          id: string
+          is_active: boolean | null
+          location: string | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          description?: string | null
+          event_date: string
+          id?: string
+          is_active?: boolean | null
+          location?: string | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          event_date?: string
+          id?: string
+          is_active?: boolean | null
+          location?: string | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      intensive_lead_notes: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          lead_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          lead_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          lead_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intensive_lead_notes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "intensive_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intensive_leads: {
+        Row: {
+          attended_at: string | null
+          closer_id: string
+          company: string | null
+          confirmed_at: string | null
+          created_at: string | null
+          edition_id: string
+          email: string | null
+          id: string
+          indication_id: string | null
+          name: string
+          niche: string | null
+          notes: string | null
+          phone: string | null
+          source: string | null
+          source_client_id: string | null
+          source_student_id: string | null
+          status: string
+          status_changed_at: string | null
+          ticket_retrieved_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          attended_at?: string | null
+          closer_id: string
+          company?: string | null
+          confirmed_at?: string | null
+          created_at?: string | null
+          edition_id: string
+          email?: string | null
+          id?: string
+          indication_id?: string | null
+          name: string
+          niche?: string | null
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          source_client_id?: string | null
+          source_student_id?: string | null
+          status?: string
+          status_changed_at?: string | null
+          ticket_retrieved_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          attended_at?: string | null
+          closer_id?: string
+          company?: string | null
+          confirmed_at?: string | null
+          created_at?: string | null
+          edition_id?: string
+          email?: string | null
+          id?: string
+          indication_id?: string | null
+          name?: string
+          niche?: string | null
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          source_client_id?: string | null
+          source_student_id?: string | null
+          status?: string
+          status_changed_at?: string | null
+          ticket_retrieved_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intensive_leads_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "intensive_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intensive_leads_indication_id_fkey"
+            columns: ["indication_id"]
+            isOneToOne: false
+            referencedRelation: "indications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intensive_leads_source_client_id_fkey"
+            columns: ["source_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intensive_leads_source_student_id_fkey"
+            columns: ["source_student_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_goals: {
         Row: {
           closer_id: string
