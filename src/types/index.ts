@@ -146,6 +146,9 @@ export interface Client {
   sdr_name: string | null;
   product_offered: string | null;
   followup_date: string | null;
+  // Indication source fields
+  is_from_indication: boolean | null;
+  indication_source_id: string | null;
   created_at: string;
   updated_at: string;
 }

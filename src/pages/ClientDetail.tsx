@@ -10,8 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import ClientEditDialog from '@/components/clients/ClientEditDialog';
-
+import IntensiveParticipationDialog from '@/components/clients/IntensiveParticipationDialog';
+import MentoriaExtraDialog from '@/components/clients/MentoriaExtraDialog';
+import ClientIndicationsDialog from '@/components/clients/ClientIndicationsDialog';
+import IndicationSourceDialog from '@/components/clients/IndicationSourceDialog';
 import SaleFormDialog from '@/components/clients/SaleFormDialog';
+import { useClientActivities, useClientIndications } from '@/hooks/useClientActivities';
 import { 
   ArrowLeft, 
   Building2, 
@@ -30,7 +34,10 @@ import {
   Clock,
   BadgeCheck,
   Trash2,
-  Merge
+  Merge,
+  Zap,
+  BookOpen,
+  Link2
 } from 'lucide-react';
 import { MergeCallDialog } from '@/components/calls/MergeCallDialog';
 import {
@@ -97,6 +104,10 @@ export default function ClientDetail() {
   const [loading, setLoading] = useState(true);
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
   const [saleDialogOpen, setSaleDialogOpen] = useState(false);
+  const [intensiveDialogOpen, setIntensiveDialogOpen] = useState(false);
+  const [mentoriaDialogOpen, setMentoriaDialogOpen] = useState(false);
+  const [indicationsDialogOpen, setIndicationsDialogOpen] = useState(false);
+  const [indicationSourceDialogOpen, setIndicationSourceDialogOpen] = useState(false);
 
   useEffect(() => {
     if (user && id) {
@@ -284,7 +295,41 @@ export default function ClientDetail() {
           </div>
         </div>
 
-        {/* Sale Info Banner */}
+        {/* Action Buttons Row */}
+        <div className="flex flex-wrap gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setIntensiveDialogOpen(true)}
+            className="gap-2"
+          >
+            <Zap className="w-4 h-4 text-warning" />
+            Intensivo
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setIndicationsDialogOpen(true)}
+            className="gap-2"
+          >
+            <Users className="w-4 h-4 text-primary" />
+            Indicações
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setMentoriaDialogOpen(true)}
+            className="gap-2"
+          >
+            <BookOpen className="w-4 h-4 text-primary" />
+            Mentoria Extra
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setIndicationSourceDialogOpen(true)}
+            className={cn("gap-2", client.is_from_indication && "border-success text-success")}
+          >
+            <Link2 className="w-4 h-4" />
+            {client.is_from_indication ? 'Veio de Indicação ✓' : 'Origem Indicação'}
+          </Button>
+        </div>
         {client.is_sold && (
           <Card className="border-success/50 bg-success/5">
             <CardContent className="py-4">
@@ -648,6 +693,35 @@ export default function ClientDetail() {
         open={saleDialogOpen}
         onOpenChange={setSaleDialogOpen}
         onSaleUpdated={fetchClientData}
+      />
+
+      {/* Activity Dialogs */}
+      <IntensiveParticipationDialog
+        client={client}
+        open={intensiveDialogOpen}
+        onOpenChange={setIntensiveDialogOpen}
+        onActivityAdded={fetchClientData}
+      />
+
+      <MentoriaExtraDialog
+        client={client}
+        open={mentoriaDialogOpen}
+        onOpenChange={setMentoriaDialogOpen}
+        onActivityAdded={fetchClientData}
+      />
+
+      <ClientIndicationsDialog
+        client={client}
+        open={indicationsDialogOpen}
+        onOpenChange={setIndicationsDialogOpen}
+        onIndicationAdded={fetchClientData}
+      />
+
+      <IndicationSourceDialog
+        client={client}
+        open={indicationSourceDialogOpen}
+        onOpenChange={setIndicationSourceDialogOpen}
+        onLinked={fetchClientData}
       />
     </MainLayout>
   );
