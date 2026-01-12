@@ -23,10 +23,12 @@ import {
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
 import { SquadManagement } from '@/components/admin/SquadManagement';
-import { CloserLevelSelect, LEVEL_CONFIG, type CloserLevel } from '@/components/admin/CloserLevelSelect';
+import { CloserLevelSelect, type CloserLevel } from '@/components/admin/CloserLevelSelect';
+import { UserRoleSelect } from '@/components/admin/UserRoleSelect';
 import { SetMonthlyGoalDialog } from '@/components/admin/SetMonthlyGoalDialog';
 import { ResetPasswordDialog } from '@/components/admin/ResetPasswordDialog';
 import { Navigate } from 'react-router-dom';
+import { UserRole } from '@/types';
 
 interface CloserWithProfile {
   id: string;
@@ -38,6 +40,7 @@ interface CloserWithProfile {
   status: string;
   closer_level: CloserLevel;
   created_at: string;
+  role: UserRole;
 }
 
 export default function Admin() {
@@ -58,16 +61,37 @@ export default function Admin() {
 
   const fetchClosers = async () => {
     try {
-      const { data, error } = await supabase
+      // Buscar perfis
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setClosers((data || []).map(c => ({
+      if (profilesError) throw profilesError;
+
+      // Buscar roles de todos os usuários
+      const userIds = (profilesData || []).map(p => p.user_id);
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .in('user_id', userIds);
+
+      if (rolesError) throw rolesError;
+
+      // Mapear roles por user_id
+      const rolesMap = new Map<string, UserRole>();
+      (rolesData || []).forEach(r => {
+        rolesMap.set(r.user_id, r.role as UserRole);
+      });
+
+      // Combinar perfis com roles
+      const closersWithRoles = (profilesData || []).map(c => ({
         ...c,
-        closer_level: c.closer_level || 'assessor'
-      })) as CloserWithProfile[]);
+        closer_level: c.closer_level || 'assessor',
+        role: rolesMap.get(c.user_id) || 'closer' as UserRole
+      })) as CloserWithProfile[];
+
+      setClosers(closersWithRoles);
     } catch (error) {
       console.error('Error fetching closers:', error);
       toast.error('Erro ao carregar closers');
@@ -253,6 +277,15 @@ export default function Admin() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3 flex-wrap">
+                          <UserRoleSelect
+                            userId={closer.user_id}
+                            currentRole={closer.role}
+                            onRoleChange={(newRole) => {
+                              setClosers(prev => prev.map(c => 
+                                c.id === closer.id ? { ...c, role: newRole } : c
+                              ));
+                            }}
+                          />
                           <CloserLevelSelect
                             value={closer.closer_level}
                             onValueChange={(newLevel) => updateCloserLevel(closer.id, newLevel)}
