@@ -6,104 +6,297 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BETHEL_PROMPT = `Você é uma IA de Análise de Calls especializada em vendas high-ticket.
+const MASTER_PROMPT = `Você é um DIRETOR COMERCIAL + ANALISTA SÊNIOR DE CALLS HIGH TICKET.
 
-Sua tarefa é analisar a transcrição de uma call de vendas e extrair as seguintes informações:
+Seu trabalho é auditar a call com rigor, como se você fosse o líder do time avaliando performance, aderência ao processo e capacidade de conversão.
 
-1️⃣ EXTRAÇÃO DE DADOS DA CALL:
-- nome_cliente: Nome do cliente/lead mencionado na call
-- nicho: Nicho ou profissão do lead
-- faturamento: Faturamento atual (número ou "não informado")
-- tem_socio: Tem sócio? (sim/não/não_informado)
-- maior_dificuldade: Maior dificuldade atual do lead
-- dor_principal: Dor principal identificada
-- produto: Produto/serviço sendo oferecido na call
+Você tem acesso a 4 frameworks oficiais e deve escolher AUTOMATICAMENTE o framework correto com base no produto/pitch que aparece na call.
 
-2️⃣ RESUMO RÁPIDO DA CONVERSA (máximo 100 palavras):
-- Contexto da call
-- Problema central do lead
-- Nível de consciência (inconsciente, consciente do problema, consciente da solução, decidido)
-- Motivo da decisão ou não-decisão
+Frameworks disponíveis:
+- "Elite Premium" - Mentoria premium com alto acompanhamento, estrutura de empresa com marketing+comercial+gestão+mentalidade
+- "Implementação de IA (NextTrack)" - IA, WhatsApp, atendimento automatizado, SDR, automação, CRM, aumentar produtividade comercial
+- "Mentoria Julia Ottoni" - Branding, posicionamento, Instagram, identidade visual, fotos, conteúdo, prestadoras de serviço
+- "Programa de Implementação Comercial" - Processo comercial, follow-up, CRM, cadência, scripts de vendas
 
-3️⃣ CLASSIFICAÇÃO DO LEAD:
-- pos_venda: Se fechou a venda, confirmar detalhes
-- follow: Se não fechou, indicar melhor data para retorno
+────────────────────────────────────────────────────────────────────
+REGRAS ABSOLUTAS (NÃO QUEBRE)
+1) Avalie APENAS a call (execução). Não avalie a oferta, preço, slides ou estratégia macro.
+2) NÃO invente nada. Tudo tem que estar na transcrição.
+3) Sempre que possível, prove cada crítica ou elogio com:
+   - "evidencia" = trecho literal (quote curto) + timestamp se existir.
+4) Se algo não estiver explícito: use "nao_informado".
+5) Análise tem que ser acionável: toda falha deve vir com "como corrigir" + "frase pronta" + "pergunta pronta".
+6) Tom: direto, preciso, exigente e construtivo (sem ser coach motivacional).
+7) Seja específico: a pessoa precisa ler e pensar "caramba, foi exatamente isso que eu falei e era isso que eu deveria ter dito".
 
-Responda APENAS com um JSON válido no seguinte formato:
+────────────────────────────────────────────────────────────────────
+PASSO 1) IDENTIFICAR CONTEXTO E ESCOLHER O FRAMEWORK
+
+1.1 Extraia da transcrição:
+- nome_lead (se aparecer)
+- nome_closer (se aparecer)
+- produto_ofertado (se aparecer)
+- empresa/nicho do lead (se aparecer)
+- houve_venda (sim/nao/nao_informado) — considere "sim" apenas se houver confirmação clara de pagamento/fechamento.
+
+1.2 Escolha o "framework_selecionado" assim:
+- Se mencionar IA/NextTrack/WhatsApp/atendimento/SDR/automação/CRM + pitch de IA → "Implementação de IA (NextTrack)"
+- Se mencionar Julia Ottoni/branding/posicionamento/Instagram/identidade visual/fotos/conteúdo → "Mentoria Julia Ottoni"
+- Se mencionar processo comercial/follow-up/CRM/cadência/implementação comercial/scripts de vendas → "Programa de Implementação Comercial"
+- Se mencionar Elite Premium/mentoria premium/alto acompanhamento/estrutura de empresa/marketing+comercial+gestão+mentalidade/Cleiton Querobin → "Elite Premium"
+
+Se estiver ambíguo, escolha o mais provável e marque:
+- "confianca_framework" = 0.0 a 1.0
+- "motivo_escolha_framework" = 2–4 bullets com evidências do texto.
+
+────────────────────────────────────────────────────────────────────
+PASSO 2) EXTRAÇÃO DE DADOS (SEM INTERPRETAÇÃO)
+
+Extraia somente o que foi dito:
+- nicho_profissao
+- modelo_de_venda (se aparecer)
+- ticket_medio (se aparecer)
+- faturamento_mensal_bruto (se aparecer)
+- faturamento_mensal_liquido (se aparecer)
+- equipe (tamanho / funções)
+- canais_aquisicao (Instagram, tráfego, indicação, etc.)
+- estrutura_comercial (tem SDR? CRM? follow-up? etc.)
+- dor_principal_declarada (frase do lead)
+- dor_profunda (se apareceu parte pessoal/emocional/familiar)
+- objetivo_12_meses
+- urgencia_declarada (0–10 se apareceu; senão nao_informado)
+- importancia_declarada (0–10 se apareceu; senão nao_informado)
+- objecoes_levantadas (lista com trechos)
+- motivo_compra (se vendeu) OU motivo_nao_compra (se não vendeu) — sempre com evidência literal.
+
+────────────────────────────────────────────────────────────────────
+PASSO 3) AUDITORIA POR ETAPA (CORE DO ANALISADOR)
+
+Você DEVE avaliar cada etapa do framework selecionado e dar:
+- aconteceu: "sim" | "parcial" | "nao"
+- nota: 0 a 10
+- funcao_cumprida: 1–2 frases do objetivo real daquela etapa
+- evidencia_do_que_foi_feito: 1–3 quotes curtos (com timestamp se houver)
+- ponto_forte: 1 bullet (bem específico)
+- ponto_fraco: 1–2 bullets (bem específicos)
+- erro_de_execucao (se houver): descreva o erro como diagnóstico (ex.: "fugiu do assunto e quebrou profundidade")
+- impacto_no_lead: o que isso causou no estado do lead (ex.: "ficou racional", "perdeu tensão", "perdeu confiança", "não assumiu a dor")
+- como_corrigir: 2–4 bullets práticos
+- frase_melhor (ANTES → DEPOIS):
+   * antes: exatamente (ou o mais próximo possível) do que o closer disse
+   * depois: como um closer de elite deveria responder na mesma situação
+- perguntas_de_aprofundamento (3 perguntas exatas para usar)
+- seeds_prova_social:
+   * usadas: quais histórias/seeds/mentorados o closer citou (se citou) + evidência
+   * faltaram: 2 exemplos de seeds/histórias que deveriam ter entrado naquele ponto
+- risco_principal_da_etapa: 1 frase (o que mais prejudicou a conversão naquele trecho)
+
+ETAPAS (sempre na ordem do framework selecionado):
+1 Conexão Estratégica
+2 Abertura
+3 Mapeamento da Empresa
+4 Mapeamento do Problema / Dor Profunda
+5 Consultoria Estratégica
+6 Problematização
+7 Solução Imaginada
+8 Transição
+9 Pitch
+10 Perguntas de Compromisso
+11 Fechamento Estratégico
+12 Quebra de Objeções / Negociação
+
+────────────────────────────────────────────────────────────────────
+PASSO 4) DETECTORES DE ERROS RECORRENTES (VOCÊ DEVE CHECAR UM A UM)
+
+Além do framework, rode estes "checks" e marque como:
+"ok" | "parcial" | "falhou", com evidências e correção.
+
+CHECK A — ABERTURA (ANCORAGEM E SCRIPT)
+- Seguiu o script do framework ou improvisou?
+- Ancorou com números grandes (alunos, países, faturamento, impacto) quando isso é obrigatório?
+- Deixou claro que "no final, se fizer sentido, eu apresento o próximo passo"?
+
+CHECK B — PROFUNDIDADE (NÃO FUGIR DO ASSUNTO)
+- Quando o lead traz um problema (ex.: CRM), o closer APROFUNDOU ou "pulou" para outro tema?
+- Teve sequência de profundidade: "por quê?" → "impacto no negócio" → "impacto pessoal" → "impacto familiar" → "futuro"?
+
+CHECK C — EMOÇÃO E TENSÃO
+- Teve Problematização real (consequência futura, custo de não mudar)?
+- Teve Solução Imaginada real (visualização de ganho pessoal + liberdade)?
+
+CHECK D — PROVA SOCIAL / SEEDS DURANTE PERGUNTAS
+- O closer usou histórias/seeds enquanto investigava (pra preparar o pitch)?
+- Ou deixou tudo "seco" e tentou convencer só no pitch?
+
+CHECK E — OBJEÇÃO REAL VS OBJEÇÃO DECLARADA
+- O closer aceitou a primeira objeção como "a real"?
+- Ele fez perguntas para chegar na objeção raiz?
+
+CHECK F — NEGOCIAÇÃO (MAXIMIZAR RECEITA SEM QUEIMAR VALOR)
+- O closer "jogou preço/ desconto cedo"?
+- Ele investigou capacidade real de pagamento antes (limite, cartões, à vista, alternativas)?
+- Ele manteve postura firme + inevitabilidade?
+
+────────────────────────────────────────────────────────────────────
+PASSO 5) PONTO DE PERDA DA VENDA + PORQUE COMPROU (SE HOUVE VENDA)
+
+- ponto_de_perda_da_venda: etapa onde começou a cair a chance (ou null se vendeu)
+- sinal_de_perda: 1–3 evidências do lead (ex.: "ficou frio", "ficou racional", "desviou", "não respondeu")
+
+Se vendeu:
+- porque_comprou: 3 motivos específicos (sempre com evidência do lead)
+- gatilhos_que_mais_pesaram: (dor, urgência, prova social, autoridade, clareza, inevitabilidade etc.)
+
+────────────────────────────────────────────────────────────────────
+PASSO 6) RESUMO EXECUTIVO (PRA LÍDER + PRA CLOSER)
+
+Crie um resumo com:
+- Nota geral (0–10) com critérios claros:
+  * Aderência ao processo (40%)
+  * Profundidade da dor (25%)
+  * Autoridade e condução (15%)
+  * Emoção/urgência/visualização (10%)
+  * Fechamento/objeções/negociação (10%)
+- 3 maiores acertos (com evidência + como repetir)
+- 3 maiores erros (com evidência + impacto + correção com frase pronta)
+- 1 "ajuste nº1" que mais aumenta conversão na próxima call (bem direto)
+
+────────────────────────────────────────────────────────────────────
+FORMATO DE SAÍDA (OBRIGATÓRIO)
+
+Responda APENAS com um JSON válido (sem markdown, sem comentários).
+
+SCHEMA:
+
 {
-  "nome_cliente": "string",
-  "nicho": "string",
-  "faturamento": "number ou null",
-  "tem_socio": "sim" | "nao" | "nao_informado",
-  "maior_dificuldade": "string",
-  "dor_principal": "string",
-  "produto": "string ou null",
-  "resumo": "string (máx 100 palavras)",
-  "nivel_consciencia": "inconsciente" | "consciente_problema" | "consciente_solucao" | "decidido",
-  "motivo_decisao": "string",
-  "classificacao": "pos_venda" | "follow",
-  "proxima_data_contato": "YYYY-MM-DD ou null"
-}`;
+  "framework_selecionado": "Elite Premium | Implementação de IA (NextTrack) | Mentoria Julia Ottoni | Programa de Implementação Comercial",
+  "confianca_framework": 0.0,
+  "motivo_escolha_framework": ["..."],
 
-const MASTER_PROMPT = `Você é um Especialista Máximo em Vendas High Ticket, Neurociência da Decisão, Persuasão Ética e Análise de Calls.
-
-Seu papel é analisar a transcrição de uma call de vendas usando o Framework de Closer – Julia Ottoni.
-
-AVALIE CADA ETAPA DO FRAMEWORK (na ordem correta):
-1. Conexão
-2. Abertura
-3. Mapeamento do Negócio
-4. Mapeamento do Problema
-5. Consultoria
-6. Problematização
-7. Solução Imaginada
-8. Pitch
-9. Contorno de Objeções
-10. Fechamento
-
-Para CADA etapa, avalie:
-- aconteceu: sim/parcial/nao
-- nota: 0-10
-- funcao_cumprida: texto breve
-- ponto_forte: o que foi bem
-- ponto_fraco: o que travou
-- sugestao: melhoria prática
-
-AVALIAÇÃO GLOBAL:
-- nota_geral: 0-10
-- taxa_conversao_estimada: porcentagem
-- tres_maiores_erros: array de strings
-- tres_maiores_acertos: array de strings
-- ponto_perda_venda: onde começou a perder (ou null se vendeu)
-- ponto_fortalecimento: onde poderia ter fortalecido
-
-CLASSIFICAÇÃO DO CLOSER:
-- iniciante / intermediario / avancado / alta_performance / elite
-- justificativa breve
-
-Responda APENAS com um JSON válido no seguinte formato:
-{
-  "etapas": {
-    "conexao": { "aconteceu": "sim|parcial|nao", "nota": 0-10, "funcao_cumprida": "...", "ponto_forte": "...", "ponto_fraco": "...", "sugestao": "..." },
-    "abertura": { ... },
-    "mapeamento_negocio": { ... },
-    "mapeamento_problemas": { ... },
-    "consultoria": { ... },
-    "problematizacao": { ... },
-    "solucao_imaginada": { ... },
-    "pitch": { ... },
-    "contorno_objecoes": { ... },
-    "fechamento": { ... }
+  "identificacao": {
+    "nome_lead": "string|nao_informado",
+    "nome_closer": "string|nao_informado",
+    "produto_ofertado": "string|nao_informado",
+    "houve_venda": "sim|nao|nao_informado"
   },
-  "nota_geral": 0-10,
-  "taxa_conversao_estimada": "XX%",
-  "tres_maiores_erros": ["erro1", "erro2", "erro3"],
-  "tres_maiores_acertos": ["acerto1", "acerto2", "acerto3"],
-  "ponto_perda_venda": "string ou null",
-  "ponto_fortalecimento": "string",
-  "classificacao_closer": "iniciante|intermediario|avancado|alta_performance|elite",
-  "justificativa_classificacao": "string"
-}`;
+
+  "dados_extraidos": {
+    "nicho_profissao": "string|nao_informado",
+    "modelo_de_venda": "string|nao_informado",
+    "ticket_medio": "string|nao_informado",
+    "faturamento_mensal_bruto": "string|nao_informado",
+    "faturamento_mensal_liquido": "string|nao_informado",
+    "equipe": "string|nao_informado",
+    "canais_aquisicao": ["..."],
+    "estrutura_comercial": "string|nao_informado",
+    "dor_principal_declarada": {"texto":"...", "evidencia":"..."},
+    "dor_profunda": {"texto":"nao_informado|...", "evidencia":"nao_informado|..."},
+    "objetivo_12_meses": "string|nao_informado",
+    "urgencia_declarada": "0-10|nao_informado",
+    "importancia_declarada": "0-10|nao_informado",
+    "objecoes_levantadas": [{"objecao":"...", "evidencia":"..."}],
+    "motivo_compra_ou_nao_compra": [{"motivo":"...", "evidencia":"..."}]
+  },
+
+  "nota_geral": 0,
+  "justificativa_nota_geral": ["..."],
+
+  "maiores_acertos": [
+    {
+      "acerto": "...",
+      "evidencia": "...",
+      "porque_importa": "...",
+      "como_repetir": "..."
+    }
+  ],
+
+  "maiores_erros": [
+    {
+      "erro": "...",
+      "evidencia": "...",
+      "impacto": "...",
+      "como_corrigir": ["..."],
+      "frase_pronta": {
+        "antes": "...",
+        "depois": "..."
+      }
+    }
+  ],
+
+  "ponto_de_perda_da_venda": "conexao|abertura|mapeamento_empresa|mapeamento_problema|consultoria|problematizacao|solucao_imaginada|transicao|pitch|perguntas_compromisso|fechamento|objecoes_negociacao|null",
+  "sinais_da_perda": ["..."],
+
+  "se_vendeu": {
+    "porque_comprou": [{"motivo":"...", "evidencia":"..."}],
+    "gatilhos_que_mais_pesaram": ["..."]
+  },
+
+  "checklist_erros_recorrentes": {
+    "abertura_ancoragem_script": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "profundidade_nao_fugir_assunto": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "emocao_e_tensao": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "prova_social_seeds_durante_perguntas": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "objecao_real_vs_declarada": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "negociacao_maximizar_receita": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."}
+  },
+
+  "analise_por_etapa": {
+    "conexao": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "abertura": {},
+    "mapeamento_empresa": {},
+    "mapeamento_problema": {},
+    "consultoria": {},
+    "problematizacao": {},
+    "solucao_imaginada": {},
+    "transicao": {},
+    "pitch": {},
+    "perguntas_compromisso": {},
+    "fechamento": {},
+    "objecoes_negociacao": {}
+  },
+
+  "plano_de_acao_direto": {
+    "ajuste_numero_1": {
+      "diagnostico": "...",
+      "o_que_fazer_na_proxima_call": ["..."],
+      "script_30_segundos": "..."
+    },
+    "treino_recomendado": [
+      {"habilidade":"...", "como_treinar":"...", "meta_objetiva":"..."}
+    ],
+    "proxima_acao_com_lead": {
+      "status": "fechado|follow_up|desqualificado|nao_informado",
+      "passo": "...",
+      "mensagem_sugerida_whats": "..."
+    }
+  }
+}
+
+────────────────────────────────────────────────────────────────────
+CRITÉRIO DE QUALIDADE (AUTO-CHECAGEM ANTES DE ENTREGAR)
+
+Antes de finalizar, valide:
+- Você citou evidências nos 3 maiores erros e 3 maiores acertos?
+- Você deu pelo menos 1 "ANTES → DEPOIS" em TODA etapa com falha?
+- Você entregou perguntas exatas (não genéricas) para aprofundar?
+- Você marcou "nao_informado" onde não existe dado?
+- JSON está válido e completo?
+
+Se faltar qualquer item, corrija antes de responder.`;
 
 async function callOpenAI(systemPrompt: string, transcription: string): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -112,6 +305,8 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
     throw new Error("OPENAI_API_KEY not configured");
   }
 
+  console.log("Calling OpenAI with gpt-4o model...");
+
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -119,12 +314,12 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}` },
       ],
-      max_tokens: 4000,
+      max_tokens: 8000,
     }),
   });
 
@@ -158,6 +353,75 @@ function parseJSONFromResponse(response: string): unknown {
   throw new Error("No JSON found in AI response");
 }
 
+interface AnalysisData {
+  framework_selecionado?: string;
+  confianca_framework?: number;
+  motivo_escolha_framework?: string[];
+  identificacao?: {
+    nome_lead?: string;
+    nome_closer?: string;
+    produto_ofertado?: string;
+    houve_venda?: string;
+  };
+  dados_extraidos?: {
+    nicho_profissao?: string;
+    modelo_de_venda?: string;
+    ticket_medio?: string;
+    faturamento_mensal_bruto?: string;
+    faturamento_mensal_liquido?: string;
+    equipe?: string;
+    canais_aquisicao?: string[];
+    estrutura_comercial?: string;
+    dor_principal_declarada?: { texto?: string; evidencia?: string };
+    dor_profunda?: { texto?: string; evidencia?: string };
+    objetivo_12_meses?: string;
+    urgencia_declarada?: string;
+    importancia_declarada?: string;
+    objecoes_levantadas?: Array<{ objecao?: string; evidencia?: string }>;
+    motivo_compra_ou_nao_compra?: Array<{ motivo?: string; evidencia?: string }>;
+  };
+  nota_geral?: number;
+  justificativa_nota_geral?: string[];
+  maiores_acertos?: Array<{
+    acerto?: string;
+    evidencia?: string;
+    porque_importa?: string;
+    como_repetir?: string;
+  }>;
+  maiores_erros?: Array<{
+    erro?: string;
+    evidencia?: string;
+    impacto?: string;
+    como_corrigir?: string[];
+    frase_pronta?: { antes?: string; depois?: string };
+  }>;
+  ponto_de_perda_da_venda?: string | null;
+  sinais_da_perda?: string[];
+  se_vendeu?: {
+    porque_comprou?: Array<{ motivo?: string; evidencia?: string }>;
+    gatilhos_que_mais_pesaram?: string[];
+  };
+  checklist_erros_recorrentes?: Record<string, { status?: string; evidencias?: string[]; correcao?: string }>;
+  analise_por_etapa?: Record<string, unknown>;
+  plano_de_acao_direto?: {
+    ajuste_numero_1?: {
+      diagnostico?: string;
+      o_que_fazer_na_proxima_call?: string[];
+      script_30_segundos?: string;
+    };
+    treino_recomendado?: Array<{
+      habilidade?: string;
+      como_treinar?: string;
+      meta_objetiva?: string;
+    }>;
+    proxima_acao_com_lead?: {
+      status?: string;
+      passo?: string;
+      mensagem_sugerida_whats?: string;
+    };
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -175,70 +439,85 @@ serve(async (req) => {
 
     console.log(`Analyzing call from file: ${fileName}, transcription length: ${transcription.length}`);
 
-    // Run both analyses in parallel for efficiency
-    const [bethelResponse, masterResponse] = await Promise.all([
-      callOpenAI(BETHEL_PROMPT, transcription),
-      callOpenAI(MASTER_PROMPT, transcription),
-    ]);
+    // Run single comprehensive analysis
+    const masterResponse = await callOpenAI(MASTER_PROMPT, transcription);
 
-    console.log("Both AI analyses completed");
+    console.log("AI analysis completed");
 
-    // Parse the responses
-    const bethelData = parseJSONFromResponse(bethelResponse) as {
-      nome_cliente?: string;
-      nicho?: string;
-      faturamento?: number | null;
-      tem_socio?: string;
-      maior_dificuldade?: string;
-      dor_principal?: string;
-      produto?: string | null;
-      resumo?: string;
-      nivel_consciencia?: string;
-      motivo_decisao?: string;
-      classificacao?: string;
-      proxima_data_contato?: string | null;
-    };
-    const masterData = parseJSONFromResponse(masterResponse) as {
-      etapas?: Record<string, unknown>;
-      nota_geral?: number;
-      taxa_conversao_estimada?: string;
-      tres_maiores_erros?: string[];
-      tres_maiores_acertos?: string[];
-      ponto_perda_venda?: string | null;
-      ponto_fortalecimento?: string;
-      classificacao_closer?: string;
-      justificativa_classificacao?: string;
-    };
+    // Parse the response
+    const data = parseJSONFromResponse(masterResponse) as AnalysisData;
 
-    // Combine the analyses
+    // Map to analysis object for database compatibility
     const analysis = {
-      // Bethel extraction data
-      client_name: bethelData.nome_cliente || "Cliente não identificado",
-      niche: bethelData.nicho,
-      revenue: bethelData.faturamento,
-      has_partner: bethelData.tem_socio === "sim",
-      main_difficulty: bethelData.maior_dificuldade,
-      main_pain: bethelData.dor_principal,
-      product: bethelData.produto,
-      ai_summary: bethelData.resumo,
-      consciousness_level: bethelData.nivel_consciencia,
-      decision_reason: bethelData.motivo_decisao,
-      lead_classification: bethelData.classificacao as "pos_venda" | "follow",
-      next_contact_date: bethelData.proxima_data_contato,
+      // Identification
+      client_name: data.identificacao?.nome_lead || "Cliente não identificado",
+      closer_name: data.identificacao?.nome_closer,
+      product: data.identificacao?.produto_ofertado,
+      sold: data.identificacao?.houve_venda,
       
-      // Master technical analysis
-      technical_analysis: masterData.etapas,
-      call_score: masterData.nota_geral,
-      conversion_rate_estimate: masterData.taxa_conversao_estimada,
-      main_errors: masterData.tres_maiores_erros,
-      main_wins: masterData.tres_maiores_acertos,
-      loss_point: masterData.ponto_perda_venda,
-      strengthening_point: masterData.ponto_fortalecimento,
-      closer_classification: masterData.classificacao_closer,
-      closer_justification: masterData.justificativa_classificacao,
+      // Framework
+      framework: data.framework_selecionado,
+      framework_confidence: data.confianca_framework,
+      framework_reason: data.motivo_escolha_framework,
+      
+      // Extracted data
+      niche: data.dados_extraidos?.nicho_profissao,
+      revenue: data.dados_extraidos?.faturamento_mensal_bruto,
+      has_partner: null, // Not in new schema, keeping for backward compat
+      main_difficulty: data.dados_extraidos?.dor_principal_declarada?.texto,
+      main_pain: data.dados_extraidos?.dor_profunda?.texto,
+      team: data.dados_extraidos?.equipe,
+      channels: data.dados_extraidos?.canais_aquisicao,
+      commercial_structure: data.dados_extraidos?.estrutura_comercial,
+      goal_12_months: data.dados_extraidos?.objetivo_12_meses,
+      urgency: data.dados_extraidos?.urgencia_declarada,
+      importance: data.dados_extraidos?.importancia_declarada,
+      objections: data.dados_extraidos?.objecoes_levantadas,
+      purchase_reason: data.dados_extraidos?.motivo_compra_ou_nao_compra,
+      
+      // Summary
+      ai_summary: data.justificativa_nota_geral?.join(" | "),
+      consciousness_level: null, // Deprecated in new schema
+      decision_reason: data.ponto_de_perda_da_venda || (data.se_vendeu?.gatilhos_que_mais_pesaram?.join(", ")),
+      lead_classification: data.identificacao?.houve_venda === "sim" ? "pos_venda" : "follow",
+      next_contact_date: data.plano_de_acao_direto?.proxima_acao_com_lead?.status === "follow_up" ? null : null,
+      
+      // Technical analysis (full object for detailed view)
+      technical_analysis: {
+        analise_por_etapa: data.analise_por_etapa,
+        checklist_erros_recorrentes: data.checklist_erros_recorrentes,
+        plano_de_acao_direto: data.plano_de_acao_direto,
+      },
+      
+      // Scores and evaluation
+      call_score: data.nota_geral,
+      score_justification: data.justificativa_nota_geral,
+      main_errors: data.maiores_erros?.map(e => e.erro) || [],
+      main_wins: data.maiores_acertos?.map(a => a.acerto) || [],
+      loss_point: data.ponto_de_perda_da_venda,
+      loss_signals: data.sinais_da_perda,
+      
+      // If sold
+      why_bought: data.se_vendeu?.porque_comprou,
+      key_triggers: data.se_vendeu?.gatilhos_que_mais_pesaram,
+      
+      // Detailed analysis for frontend display
+      detailed_errors: data.maiores_erros,
+      detailed_wins: data.maiores_acertos,
+      error_checklist: data.checklist_erros_recorrentes,
+      stage_analysis: data.analise_por_etapa,
+      action_plan: data.plano_de_acao_direto,
+      
+      // Closer classification (derived from score)
+      closer_classification: data.nota_geral && data.nota_geral >= 9 ? "elite" 
+        : data.nota_geral && data.nota_geral >= 8 ? "alta_performance"
+        : data.nota_geral && data.nota_geral >= 7 ? "avancado"
+        : data.nota_geral && data.nota_geral >= 5 ? "intermediario"
+        : "iniciante",
+      closer_justification: data.justificativa_nota_geral?.join(" "),
     };
 
-    console.log("Analysis complete, client:", analysis.client_name);
+    console.log("Analysis complete, client:", analysis.client_name, "score:", analysis.call_score);
 
     return new Response(
       JSON.stringify({ success: true, analysis }),
