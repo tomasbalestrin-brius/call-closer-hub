@@ -13,8 +13,7 @@ import {
   Shield,
   BarChart3,
   Briefcase,
-  Flame,
-  Target
+  Flame
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,7 +32,6 @@ const baseNavigation = [
 
 const leaderNavigation = [
   { name: 'Relatórios', href: '/squad-reports', icon: BarChart3 },
-  { name: 'Metas do Squad', href: '/squad-goals', icon: Target },
 ];
 
 const adminNavigation = [
