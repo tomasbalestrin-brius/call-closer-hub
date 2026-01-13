@@ -45,7 +45,9 @@ import {
   Copy,
   Dumbbell,
   FileText,
-  Quote
+  Quote,
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import { MergeCallDialog } from '@/components/calls/MergeCallDialog';
 import {
@@ -166,9 +168,29 @@ export default function ClientDetail() {
   const [indicationsDialogOpen, setIndicationsDialogOpen] = useState(false);
   const [indicationSourceDialogOpen, setIndicationSourceDialogOpen] = useState(false);
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   const toggleStageExpanded = (key: string) => {
     setExpandedStages(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleReanalyze = async (callId: string) => {
+    setReanalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reanalyze-call', {
+        body: { callId }
+      });
+      
+      if (error) throw error;
+      
+      toast.success('Call reanalisada com sucesso! Atualizando dados...');
+      await fetchClientData();
+    } catch (error) {
+      console.error('Erro ao reanalisar call:', error);
+      toast.error('Erro ao reanalisar call. Verifique se a call possui transcrição.');
+    } finally {
+      setReanalyzing(false);
+    }
   };
 
   useEffect(() => {
@@ -600,7 +622,20 @@ export default function ClientDetail() {
                                 {formatCurrency(call.sale_value)}
                               </span>
                             )}
-                            <div onClick={(e) => e.stopPropagation()}>
+                            <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleReanalyze(call.id)}
+                                disabled={reanalyzing || !call.transcription}
+                                title={call.transcription ? 'Reanalisar com novo prompt' : 'Call sem transcrição'}
+                              >
+                                {reanalyzing ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="w-4 h-4" />
+                                )}
+                              </Button>
                               <MergeCallDialog 
                                 currentCall={call} 
                                 onMergeComplete={fetchClientData} 
