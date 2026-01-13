@@ -65,34 +65,46 @@ const statusConfig: Record<CallStatus, { label: string; className: string }> = {
   perdido: { label: 'Perdido', className: 'bg-destructive text-destructive-foreground' },
 };
 
-// Nova ordem do Framework Julia Ottoni
+// Nova ordem do Framework Julia Ottoni (atualizada para alinhar com o prompt)
 const stageOrder = [
   'conexao',
   'abertura',
-  'mapeamento_negocio',
-  'mapeamento_problemas',
+  'mapeamento_empresa',
+  'mapeamento_problema',
   'consultoria',
   'problematizacao',
   'solucao_imaginada',
+  'transicao',
   'pitch',
-  'contorno_objecoes',
-  'fechamento'
+  'perguntas_compromisso',
+  'fechamento',
+  'objecoes_negociacao'
 ];
 
 const stageLabels: Record<string, string> = {
-  conexao: 'Conexão',
+  conexao: 'Conexão Estratégica',
   abertura: 'Abertura',
-  mapeamento_negocio: 'Mapeamento do Negócio',
-  mapeamento_problemas: 'Mapeamento do Problema',
-  consultoria: 'Consultoria',
+  mapeamento_empresa: 'Mapeamento da Empresa',
+  mapeamento_problema: 'Mapeamento do Problema / Dor Profunda',
+  consultoria: 'Consultoria Estratégica',
   problematizacao: 'Problematização',
   solucao_imaginada: 'Solução Imaginada',
-  pitch: 'Pitch',
-  contorno_objecoes: 'Contorno de Objeções',
-  fechamento: 'Fechamento',
-  // Legado (para compatibilidade)
   transicao: 'Transição',
+  pitch: 'Pitch',
   perguntas_compromisso: 'Perguntas de Compromisso',
+  fechamento: 'Fechamento Estratégico',
+  objecoes_negociacao: 'Quebra de Objeções / Negociação',
+  // Legado (para compatibilidade)
+  mapeamento_negocio: 'Mapeamento do Negócio',
+  mapeamento_problemas: 'Mapeamento do Problema',
+  contorno_objecoes: 'Contorno de Objeções',
+};
+
+// Helper para converter array para string
+const getStringValue = (value: unknown): string | null => {
+  if (!value) return null;
+  if (Array.isArray(value)) return value.join(' | ');
+  return String(value);
 };
 
 export default function ClientDetail() {
@@ -621,9 +633,18 @@ export default function ClientDetail() {
                   <CardContent>
                     <div className="space-y-4">
                       {stageOrder.map((key) => {
-                        const stage = (selectedCall.technical_analysis as Record<string, unknown>)[key];
-                        if (!stage) return null;
+                        // Acessa analise_por_etapa dentro de technical_analysis
+                        const techAnalysis = selectedCall.technical_analysis as Record<string, unknown>;
+                        const analiseEtapas = techAnalysis?.analise_por_etapa as Record<string, unknown> | undefined;
+                        
+                        // Tenta acessar a etapa primeiro em analise_por_etapa, depois diretamente
+                        const stage = analiseEtapas?.[key] || techAnalysis?.[key];
+                        if (!stage || (typeof stage === 'object' && Object.keys(stage as object).length === 0)) return null;
+                        
                         const stageData = stage as StageAnalysis;
+                        const pontoForte = getStringValue(stageData.ponto_forte);
+                        const pontoFraco = getStringValue(stageData.ponto_fraco);
+                        
                         return (
                           <div key={key} className="border rounded-lg p-4">
                             <div className="flex items-center justify-between mb-2">
@@ -640,37 +661,43 @@ export default function ClientDetail() {
                                   {stageData.aconteceu === 'sim' ? 'Sim' : 
                                    stageData.aconteceu === 'parcial' ? 'Parcial' : 'Não'}
                                 </Badge>
-                                <span className={cn("font-bold", getScoreColor(stageData.nota))}>
-                                  {stageData.nota}/10
+                                <span className={cn("font-bold", getScoreColor(stageData.nota || 0))}>
+                                  {stageData.nota || 0}/10
                                 </span>
                               </div>
                             </div>
                             <Progress 
-                              value={stageData.nota * 10} 
+                              value={(stageData.nota || 0) * 10} 
                               className={cn(
                                 "h-2",
-                                stageData.nota >= 8 && "[&>div]:bg-success",
-                                stageData.nota >= 6 && stageData.nota < 8 && "[&>div]:bg-warning",
-                                stageData.nota < 6 && "[&>div]:bg-destructive"
+                                (stageData.nota || 0) >= 8 && "[&>div]:bg-success",
+                                (stageData.nota || 0) >= 6 && (stageData.nota || 0) < 8 && "[&>div]:bg-warning",
+                                (stageData.nota || 0) < 6 && "[&>div]:bg-destructive"
                               )} 
                             />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 text-sm">
-                              {stageData.ponto_forte && (
+                              {pontoForte && (
                                 <div>
                                   <p className="text-xs text-muted-foreground mb-1">Ponto forte:</p>
-                                  <p className="text-success">{stageData.ponto_forte}</p>
+                                  <p className="text-success">{pontoForte}</p>
                                 </div>
                               )}
-                              {stageData.ponto_fraco && (
+                              {pontoFraco && (
                                 <div>
                                   <p className="text-xs text-muted-foreground mb-1">Ponto fraco:</p>
-                                  <p className="text-destructive">{stageData.ponto_fraco}</p>
+                                  <p className="text-destructive">{pontoFraco}</p>
                                 </div>
                               )}
                               {stageData.sugestao && (
                                 <div className="md:col-span-2">
                                   <p className="text-xs text-muted-foreground mb-1">Sugestão:</p>
                                   <p className="text-primary">{stageData.sugestao}</p>
+                                </div>
+                              )}
+                              {stageData.frase_melhor && (
+                                <div className="md:col-span-2 bg-muted/50 rounded p-2">
+                                  <p className="text-xs text-muted-foreground mb-1">Frase Melhor (ANTES → DEPOIS):</p>
+                                  <p className="text-sm italic">{getStringValue(stageData.frase_melhor)}</p>
                                 </div>
                               )}
                             </div>
