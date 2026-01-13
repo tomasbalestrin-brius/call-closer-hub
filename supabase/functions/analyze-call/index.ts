@@ -317,9 +317,9 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}` },
+        { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nIMPORTANTE: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa, mesmo que parcialmente. Se uma etapa não aconteceu explicitamente na call, marque como "aconteceu": "nao" e explique o que deveria ter sido feito naquela etapa. NÃO DEIXE NENHUMA ETAPA VAZIA.` },
       ],
-      max_tokens: 8000,
+      max_tokens: 16000,
     }),
   });
 
