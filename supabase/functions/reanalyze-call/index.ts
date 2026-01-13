@@ -1,0 +1,134 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { callId } = await req.json();
+
+    if (!callId) {
+      return new Response(
+        JSON.stringify({ error: 'callId é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`[reanalyze-call] Iniciando reanálise da call: ${callId}`);
+
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Fetch the call with transcription
+    const { data: call, error: fetchError } = await supabase
+      .from('calls')
+      .select('id, transcription, client_name')
+      .eq('id', callId)
+      .single();
+
+    if (fetchError) {
+      console.error('[reanalyze-call] Erro ao buscar call:', fetchError);
+      return new Response(
+        JSON.stringify({ error: 'Call não encontrada', details: fetchError.message }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!call.transcription) {
+      console.error('[reanalyze-call] Call não possui transcrição');
+      return new Response(
+        JSON.stringify({ error: 'Esta call não possui transcrição para analisar' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`[reanalyze-call] Transcrição encontrada. Chamando analyze-call...`);
+
+    // Call the analyze-call edge function
+    const analyzeResponse = await fetch(`${supabaseUrl}/functions/v1/analyze-call`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({ transcription: call.transcription }),
+    });
+
+    if (!analyzeResponse.ok) {
+      const errorText = await analyzeResponse.text();
+      console.error('[reanalyze-call] Erro ao chamar analyze-call:', errorText);
+      return new Response(
+        JSON.stringify({ error: 'Erro ao analisar call', details: errorText }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const analysisResult = await analyzeResponse.json();
+    console.log('[reanalyze-call] Análise concluída com sucesso');
+
+    // Update the call with new analysis
+    const updateData: Record<string, unknown> = {
+      technical_analysis: analysisResult.analysis || analysisResult,
+      analyzed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // Extract summary fields from analysis if available
+    const analysis = analysisResult.analysis || analysisResult;
+    if (analysis) {
+      if (analysis.resumo_executivo) {
+        const resumo = analysis.resumo_executivo;
+        if (resumo.score_geral !== undefined) updateData.score = resumo.score_geral;
+        if (resumo.conclusao_da_call) updateData.call_conclusion = resumo.conclusao_da_call;
+        if (resumo.maiores_erros) updateData.main_errors = resumo.maiores_erros;
+        if (resumo.maiores_acertos) updateData.main_wins = resumo.maiores_acertos;
+        if (resumo.ponto_de_perda) updateData.loss_point = resumo.ponto_de_perda;
+      }
+      if (analysis.ai_summary) updateData.ai_summary = analysis.ai_summary;
+    }
+
+    const { error: updateError } = await supabase
+      .from('calls')
+      .update(updateData)
+      .eq('id', callId);
+
+    if (updateError) {
+      console.error('[reanalyze-call] Erro ao atualizar call:', updateError);
+      return new Response(
+        JSON.stringify({ error: 'Erro ao salvar análise', details: updateError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`[reanalyze-call] Call ${callId} atualizada com sucesso`);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        message: 'Call reanalisada com sucesso',
+        callId,
+        clientName: call.client_name
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('[reanalyze-call] Erro inesperado:', error);
+    return new Response(
+      JSON.stringify({ error: 'Erro interno', details: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
