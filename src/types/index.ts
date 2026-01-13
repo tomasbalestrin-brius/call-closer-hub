@@ -238,28 +238,95 @@ export interface AutomationLog {
   result: Record<string, unknown> | null;
 }
 
+// Checklist de Erros Recorrentes
+export interface ChecklistItem {
+  status: 'ok' | 'parcial' | 'falhou';
+  evidencias?: string[];
+  correcao?: string;
+}
+
+export interface ChecklistErrosRecorrentes {
+  abertura_ancoragem_script?: ChecklistItem;
+  profundidade_nao_fugir_assunto?: ChecklistItem;
+  emocao_e_tensao?: ChecklistItem;
+  prova_social_seeds_durante_perguntas?: ChecklistItem;
+  objecao_real_vs_declarada?: ChecklistItem;
+  negociacao_maximizar_receita?: ChecklistItem;
+}
+
+// Plano de Ação Direto
+export interface PlanoAcaoDireto {
+  ajuste_numero_1?: {
+    diagnostico?: string;
+    o_que_fazer_na_proxima_call?: string[];
+    script_30_segundos?: string;
+  };
+  treino_recomendado?: Array<{
+    habilidade?: string;
+    como_treinar?: string;
+    meta_objetiva?: string;
+  }>;
+  proxima_acao_com_lead?: {
+    status?: 'fechado' | 'follow_up' | 'desqualificado' | 'nao_informado';
+    passo?: string;
+    mensagem_sugerida_whats?: string;
+  };
+}
+
+// Seeds de Prova Social
+export interface SeedsProvaSocial {
+  usadas?: string[];
+  faltaram?: string[];
+}
+
+// Frase Melhor (ANTES → DEPOIS)
+export interface FraseMelhor {
+  antes?: string;
+  depois?: string;
+}
+
+// Erro Detalhado (maiores_erros)
+export interface ErroDetalhado {
+  erro?: string;
+  evidencia?: string;
+  impacto?: string;
+  como_corrigir?: string[];
+  frase_pronta?: FraseMelhor;
+}
+
+// Acerto Detalhado (maiores_acertos)
+export interface AcertoDetalhado {
+  acerto?: string;
+  evidencia?: string;
+  porque_importa?: string;
+  como_repetir?: string;
+}
+
 export interface StageAnalysis {
   aconteceu: 'sim' | 'parcial' | 'nao';
   nota: number;
   funcao_cumprida?: string;
+  evidencias?: string[];
   ponto_forte: string | string[];
   ponto_fraco: string | string[];
+  erro_de_execucao?: string;
+  impacto_no_lead?: string;
+  como_corrigir?: string[];
   sugestao?: string;
-  frase_melhor?: string | string[];
+  frase_melhor?: FraseMelhor | string | string[];
   perguntas_de_aprofundamento?: string[];
-  seeds_prova_social?: string[];
+  seeds_prova_social?: SeedsProvaSocial | string[];
   risco_principal_da_etapa?: string;
 }
 
 export interface TechnicalAnalysis {
   // Estrutura nova (prompt atualizado)
   analise_por_etapa?: Record<string, StageAnalysis>;
-  checklist_erros_recorrentes?: Record<string, { status: string; observacao: string }>;
-  plano_de_acao_direto?: {
-    erro_mais_grave?: string;
-    o_que_treinar?: string;
-    exercicio_pratico?: string;
-  };
+  checklist_erros_recorrentes?: ChecklistErrosRecorrentes;
+  plano_de_acao_direto?: PlanoAcaoDireto;
+  // Dados detalhados (extras retornados pela análise)
+  detailed_errors?: ErroDetalhado[];
+  detailed_wins?: AcertoDetalhado[];
   // Etapas diretas (compatibilidade legada)
   conexao?: StageAnalysis;
   abertura?: StageAnalysis;
