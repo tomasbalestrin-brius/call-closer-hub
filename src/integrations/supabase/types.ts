@@ -1210,6 +1210,10 @@ export type Database = {
         Args: { _squad_id: string; _user_id: string }
         Returns: boolean
       }
+      is_squad_leader_of_user: {
+        Args: { _leader_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       call_status:

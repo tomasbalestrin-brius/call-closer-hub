@@ -32,6 +32,7 @@ const baseNavigation = [
 
 const leaderNavigation = [
   { name: 'Relatórios', href: '/squad-reports', icon: BarChart3 },
+  { name: 'Ver Squad', href: '/squad-view', icon: Users },
 ];
 
 const adminNavigation = [
