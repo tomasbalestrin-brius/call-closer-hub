@@ -241,15 +241,30 @@ export interface AutomationLog {
 export interface StageAnalysis {
   aconteceu: 'sim' | 'parcial' | 'nao';
   nota: number;
-  funcao_cumprida: string;
-  ponto_forte: string;
-  ponto_fraco: string;
-  sugestao: string;
+  funcao_cumprida?: string;
+  ponto_forte: string | string[];
+  ponto_fraco: string | string[];
+  sugestao?: string;
+  frase_melhor?: string | string[];
+  perguntas_de_aprofundamento?: string[];
+  seeds_prova_social?: string[];
+  risco_principal_da_etapa?: string;
 }
 
 export interface TechnicalAnalysis {
+  // Estrutura nova (prompt atualizado)
+  analise_por_etapa?: Record<string, StageAnalysis>;
+  checklist_erros_recorrentes?: Record<string, { status: string; observacao: string }>;
+  plano_de_acao_direto?: {
+    erro_mais_grave?: string;
+    o_que_treinar?: string;
+    exercicio_pratico?: string;
+  };
+  // Etapas diretas (compatibilidade legada)
   conexao?: StageAnalysis;
   abertura?: StageAnalysis;
+  mapeamento_empresa?: StageAnalysis;
+  mapeamento_problema?: StageAnalysis;
   mapeamento_negocio?: StageAnalysis;
   mapeamento_problemas?: StageAnalysis;
   consultoria?: StageAnalysis;
@@ -259,6 +274,7 @@ export interface TechnicalAnalysis {
   pitch?: StageAnalysis;
   perguntas_compromisso?: StageAnalysis;
   contorno_objecoes?: StageAnalysis;
+  objecoes_negociacao?: StageAnalysis;
   fechamento?: StageAnalysis;
 }
 
