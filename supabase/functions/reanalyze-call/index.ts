@@ -76,58 +76,76 @@ serve(async (req) => {
 
     const analysisResult = await analyzeResponse.json();
     console.log('[reanalyze-call] Análise concluída com sucesso');
+    console.log('[reanalyze-call] analysisResult keys:', Object.keys(analysisResult));
+
+    // Extract the analysis object - analyze-call returns { success, analysis: { technical_analysis, ... } }
+    const analysis = analysisResult.analysis || analysisResult;
+    console.log('[reanalyze-call] analysis keys:', Object.keys(analysis));
 
     // Update the call with new analysis
+    // IMPORTANT: save technical_analysis from the nested analysis.technical_analysis
     const updateData: Record<string, unknown> = {
-      technical_analysis: analysisResult.analysis || analysisResult,
+      technical_analysis: analysis.technical_analysis || analysis,
       analyzed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    // Extract summary fields from new schema (campos na raiz do JSON)
-    const analysis = analysisResult.analysis || analysisResult;
+    // Extract summary fields from the analysis object
     if (analysis) {
-      // Nota geral
-      if (analysis.nota_geral !== undefined) updateData.score = analysis.nota_geral;
+      // Score from call_score or nota_geral
+      if (analysis.call_score !== undefined) {
+        updateData.score = typeof analysis.call_score === 'string' 
+          ? parseInt(analysis.call_score, 10) 
+          : analysis.call_score;
+      } else if (analysis.nota_geral !== undefined) {
+        updateData.score = analysis.nota_geral;
+      }
       
-      // Maiores erros (array de objetos com erro, evidencia, impacto, etc.)
-      if (analysis.maiores_erros) updateData.main_errors = analysis.maiores_erros;
+      // Main errors and wins (arrays of strings)
+      if (analysis.main_errors) updateData.main_errors = analysis.main_errors;
+      if (analysis.main_wins) updateData.main_wins = analysis.main_wins;
       
-      // Maiores acertos (array de objetos com acerto, evidencia, etc.)
-      if (analysis.maiores_acertos) updateData.main_wins = analysis.maiores_acertos;
+      // Loss point
+      if (analysis.loss_point) updateData.loss_point = analysis.loss_point;
       
-      // Ponto de perda da venda
-      if (analysis.ponto_de_perda_da_venda) updateData.loss_point = analysis.ponto_de_perda_da_venda;
+      // Additional fields
+      if (analysis.niche) updateData.niche = analysis.niche;
+      if (analysis.main_pain) updateData.main_pain = analysis.main_pain;
+      if (analysis.main_difficulty) updateData.main_difficulty = analysis.main_difficulty;
+      if (analysis.ai_summary) updateData.ai_summary = analysis.ai_summary;
       
-      // Dados de identificação
+      // Call conclusion from sold field
+      if (analysis.sold !== undefined) {
+        updateData.call_conclusion = analysis.sold === true || analysis.sold === 'sim' ? 'vendeu' : 'nao_vendeu';
+      }
+      
+      // Fallback: extract from nested identificacao/dados_extraidos if direct fields not available
       if (analysis.identificacao) {
-        if (analysis.identificacao.nome_lead && analysis.identificacao.nome_lead !== 'nao_informado') {
-          // Client name já vem do registro, não sobrescrever
-        }
-        if (analysis.identificacao.houve_venda && analysis.identificacao.houve_venda !== 'nao_informado') {
+        if (analysis.identificacao.houve_venda && analysis.identificacao.houve_venda !== 'nao_informado' && !updateData.call_conclusion) {
           updateData.call_conclusion = analysis.identificacao.houve_venda === 'sim' ? 'vendeu' : 'nao_vendeu';
         }
       }
       
-      // Dados extraídos
       if (analysis.dados_extraidos) {
         const dados = analysis.dados_extraidos;
-        if (dados.nicho_profissao && dados.nicho_profissao !== 'nao_informado') {
+        if (dados.nicho_profissao && dados.nicho_profissao !== 'nao_informado' && !updateData.niche) {
           updateData.niche = dados.nicho_profissao;
         }
-        if (dados.dor_principal_declarada?.texto && dados.dor_principal_declarada.texto !== 'nao_informado') {
+        if (dados.dor_principal_declarada?.texto && dados.dor_principal_declarada.texto !== 'nao_informado' && !updateData.main_pain) {
           updateData.main_pain = dados.dor_principal_declarada.texto;
         }
-        if (dados.dor_profunda?.texto && dados.dor_profunda.texto !== 'nao_informado') {
+        if (dados.dor_profunda?.texto && dados.dor_profunda.texto !== 'nao_informado' && !updateData.main_difficulty) {
           updateData.main_difficulty = dados.dor_profunda.texto;
         }
       }
       
-      // Justificativa da nota como resumo
-      if (analysis.justificativa_nota_geral && Array.isArray(analysis.justificativa_nota_geral)) {
+      // Justificativa da nota como resumo (fallback)
+      if (!updateData.ai_summary && analysis.justificativa_nota_geral && Array.isArray(analysis.justificativa_nota_geral)) {
         updateData.ai_summary = analysis.justificativa_nota_geral.join(' | ');
       }
     }
+    
+    console.log('[reanalyze-call] updateData keys:', Object.keys(updateData));
 
     const { error: updateError } = await supabase
       .from('calls')
