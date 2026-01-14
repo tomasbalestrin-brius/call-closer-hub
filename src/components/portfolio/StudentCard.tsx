@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { User, Calendar, Phone, Mail } from 'lucide-react';
+import { User, Calendar, Phone, Mail, Link as LinkIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -19,9 +19,14 @@ const ticketStyles: Record<TicketType, string> = {
 };
 
 export default function StudentCard({ student, onClick }: StudentCardProps) {
+  const isFromCRM = !!student.client_id;
+  
   return (
     <Card 
-      className="cursor-pointer hover:border-primary/50 transition-colors"
+      className={cn(
+        "cursor-pointer hover:border-primary/50 transition-colors",
+        isFromCRM && "border-l-4 border-l-primary"
+      )}
       onClick={onClick}
     >
       <CardContent className="p-4">
@@ -31,7 +36,15 @@ export default function StudentCard({ student, onClick }: StudentCardProps) {
               <User className="w-6 h-6 text-muted-foreground" />
             </div>
             <div>
-              <h3 className="font-semibold text-foreground">{student.name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-foreground">{student.name}</h3>
+                {isFromCRM && (
+                  <Badge variant="outline" className="text-xs gap-1 bg-primary/5">
+                    <LinkIcon className="w-3 h-3" />
+                    CRM
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
                 {student.phone && (
                   <span className="flex items-center gap-1">

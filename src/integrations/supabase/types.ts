@@ -1214,6 +1214,10 @@ export type Database = {
         Args: { _leader_id: string; _user_id: string }
         Returns: boolean
       }
+      map_product_to_ticket: {
+        Args: { product_offered: string }
+        Returns: Database["public"]["Enums"]["ticket_type"]
+      }
     }
     Enums: {
       call_status:

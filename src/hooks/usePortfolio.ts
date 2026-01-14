@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
-import type { PortfolioStudent, TicketUpgrade, StudentActivity, PortfolioMetrics, TicketType, StudentActivityType } from '@/types';
+import type { PortfolioStudent, TicketUpgrade, StudentActivity, PortfolioMetrics, TicketType, StudentActivityType, Client, Call } from '@/types';
 
 export function usePortfolioStudents() {
   const { user } = useAuth();
@@ -315,5 +315,45 @@ export function useCreateStudentIndication() {
     onError: (error) => {
       toast.error('Erro ao registrar indicação: ' + error.message);
     },
+  });
+}
+
+// Hook para buscar dados do cliente vinculado ao aluno
+export function useLinkedClient(clientId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['linked-client', clientId],
+    queryFn: async () => {
+      if (!clientId) return null;
+      
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', clientId)
+        .single();
+      
+      if (error) throw error;
+      return data as Client;
+    },
+    enabled: !!clientId,
+  });
+}
+
+// Hook para buscar calls do cliente vinculado
+export function useLinkedClientCalls(clientId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['linked-client-calls', clientId],
+    queryFn: async () => {
+      if (!clientId) return [];
+      
+      const { data, error } = await supabase
+        .from('calls')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('call_date', { ascending: false });
+      
+      if (error) throw error;
+      return data as Call[];
+    },
+    enabled: !!clientId,
   });
 }

@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, Flame, Users, Trash2, Phone, Mail, Calendar, Building } from 'lucide-react';
+import { TrendingUp, Flame, Users, Trash2, Phone, Mail, Calendar, Building, ShoppingBag, DollarSign, FileText, Link as LinkIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { TICKET_LABELS, ACTIVITY_TYPE_LABELS } from '@/types';
-import { useDeleteStudent, useTicketUpgrades, useStudentActivities, useStudentIndications } from '@/hooks/usePortfolio';
+import { useDeleteStudent, useTicketUpgrades, useStudentActivities, useStudentIndications, useLinkedClient, useLinkedClientCalls } from '@/hooks/usePortfolio';
 import UpgradeTicketDialog from './UpgradeTicketDialog';
 import ActivityDialog from './ActivityDialog';
 import StudentIndicationDialog from './StudentIndicationDialog';
@@ -47,12 +47,15 @@ export default function StudentDetailDialog({ student, open, onOpenChange }: Stu
   const { data: allUpgrades } = useTicketUpgrades();
   const { data: allActivities } = useStudentActivities();
   const { data: allIndications } = useStudentIndications();
+  const { data: linkedClient } = useLinkedClient(student?.client_id);
+  const { data: linkedCalls } = useLinkedClientCalls(student?.client_id);
   
   if (!student) return null;
   
   const studentUpgrades = allUpgrades?.filter(u => u.student_id === student.id) || [];
   const studentActivities = allActivities?.filter(a => a.student_id === student.id) || [];
   const studentIndications = allIndications?.filter(i => i.student_id === student.id) || [];
+  const hasLinkedClient = !!student.client_id && !!linkedClient;
   
   const handleDelete = async () => {
     await deleteStudent.mutateAsync(student.id);
@@ -133,6 +136,87 @@ export default function StudentDetailDialog({ student, open, onOpenChange }: Stu
             </Button>
           </div>
           
+          {/* Linked Client Info Card */}
+          {hasLinkedClient && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <LinkIcon className="w-4 h-4" />
+                  Dados da Venda Original
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {linkedClient.product_offered && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <ShoppingBag className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Produto</p>
+                        <p className="font-medium">{linkedClient.product_offered}</p>
+                      </div>
+                    </div>
+                  )}
+                  {linkedClient.sale_value && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <DollarSign className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Valor Venda</p>
+                        <p className="font-medium text-green-600">
+                          {linkedClient.sale_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {linkedClient.entry_value && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <DollarSign className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Entrada</p>
+                        <p className="font-medium">
+                          {linkedClient.entry_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {linkedClient.sold_at && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Data Venda</p>
+                        <p className="font-medium">
+                          {format(new Date(linkedClient.sold_at), 'dd/MM/yyyy', { locale: ptBR })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Calls History */}
+                {linkedCalls && linkedCalls.length > 0 && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      <FileText className="w-3 h-3 inline mr-1" />
+                      {linkedCalls.length} call(s) realizada(s)
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {linkedCalls.slice(0, 3).map((call) => (
+                        <Badge key={call.id} variant="outline" className="text-xs">
+                          {format(new Date(call.call_date), 'dd/MM', { locale: ptBR })} - {call.status}
+                          {call.score && ` (${call.score}pts)`}
+                        </Badge>
+                      ))}
+                      {linkedCalls.length > 3 && (
+                        <Badge variant="secondary" className="text-xs">
+                          +{linkedCalls.length - 3} mais
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Tabs */}
           <Tabs defaultValue="upgrades" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
