@@ -503,7 +503,7 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
         { role: "system", content: systemPrompt },
         { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.` },
       ],
-      max_tokens: 32000,
+      max_tokens: 16000,
     }),
   });
 

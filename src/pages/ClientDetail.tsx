@@ -185,9 +185,23 @@ export default function ClientDetail() {
       
       toast.success('Call reanalisada com sucesso! Atualizando dados...');
       await fetchClientData();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao reanalisar call:', error);
-      toast.error('Erro ao reanalisar call. Verifique se a call possui transcrição.');
+      
+      // Extract more specific error message
+      let errorMessage = 'Erro ao reanalisar call. Verifique se a call possui transcrição.';
+      if (error && typeof error === 'object' && 'message' in error) {
+        const msg = (error as { message: string }).message;
+        if (msg.includes('max_tokens')) {
+          errorMessage = 'Erro: limite de tokens excedido. A transcrição pode ser muito longa.';
+        } else if (msg.includes('400')) {
+          errorMessage = 'Erro na API de análise (400). Tente novamente.';
+        } else if (msg.includes('500')) {
+          errorMessage = 'Erro interno na análise. Verifique os logs do backend.';
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setReanalyzing(false);
     }
