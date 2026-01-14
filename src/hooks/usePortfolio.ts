@@ -76,6 +76,138 @@ export function useStudentIndications() {
   });
 }
 
+// Hook para buscar TODOS os clientes do closer (para métricas do dashboard)
+export function useAllClients() {
+  const { user } = useAuth();
+  
+  return useQuery({
+    queryKey: ['all-clients', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*');
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+}
+
+// Hook para buscar atividades de TODOS os clientes (client_activities)
+export function useAllClientActivities() {
+  const { user } = useAuth();
+  
+  return useQuery({
+    queryKey: ['all-client-activities', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('client_activities')
+        .select('*');
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+}
+
+// Hook para buscar TODAS as indicações
+export function useAllIndications() {
+  const { user } = useAuth();
+  
+  return useQuery({
+    queryKey: ['all-indications', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('indications')
+        .select('*');
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+}
+
+// Métricas baseadas em TODOS os clientes (para o dashboard da carteira)
+export function useClientsMetrics() {
+  const { data: clients } = useAllClients();
+  const { data: activities } = useAllClientActivities();
+  const { data: indications } = useAllIndications();
+  const { data: upgrades } = useTicketUpgrades();
+  
+  // Contagem por ticket baseado em vendas
+  const clientsByTicket = {
+    '29_90': clients?.filter(c => !c.is_sold || (c.sale_value && c.sale_value < 5000)).length || 0,
+    '12k': clients?.filter(c => c.is_sold && c.sale_value && c.sale_value >= 5000 && c.sale_value < 50000).length || 0,
+    '80k': clients?.filter(c => c.is_sold && c.sale_value && c.sale_value >= 50000).length || 0,
+  };
+  
+  // Contagem de atividades
+  const totalIntensivos = activities?.filter(a => a.activity_type === 'intensivo').length || 0;
+  const totalMentorias = activities?.filter(a => a.activity_type === 'mentoria').length || 0;
+  const totalEventos = activities?.filter(a => a.activity_type === 'evento').length || 0;
+  
+  // Indicações por tipo
+  const indicacoesCall = indications?.filter(i => i.indication_type === 'call').length || 0;
+  const indicacoesIntensivo = indications?.filter(i => i.indication_type === 'intensivo').length || 0;
+  const totalIndicacoes = indications?.length || 0;
+  
+  // Fechadas (status = 'convertido') por tipo
+  const indicacoesFechadasCall = indications?.filter(i => 
+    i.indication_type === 'call' && i.status === 'convertido'
+  ).length || 0;
+  
+  const indicacoesFechadasIntensivo = indications?.filter(i => 
+    i.indication_type === 'intensivo' && i.status === 'convertido'
+  ).length || 0;
+  
+  // Taxas de conversão de indicações
+  const taxaConversaoCall = indicacoesCall > 0 
+    ? (indicacoesFechadasCall / indicacoesCall) * 100 : 0;
+  const taxaConversaoIntensivo = indicacoesIntensivo > 0 
+    ? (indicacoesFechadasIntensivo / indicacoesIntensivo) * 100 : 0;
+  const taxaConversaoGeral = totalIndicacoes > 0 
+    ? ((indicacoesFechadasCall + indicacoesFechadasIntensivo) / totalIndicacoes) * 100 : 0;
+  
+  // Taxas de ascensão baseadas em vendas reais
+  const totalClients = clients?.length || 0;
+  const clientsSold12k = clientsByTicket['12k'];
+  const clientsSold80k = clientsByTicket['80k'];
+  
+  // Taxa 29,90 → 12K: % de clientes que compraram 12k
+  const ascensionRate29to12k = totalClients > 0 
+    ? ((clientsSold12k + clientsSold80k) / totalClients) * 100 : 0;
+  
+  // Taxa 12K → 80K: baseado em upgrades registrados
+  const upgradesFrom12k = upgrades?.filter(u => u.from_ticket === '12k' && u.to_ticket === '80k').length || 0;
+  const total12kBase = clientsSold12k + upgradesFrom12k;
+  const ascensionRate12kto80k = total12kBase > 0 ? (upgradesFrom12k / total12kBase) * 100 : 0;
+  
+  const metrics: PortfolioMetrics = {
+    totalStudents: totalClients,
+    studentsByTicket: clientsByTicket,
+    ascensionRate29to12k,
+    ascensionRate12kto80k,
+    totalAscensions: upgrades?.length || 0,
+    totalIntensivos,
+    totalMentorias,
+    totalEventos,
+    totalIndicacoes,
+    indicacoesCall,
+    indicacoesIntensivo,
+    indicacoesFechadasCall,
+    indicacoesFechadasIntensivo,
+    taxaConversaoCall,
+    taxaConversaoIntensivo,
+    taxaConversaoGeral,
+  };
+  
+  return metrics;
+}
+
+// Métricas originais baseadas apenas em portfolio_students (mantido para compatibilidade)
 export function usePortfolioMetrics() {
   const { data: students } = usePortfolioStudents();
   const { data: upgrades } = useTicketUpgrades();
