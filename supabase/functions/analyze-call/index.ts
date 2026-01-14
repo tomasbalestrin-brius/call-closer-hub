@@ -503,7 +503,7 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
         { role: "system", content: systemPrompt },
         { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.` },
       ],
-      max_tokens: 16000,
+      max_tokens: 32000,
     }),
   });
 
@@ -524,16 +524,34 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
 }
 
 function parseJSONFromResponse(response: string): unknown {
+  console.log("Attempting to parse response, length:", response.length);
+  console.log("Response preview (first 500 chars):", response.substring(0, 500));
+  console.log("Response preview (last 500 chars):", response.substring(response.length - 500));
+  
+  // Try to remove markdown code blocks if they exist
+  let cleanedResponse = response;
+  const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    cleanedResponse = codeBlockMatch[1];
+    console.log("Extracted JSON from markdown code block");
+  }
+  
   // Try to extract JSON from the response
-  const jsonMatch = response.match(/\{[\s\S]*\}/);
+  const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
-      return JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonMatch[0]);
+      console.log("JSON parsed successfully, top-level keys:", Object.keys(parsed));
+      return parsed;
     } catch (e) {
       console.error("Failed to parse JSON:", e);
+      console.error("JSON that failed (first 1000 chars):", jsonMatch[0].substring(0, 1000));
+      console.error("JSON that failed (last 1000 chars):", jsonMatch[0].substring(jsonMatch[0].length - 1000));
       throw new Error("Failed to parse AI response as JSON");
     }
   }
+  
+  console.error("No JSON found in response. Full response:", response);
   throw new Error("No JSON found in AI response");
 }
 
@@ -627,9 +645,47 @@ serve(async (req) => {
     const masterResponse = await callOpenAI(MASTER_PROMPT, transcription);
 
     console.log("AI analysis completed");
+    console.log("Raw response length:", masterResponse.length);
 
     // Parse the response
     const data = parseJSONFromResponse(masterResponse) as AnalysisData;
+    
+    // Ensure all 12 stages exist with complete structure (fallback)
+    const requiredStages = [
+      'conexao', 'abertura', 'mapeamento_empresa', 'mapeamento_problema',
+      'consultoria', 'problematizacao', 'solucao_imaginada', 'transicao',
+      'pitch', 'perguntas_compromisso', 'fechamento', 'objecoes_negociacao'
+    ];
+
+    const defaultStageStructure = {
+      aconteceu: "nao",
+      nota: 0,
+      funcao_cumprida: "Esta etapa não foi identificada ou não aconteceu na call",
+      evidencias: [],
+      ponto_forte: [],
+      ponto_fraco: ["Etapa não executada ou não identificada na call"],
+      erro_de_execucao: "Etapa ausente",
+      impacto_no_lead: "Sem dados para avaliar - etapa não aconteceu",
+      como_corrigir: ["Revisar o framework e garantir execução desta etapa nas próximas calls"],
+      frase_melhor: { antes: "", depois: "" },
+      perguntas_de_aprofundamento: [],
+      seeds_prova_social: { usadas: [], faltaram: [] },
+      risco_principal_da_etapa: "Etapa não executada - risco de perda de profundidade e conexão"
+    };
+
+    if (!data.analise_por_etapa) {
+      data.analise_por_etapa = {};
+    }
+
+    for (const stage of requiredStages) {
+      const existingStage = data.analise_por_etapa[stage];
+      if (!existingStage || (typeof existingStage === 'object' && Object.keys(existingStage).length === 0)) {
+        data.analise_por_etapa[stage] = { ...defaultStageStructure };
+        console.log(`Filled missing/empty stage with default: ${stage}`);
+      }
+    }
+    
+    console.log("Stage analysis keys after fallback:", Object.keys(data.analise_por_etapa));
 
     // Map to analysis object for database compatibility
     const analysis = {
