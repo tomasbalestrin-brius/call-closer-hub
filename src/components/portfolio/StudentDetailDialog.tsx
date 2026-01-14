@@ -1,13 +1,15 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, Flame, Users, Trash2, Phone, Mail, Calendar, Building, ShoppingBag, DollarSign, FileText, Link as LinkIcon } from 'lucide-react';
+import { TrendingUp, Flame, Users, Trash2, Phone, Mail, Calendar, Building, ShoppingBag, DollarSign, FileText, Link as LinkIcon, GraduationCap } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import { TICKET_LABELS, ACTIVITY_TYPE_LABELS } from '@/types';
 import { useDeleteStudent, useTicketUpgrades, useStudentActivities, useStudentIndications, useLinkedClient, useLinkedClientCalls } from '@/hooks/usePortfolio';
 import UpgradeTicketDialog from './UpgradeTicketDialog';
@@ -49,6 +51,40 @@ export default function StudentDetailDialog({ student, open, onOpenChange }: Stu
   const { data: allIndications } = useStudentIndications();
   const { data: linkedClient } = useLinkedClient(student?.client_id);
   const { data: linkedCalls } = useLinkedClientCalls(student?.client_id);
+  
+  // Fetch client activities (intensivo, mentoria)
+  const { data: clientActivities } = useQuery({
+    queryKey: ['client-activities-detail', student?.client_id],
+    queryFn: async () => {
+      if (!student?.client_id) return [];
+      const { data } = await supabase
+        .from('client_activities')
+        .select('*')
+        .eq('client_id', student.client_id)
+        .in('activity_type', ['intensivo', 'mentoria']);
+      return data || [];
+    },
+    enabled: !!student?.client_id,
+  });
+
+  // Fetch client indications
+  const { data: clientIndications } = useQuery({
+    queryKey: ['client-indications-detail', student?.client_id],
+    queryFn: async () => {
+      if (!student?.client_id) return [];
+      const { data } = await supabase
+        .from('indications')
+        .select('*')
+        .eq('client_id', student.client_id);
+      return data || [];
+    },
+    enabled: !!student?.client_id,
+  });
+
+  // Calculate participation flags
+  const hasIntensivo = clientActivities?.some(a => a.activity_type === 'intensivo') || false;
+  const hasMentoria = clientActivities?.some(a => a.activity_type === 'mentoria') || false;
+  const clientIndicationsCount = clientIndications?.length || 0;
   
   if (!student) return null;
   
@@ -107,7 +143,42 @@ export default function StudentDetailDialog({ student, open, onOpenChange }: Stu
                 <span>{student.niche}</span>
               </div>
             )}
+            {linkedClient?.revenue && (
+              <div className="flex items-center gap-2 text-sm">
+                <DollarSign className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Faturamento</p>
+                  <p className="font-medium">
+                    {linkedClient.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
+          
+          {/* Participation Badges */}
+          {(hasIntensivo || hasMentoria || clientIndicationsCount > 0) && (
+            <div className="flex flex-wrap gap-2 py-2 border-b">
+              {hasIntensivo && (
+                <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+                  <Flame className="w-3 h-3 mr-1" />
+                  Intensivo
+                </Badge>
+              )}
+              {hasMentoria && (
+                <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30">
+                  <GraduationCap className="w-3 h-3 mr-1" />
+                  Mentoria Extra
+                </Badge>
+              )}
+              {clientIndicationsCount > 0 && (
+                <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/30">
+                  <Users className="w-3 h-3 mr-1" />
+                  {clientIndicationsCount} Indicação(ões)
+                </Badge>
+              )}
+            </div>
+          )}
           
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2 py-4">
