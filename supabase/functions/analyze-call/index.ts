@@ -162,11 +162,41 @@ Crie um resumo com:
 - 1 "ajuste nº1" que mais aumenta conversão na próxima call (bem direto)
 
 ────────────────────────────────────────────────────────────────────
+REGRA CRÍTICA: TODAS AS 12 ETAPAS SÃO OBRIGATÓRIAS
+
+VOCÊ DEVE PREENCHER TODAS AS 12 ETAPAS EM "analise_por_etapa" COM A ESTRUTURA COMPLETA.
+
+Lista das 12 etapas (TODAS obrigatórias):
+1. conexao
+2. abertura
+3. mapeamento_empresa
+4. mapeamento_problema
+5. consultoria
+6. problematizacao
+7. solucao_imaginada
+8. transicao
+9. pitch
+10. perguntas_compromisso
+11. fechamento
+12. objecoes_negociacao
+
+Se uma etapa NÃO aconteceu explicitamente na call:
+- Marque "aconteceu": "nao"
+- Coloque "nota": 0
+- Em "funcao_cumprida": explique qual seria o objetivo dessa etapa
+- Em "ponto_fraco": descreva o que deveria ter sido feito
+- Em "como_corrigir": dê orientações práticas
+- Em "risco_principal_da_etapa": explique o impacto de ter pulado essa etapa
+- Preencha TODOS os campos mesmo assim
+
+NÃO DEIXE NENHUMA ETAPA COMO OBJETO VAZIO {}.
+
+────────────────────────────────────────────────────────────────────
 FORMATO DE SAÍDA (OBRIGATÓRIO)
 
 Responda APENAS com um JSON válido (sem markdown, sem comentários).
 
-SCHEMA:
+SCHEMA (estrutura completa para CADA etapa):
 
 {
   "framework_selecionado": "Elite Premium | Implementação de IA (NextTrack) | Mentoria Julia Ottoni | Programa de Implementação Comercial",
@@ -256,17 +286,171 @@ SCHEMA:
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
       "risco_principal_da_etapa": "..."
     },
-    "abertura": {},
-    "mapeamento_empresa": {},
-    "mapeamento_problema": {},
-    "consultoria": {},
-    "problematizacao": {},
-    "solucao_imaginada": {},
-    "transicao": {},
-    "pitch": {},
-    "perguntas_compromisso": {},
-    "fechamento": {},
-    "objecoes_negociacao": {}
+    "abertura": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "mapeamento_empresa": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "mapeamento_problema": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "consultoria": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "problematizacao": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "solucao_imaginada": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "transicao": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "pitch": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "perguntas_compromisso": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "fechamento": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    },
+    "objecoes_negociacao": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "nao_informado|...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "..."
+    }
   },
 
   "plano_de_acao_direto": {
@@ -317,7 +501,7 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nIMPORTANTE: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa, mesmo que parcialmente. Se uma etapa não aconteceu explicitamente na call, marque como "aconteceu": "nao" e explique o que deveria ter sido feito naquela etapa. NÃO DEIXE NENHUMA ETAPA VAZIA.` },
+        { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.` },
       ],
       max_tokens: 16000,
     }),
