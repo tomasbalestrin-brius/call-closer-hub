@@ -176,6 +176,8 @@ export default function ClientDetail() {
 
   const handleReanalyze = async (callId: string) => {
     setReanalyzing(true);
+    const toastId = toast.loading('Reanalisando call... Isso pode levar até 2 minutos.');
+    
     try {
       const { data, error } = await supabase.functions.invoke('reanalyze-call', {
         body: { callId }
@@ -183,21 +185,29 @@ export default function ClientDetail() {
       
       if (error) throw error;
       
-      toast.success('Call reanalisada com sucesso! Atualizando dados...');
+      toast.dismiss(toastId);
+      toast.success(`Call reanalisada com sucesso! Nota: ${data?.score || '-'}/10`);
       await fetchClientData();
     } catch (error: unknown) {
+      toast.dismiss(toastId);
       console.error('Erro ao reanalisar call:', error);
       
       // Extract more specific error message
       let errorMessage = 'Erro ao reanalisar call. Verifique se a call possui transcrição.';
       if (error && typeof error === 'object' && 'message' in error) {
         const msg = (error as { message: string }).message;
-        if (msg.includes('max_tokens')) {
-          errorMessage = 'Erro: limite de tokens excedido. A transcrição pode ser muito longa.';
-        } else if (msg.includes('400')) {
-          errorMessage = 'Erro na API de análise (400). Tente novamente.';
+        if (msg.includes('timeout') || msg.includes('connection closed')) {
+          errorMessage = 'A análise demorou muito. Tente novamente com uma transcrição menor.';
+        } else if (msg.includes('Rate limit')) {
+          errorMessage = 'Limite de requisições atingido. Aguarde um momento e tente novamente.';
+        } else if (msg.includes('max_tokens')) {
+          errorMessage = 'Transcrição muito longa. Considere dividir em partes menores.';
+        } else if (msg.includes('API key') || msg.includes('401') || msg.includes('402')) {
+          errorMessage = 'Erro de autenticação com a API. Verifique a configuração.';
+        } else if (msg.includes('JSON')) {
+          errorMessage = 'Erro ao processar resposta da IA. Tente novamente.';
         } else if (msg.includes('500')) {
-          errorMessage = 'Erro interno na análise. Verifique os logs do backend.';
+          errorMessage = 'Erro interno. Verifique os logs do backend.';
         }
       }
       
@@ -969,7 +979,21 @@ export default function ClientDetail() {
                       {stageOrder.map((key) => {
                         // Tenta acessar a etapa primeiro em analise_por_etapa, depois diretamente
                         const stage = analiseEtapas?.[key] || techAnalysis?.[key];
-                        if (!stage || (typeof stage === 'object' && Object.keys(stage as object).length === 0)) return null;
+                        
+                        // Se a etapa não existir ou for vazia, mostrar placeholder
+                        if (!stage || (typeof stage === 'object' && Object.keys(stage as object).length === 0)) {
+                          return (
+                            <div key={key} className="border rounded-lg p-4 bg-muted/20">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-medium text-muted-foreground">{stageLabels[key] || key}</h4>
+                                <Badge variant="outline" className="bg-muted/50">Não analisada</Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Esta etapa não foi identificada ou analisada na call.
+                              </p>
+                            </div>
+                          );
+                        }
                         
                         const stageData = stage as StageAnalysis;
                         const pontoForte = getStringValue(stageData.ponto_forte);
