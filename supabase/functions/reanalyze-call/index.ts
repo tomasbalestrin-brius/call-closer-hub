@@ -84,18 +84,49 @@ serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
 
-    // Extract summary fields from analysis if available
+    // Extract summary fields from new schema (campos na raiz do JSON)
     const analysis = analysisResult.analysis || analysisResult;
     if (analysis) {
-      if (analysis.resumo_executivo) {
-        const resumo = analysis.resumo_executivo;
-        if (resumo.score_geral !== undefined) updateData.score = resumo.score_geral;
-        if (resumo.conclusao_da_call) updateData.call_conclusion = resumo.conclusao_da_call;
-        if (resumo.maiores_erros) updateData.main_errors = resumo.maiores_erros;
-        if (resumo.maiores_acertos) updateData.main_wins = resumo.maiores_acertos;
-        if (resumo.ponto_de_perda) updateData.loss_point = resumo.ponto_de_perda;
+      // Nota geral
+      if (analysis.nota_geral !== undefined) updateData.score = analysis.nota_geral;
+      
+      // Maiores erros (array de objetos com erro, evidencia, impacto, etc.)
+      if (analysis.maiores_erros) updateData.main_errors = analysis.maiores_erros;
+      
+      // Maiores acertos (array de objetos com acerto, evidencia, etc.)
+      if (analysis.maiores_acertos) updateData.main_wins = analysis.maiores_acertos;
+      
+      // Ponto de perda da venda
+      if (analysis.ponto_de_perda_da_venda) updateData.loss_point = analysis.ponto_de_perda_da_venda;
+      
+      // Dados de identificação
+      if (analysis.identificacao) {
+        if (analysis.identificacao.nome_lead && analysis.identificacao.nome_lead !== 'nao_informado') {
+          // Client name já vem do registro, não sobrescrever
+        }
+        if (analysis.identificacao.houve_venda && analysis.identificacao.houve_venda !== 'nao_informado') {
+          updateData.call_conclusion = analysis.identificacao.houve_venda === 'sim' ? 'vendeu' : 'nao_vendeu';
+        }
       }
-      if (analysis.ai_summary) updateData.ai_summary = analysis.ai_summary;
+      
+      // Dados extraídos
+      if (analysis.dados_extraidos) {
+        const dados = analysis.dados_extraidos;
+        if (dados.nicho_profissao && dados.nicho_profissao !== 'nao_informado') {
+          updateData.niche = dados.nicho_profissao;
+        }
+        if (dados.dor_principal_declarada?.texto && dados.dor_principal_declarada.texto !== 'nao_informado') {
+          updateData.main_pain = dados.dor_principal_declarada.texto;
+        }
+        if (dados.dor_profunda?.texto && dados.dor_profunda.texto !== 'nao_informado') {
+          updateData.main_difficulty = dados.dor_profunda.texto;
+        }
+      }
+      
+      // Justificativa da nota como resumo
+      if (analysis.justificativa_nota_geral && Array.isArray(analysis.justificativa_nota_geral)) {
+        updateData.ai_summary = analysis.justificativa_nota_geral.join(' | ');
+      }
     }
 
     const { error: updateError } = await supabase
