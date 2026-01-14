@@ -41,15 +41,37 @@ PASSO 1) IDENTIFICAR CONTEXTO E ESCOLHER O FRAMEWORK
 - empresa/nicho do lead (se aparecer)
 - houve_venda (sim/nao/nao_informado) — considere "sim" apenas se houver confirmação clara de pagamento/fechamento.
 
-1.2 Escolha o "framework_selecionado" assim:
-- Se mencionar IA/NextTrack/WhatsApp/atendimento/SDR/automação/CRM + pitch de IA → "Implementação de IA (NextTrack)"
-- Se mencionar Julia Ottoni/branding/posicionamento/Instagram/identidade visual/fotos/conteúdo → "Mentoria Julia Ottoni"
-- Se mencionar processo comercial/follow-up/CRM/cadência/implementação comercial/scripts de vendas → "Programa de Implementação Comercial"
-- Se mencionar Elite Premium/mentoria premium/alto acompanhamento/estrutura de empresa/marketing+comercial+gestão+mentalidade/Cleiton Querobin → "Elite Premium"
+1.2 REGRAS DE SELEÇÃO DO FRAMEWORK (SIGA ESTA ORDEM DE PRIORIDADE):
 
-Se estiver ambíguo, escolha o mais provável e marque:
+PRIORIDADE 1 - "Implementação de IA (NextTrack)":
+Se a call mencionar QUALQUER um destes termos, USE ESTE FRAMEWORK:
+- IA, inteligência artificial, WhatsApp, atendimento automatizado
+- SDR automatizado, robô, bot, automação comercial
+- CRM inteligente, NextTrack, aumentar produtividade com tecnologia
+- Atendimento por IA, resposta automática, qualificação automática
+→ USE "Implementação de IA (NextTrack)" MESMO que outros elementos estejam presentes
+
+PRIORIDADE 2 - "Elite Premium":
+Se mencionar: Elite Premium, Cleiton Querobin, mentoria premium, alto acompanhamento, 
+estrutura completa de empresa (marketing+comercial+gestão+mentalidade)
+→ USE "Elite Premium"
+
+PRIORIDADE 3 - "Mentoria Julia Ottoni":
+Se mencionar: Julia Ottoni, branding, posicionamento pessoal, Instagram, 
+identidade visual, fotos profissionais, conteúdo, prestadoras de serviço femininas
+→ USE "Mentoria Julia Ottoni"
+
+PRIORIDADE 4 - "Programa de Implementação Comercial":
+Se mencionar: processo comercial, follow-up, cadência, scripts de vendas, 
+implementação comercial (SEM IA/automação)
+→ USE "Programa de Implementação Comercial"
+
+REGRA CRÍTICA: Se houver QUALQUER menção a IA/automação/WhatsApp automatizado, 
+a PRIORIDADE 1 vence TODAS as outras, mesmo que outros frameworks pareçam aplicáveis.
+
+Se estiver ambíguo após seguir as prioridades:
 - "confianca_framework" = 0.0 a 1.0
-- "motivo_escolha_framework" = 2–4 bullets com evidências do texto.
+- "motivo_escolha_framework" = 2–4 bullets com evidências LITERAIS do texto que justificam a escolha
 
 ────────────────────────────────────────────────────────────────────
 PASSO 2) EXTRAÇÃO DE DADOS (SEM INTERPRETAÇÃO)
@@ -473,14 +495,41 @@ SCHEMA (estrutura completa para CADA etapa):
 }
 
 ────────────────────────────────────────────────────────────────────
+EXEMPLOS DE QUALIDADE (SIGA ESTE PADRÃO)
+
+PONTO FORTE - RUIM (NÃO FAÇA ASSIM):
+"Conexão pessoal através de reconhecimento regional"
+"Explicou brevemente o objetivo da conversa"
+"Identificou a estrutura da empresa"
+
+PONTO FORTE - BOM (FAÇA ASSIM):
+"Na abertura (00:45), ancorou autoridade citando 'já ajudamos mais de 500 empresas a implementar IA, gerando em média 40% de aumento nas vendas' - isso criou credibilidade imediata e o lead respondeu com mais abertura, perguntando 'como vocês fazem isso?'"
+"Durante o mapeamento (05:30), quando o lead mencionou 'meu time perde muito tempo respondendo mensagens', o closer aprofundou com 'quanto tempo exatamente por dia?' e depois 'e isso te impacta como pessoa, não só na empresa?' - a sequência trouxe a dor pessoal à tona"
+"Usou prova social contextualizada: 'tive um cliente no mesmo nicho que você, advogado também, que tinha exatamente esse problema de atendimento. Hoje ele atende 3x mais leads com a mesma equipe' - o lead respondeu 'é exatamente isso que eu preciso'"
+
+PONTO FRACO - RUIM (NÃO FAÇA ASSIM):
+"Faltou ancoragem com números"
+"Não aprofundou na dor"
+"Faltou prova social"
+
+PONTO FRACO - BOM (FAÇA ASSIM):
+"Na abertura (00:45), apenas disse 'a gente ajuda empresas a vender mais' sem ancorar autoridade - deveria ter dito 'já ajudamos mais de 500 empresas a implementar IA comercial, gerando em média 40% de aumento em vendas'. Impacto: o lead ficou cético desde o início e fez mais objeções que o normal"
+"Quando o lead disse 'estou sobrecarregado' (12:30), o closer não explorou a dor pessoal - pulou direto para perguntar sobre CRM. Deveria ter perguntado: 'Como isso tem afetado sua vida fora do trabalho? Sua família percebe?'. Impacto: perdeu oportunidade de criar urgência emocional"
+"No mapeamento, identificou que o lead não tem processo de follow-up, mas não problematizou: 'Você sabe quantas vendas está deixando na mesa por não ter follow-up estruturado? Nossos clientes descobrem que perdem em média 40% das vendas que poderiam fechar'. Impacto: o lead não sentiu urgência de mudar"
+
+────────────────────────────────────────────────────────────────────
 CRITÉRIO DE QUALIDADE (AUTO-CHECAGEM ANTES DE ENTREGAR)
 
-Antes de finalizar, valide:
-- Você citou evidências nos 3 maiores erros e 3 maiores acertos?
-- Você deu pelo menos 1 "ANTES → DEPOIS" em TODA etapa com falha?
-- Você entregou perguntas exatas (não genéricas) para aprofundar?
-- Você marcou "nao_informado" onde não existe dado?
-- JSON está válido e completo?
+Antes de finalizar, valide CADA item:
+1. [ ] O framework selecionado bate com o produto/serviço da call?
+2. [ ] Se a call menciona IA/automação/WhatsApp automatizado, você usou "Implementação de IA (NextTrack)"?
+3. [ ] Cada ponto_forte tem contexto específico (QUANDO aconteceu, O QUE disse, QUAL foi o impacto)?
+4. [ ] Cada ponto_fraco tem diagnóstico + impacto + o que deveria ter dito?
+5. [ ] Você citou evidências LITERAIS nos 3 maiores erros e 3 maiores acertos?
+6. [ ] Você deu pelo menos 1 "ANTES → DEPOIS" em TODA etapa com falha?
+7. [ ] Você entregou perguntas EXATAS e ESPECÍFICAS (não genéricas) para aprofundar?
+8. [ ] Você marcou "nao_informado" onde não existe dado?
+9. [ ] JSON está válido e completo com todas as 12 etapas?
 
 Se faltar qualquer item, corrija antes de responder.`;
 
@@ -507,7 +556,7 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
         { role: "system", content: systemPrompt },
         { 
           role: "user", 
-          content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nFORMATO DE RESPOSTA OBRIGATÓRIO:\n- Retorne APENAS o JSON, sem texto adicional antes ou depois\n- NÃO use markdown code blocks (\`\`\`json ou \`\`\`)\n- Comece sua resposta diretamente com { e termine com }\n- Certifique-se de que todas as strings estão corretamente escapadas (aspas internas como \\", quebras de linha como \\n)\n- Use aspas duplas para strings, nunca aspas simples\n\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.\n\nLIMITES DE TAMANHO (para caber no limite de tokens):\n- Máximo 2 evidências por etapa\n- Máximo 2 itens em como_corrigir\n- Máximo 2 perguntas em perguntas_de_aprofundamento\n- Textos curtos (1-2 frases por campo)` 
+          content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nFORMATO DE RESPOSTA OBRIGATÓRIO:\n- Retorne APENAS o JSON, sem texto adicional antes ou depois\n- NÃO use markdown code blocks (\`\`\`json ou \`\`\`)\n- Comece sua resposta diretamente com { e termine com }\n- Certifique-se de que todas as strings estão corretamente escapadas (aspas internas como \\", quebras de linha como \\n)\n- Use aspas duplas para strings, nunca aspas simples\n\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.\n\nQUALIDADE DOS PONTOS FORTES E FRACOS (OBRIGATÓRIO):\n- Cada ponto_forte deve ser ESPECÍFICO: cite o que o closer fez, quando fez, e porque foi bom. Exemplo: "Na abertura, ancorou autoridade mencionando '500 empresas atendidas e R$50M em vendas', o que criou credibilidade imediata"\n- Cada ponto_fraco deve ter DIAGNÓSTICO + IMPACTO: o que faltou, quando faltou, e qual foi a consequência. Exemplo: "Não explorou a dor pessoal quando o lead mencionou 'estou sobrecarregado' - perdeu oportunidade de criar urgência emocional"\n- EVITE frases genéricas como "explicou o objetivo" ou "identificou a estrutura" - seja ESPECÍFICO sobre COMO e QUANDO\n- Cada campo pode ter 2-3 frases se necessário para ser específico\n\nLIMITES DE TAMANHO:\n- Máximo 2 evidências por etapa\n- Máximo 2 itens em como_corrigir\n- Máximo 2 perguntas em perguntas_de_aprofundamento` 
         },
       ],
       max_tokens: 16000,
