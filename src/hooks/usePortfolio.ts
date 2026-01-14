@@ -4,6 +4,108 @@ import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import type { PortfolioStudent, TicketUpgrade, StudentActivity, PortfolioMetrics, TicketType, StudentActivityType, Client, Call } from '@/types';
 
+export interface EnrichedStudentData {
+  clientId: string;
+  revenue: number | null;
+  productOffered: string | null;
+  niche: string | null;
+  hasIntensivo: boolean;
+  hasMentoria: boolean;
+  indicationsCount: number;
+}
+
+export function useStudentEnrichedData(students: PortfolioStudent[]) {
+  const clientIds = students.map(s => s.client_id).filter(Boolean) as string[];
+  
+  const { data: clients, isLoading: isLoadingClients } = useQuery({
+    queryKey: ['enriched-clients', clientIds],
+    queryFn: async () => {
+      if (clientIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, revenue, product_offered, niche')
+        .in('id', clientIds);
+      if (error) throw error;
+      return data;
+    },
+    enabled: clientIds.length > 0,
+  });
+
+  const { data: activities, isLoading: isLoadingActivities } = useQuery({
+    queryKey: ['enriched-activities', clientIds],
+    queryFn: async () => {
+      if (clientIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('client_activities')
+        .select('client_id, activity_type')
+        .in('client_id', clientIds)
+        .in('activity_type', ['intensivo', 'mentoria']);
+      if (error) throw error;
+      return data;
+    },
+    enabled: clientIds.length > 0,
+  });
+
+  const { data: indications, isLoading: isLoadingIndications } = useQuery({
+    queryKey: ['enriched-indications', clientIds],
+    queryFn: async () => {
+      if (clientIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('indications')
+        .select('client_id')
+        .in('client_id', clientIds);
+      if (error) throw error;
+      return data;
+    },
+    enabled: clientIds.length > 0,
+  });
+
+  const enrichedDataMap = new Map<string, EnrichedStudentData>();
+  
+  if (clients) {
+    clients.forEach(client => {
+      enrichedDataMap.set(client.id, {
+        clientId: client.id,
+        revenue: client.revenue,
+        productOffered: client.product_offered,
+        niche: client.niche,
+        hasIntensivo: false,
+        hasMentoria: false,
+        indicationsCount: 0,
+      });
+    });
+  }
+
+  if (activities) {
+    activities.forEach(activity => {
+      const data = enrichedDataMap.get(activity.client_id);
+      if (data) {
+        if (activity.activity_type === 'intensivo') {
+          data.hasIntensivo = true;
+        } else if (activity.activity_type === 'mentoria') {
+          data.hasMentoria = true;
+        }
+      }
+    });
+  }
+
+  if (indications) {
+    indications.forEach(indication => {
+      if (indication.client_id) {
+        const data = enrichedDataMap.get(indication.client_id);
+        if (data) {
+          data.indicationsCount += 1;
+        }
+      }
+    });
+  }
+
+  return {
+    enrichedDataMap,
+    isLoading: isLoadingClients || isLoadingActivities || isLoadingIndications,
+  };
+}
+
 export function usePortfolioStudents() {
   const { user } = useAuth();
   
