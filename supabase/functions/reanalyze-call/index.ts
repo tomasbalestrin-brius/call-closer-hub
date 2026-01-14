@@ -41,37 +41,47 @@ PASSO 1) IDENTIFICAR CONTEXTO E ESCOLHER O FRAMEWORK
 - empresa/nicho do lead (se aparecer)
 - houve_venda (sim/nao/nao_informado) — considere "sim" apenas se houver confirmação clara de pagamento/fechamento.
 
-1.2 REGRAS DE SELEÇÃO DO FRAMEWORK (SIGA ESTA ORDEM DE PRIORIDADE):
+1.2 IDENTIFICAR O PRODUTO/SERVIÇO PRINCIPAL E ESCOLHER O FRAMEWORK:
 
-PRIORIDADE 1 - "Implementação de IA (NextTrack)":
-Se a call mencionar QUALQUER um destes termos, USE ESTE FRAMEWORK:
-- IA, inteligência artificial, WhatsApp, atendimento automatizado
-- SDR automatizado, robô, bot, automação comercial
-- CRM inteligente, NextTrack, aumentar produtividade com tecnologia
-- Atendimento por IA, resposta automática, qualificação automática
-→ USE "Implementação de IA (NextTrack)" MESMO que outros elementos estejam presentes
+Analise o CONTEXTO GERAL da call para entender qual PRODUTO/SERVIÇO está sendo vendido.
+A escolha do framework deve ser baseada no PRODUTO PRINCIPAL que está sendo oferecido, 
+NÃO em palavras-chave isoladas. Analise o pitch, a oferta, e o que o closer está tentando vender.
 
-PRIORIDADE 2 - "Elite Premium":
-Se mencionar: Elite Premium, Cleiton Querobin, mentoria premium, alto acompanhamento, 
-estrutura completa de empresa (marketing+comercial+gestão+mentalidade)
-→ USE "Elite Premium"
+FRAMEWORKS DISPONÍVEIS:
 
-PRIORIDADE 3 - "Mentoria Julia Ottoni":
-Se mencionar: Julia Ottoni, branding, posicionamento pessoal, Instagram, 
-identidade visual, fotos profissionais, conteúdo, prestadoras de serviço femininas
-→ USE "Mentoria Julia Ottoni"
+- "Implementação de IA (NextTrack)": 
+  Quando o PRODUTO vendido é sobre IA/NextTrack/WhatsApp automatizado/atendimento automatizado/
+  SDR automatizado/automação comercial/CRM com IA/robô de atendimento/qualificação automática.
+  O pitch principal gira em torno de AUTOMAÇÃO e INTELIGÊNCIA ARTIFICIAL.
 
-PRIORIDADE 4 - "Programa de Implementação Comercial":
-Se mencionar: processo comercial, follow-up, cadência, scripts de vendas, 
-implementação comercial (SEM IA/automação)
-→ USE "Programa de Implementação Comercial"
+- "Mentoria Julia Ottoni": 
+  Quando o PRODUTO vendido é sobre Julia Ottoni/branding/posicionamento pessoal/Instagram/
+  identidade visual/fotos profissionais/conteúdo/prestadoras de serviço femininas.
+  O pitch principal gira em torno de MARCA PESSOAL e POSICIONAMENTO.
 
-REGRA CRÍTICA: Se houver QUALQUER menção a IA/automação/WhatsApp automatizado, 
-a PRIORIDADE 1 vence TODAS as outras, mesmo que outros frameworks pareçam aplicáveis.
+- "Programa de Implementação Comercial": 
+  Quando o PRODUTO vendido é sobre processo comercial/follow-up/CRM/cadência/scripts de vendas/
+  implementação comercial (SEM foco em IA/automação).
+  O pitch principal gira em torno de ESTRUTURAR PROCESSOS COMERCIAIS.
 
-Se estiver ambíguo após seguir as prioridades:
-- "confianca_framework" = 0.0 a 1.0
+- "Elite Premium": 
+  Quando o PRODUTO vendido é sobre Elite Premium/Cleiton Querobin/mentoria premium/
+  alto acompanhamento/estrutura completa de empresa (marketing+comercial+gestão+mentalidade).
+  O pitch principal gira em torno de MENTORIA DE ALTO NÍVEL.
+
+COMO DECIDIR:
+1. Leia a call inteira e identifique: O que o closer está VENDENDO?
+2. Qual é a PROPOSTA DE VALOR principal? O que o lead vai receber/comprar?
+3. Escolha o framework que MELHOR representa o produto sendo oferecido.
+
+JUSTIFIQUE SUA ESCOLHA:
+- "confianca_framework" = 0.0 a 1.0 (quanto mais evidências do produto, maior a confiança)
 - "motivo_escolha_framework" = 2–4 bullets com evidências LITERAIS do texto que justificam a escolha
+
+Exemplo de justificativa boa:
+- "O closer apresentou 'nossa solução de IA para WhatsApp que atende automaticamente'"
+- "A oferta principal é 'automatizar o atendimento comercial com robô'"
+- "O pitch fala de 'aumentar vendas com SDR automatizado'"
 
 ────────────────────────────────────────────────────────────────────
 PASSO 2) EXTRAÇÃO DE DADOS (SEM INTERPRETAÇÃO)
