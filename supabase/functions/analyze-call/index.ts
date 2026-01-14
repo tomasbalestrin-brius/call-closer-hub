@@ -501,7 +501,7 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.` },
+        { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nFORMATO DE RESPOSTA OBRIGATÓRIO:\n- Retorne APENAS o JSON, sem texto adicional antes ou depois\n- NÃO use markdown code blocks (\`\`\`json ou \`\`\`)\n- Comece sua resposta diretamente com { e termine com }\n- Certifique-se de que todas as strings estão corretamente escapadas (aspas internas como \\", quebras de linha como \\n)\n- Use aspas duplas para strings, nunca aspas simples\n\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.\n\nLIMITES DE TAMANHO (para caber no limite de tokens):\n- Máximo 2 evidências por etapa\n- Máximo 2 itens em como_corrigir\n- Máximo 2 perguntas em perguntas_de_aprofundamento\n- Textos curtos (1-2 frases por campo)` },
       ],
       max_tokens: 16000,
     }),
@@ -528,31 +528,47 @@ function parseJSONFromResponse(response: string): unknown {
   console.log("Response preview (first 500 chars):", response.substring(0, 500));
   console.log("Response preview (last 500 chars):", response.substring(response.length - 500));
   
-  // Try to remove markdown code blocks if they exist
-  let cleanedResponse = response;
-  const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+  let jsonString = response;
+  
+  // Remove markdown code blocks - use GREEDY match to get ALL content
+  const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*)```\s*$/);
   if (codeBlockMatch) {
-    cleanedResponse = codeBlockMatch[1];
-    console.log("Extracted JSON from markdown code block");
+    jsonString = codeBlockMatch[1].trim();
+    console.log("Extracted JSON from markdown code block, length:", jsonString.length);
   }
   
-  // Try to extract JSON from the response
-  const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      console.log("JSON parsed successfully, top-level keys:", Object.keys(parsed));
-      return parsed;
-    } catch (e) {
-      console.error("Failed to parse JSON:", e);
-      console.error("JSON that failed (first 1000 chars):", jsonMatch[0].substring(0, 1000));
-      console.error("JSON that failed (last 1000 chars):", jsonMatch[0].substring(jsonMatch[0].length - 1000));
-      throw new Error("Failed to parse AI response as JSON");
+  // Find the outermost JSON object by locating first { and last }
+  const firstBrace = jsonString.indexOf('{');
+  const lastBrace = jsonString.lastIndexOf('}');
+  
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    jsonString = jsonString.substring(firstBrace, lastBrace + 1);
+    console.log("Extracted JSON by braces, length:", jsonString.length);
+  }
+  
+  // Remove control characters that can break JSON parsing (except newlines, tabs)
+  jsonString = jsonString.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  
+  // Try to parse
+  try {
+    const parsed = JSON.parse(jsonString);
+    console.log("JSON parsed successfully, top-level keys:", Object.keys(parsed));
+    return parsed;
+  } catch (e) {
+    console.error("Failed to parse JSON:", e);
+    console.error("JSON length:", jsonString.length);
+    console.error("JSON that failed (first 1000 chars):", jsonString.substring(0, 1000));
+    console.error("JSON that failed (last 1000 chars):", jsonString.substring(jsonString.length - 1000));
+    
+    // Log around the error position if we can extract it
+    const errorMatch = String(e).match(/position (\d+)/);
+    if (errorMatch) {
+      const pos = parseInt(errorMatch[1]);
+      console.error(`JSON around error position ${pos}:`, jsonString.substring(Math.max(0, pos - 200), pos + 200));
     }
+    
+    throw new Error("Failed to parse AI response as JSON");
   }
-  
-  console.error("No JSON found in response. Full response:", response);
-  throw new Error("No JSON found in AI response");
 }
 
 interface AnalysisData {
