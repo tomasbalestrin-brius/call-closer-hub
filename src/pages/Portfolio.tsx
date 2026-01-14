@@ -10,7 +10,7 @@ import IndicationMetrics from '@/components/portfolio/IndicationMetrics';
 import PortfolioFilters from '@/components/portfolio/PortfolioFilters';
 import StudentList from '@/components/portfolio/StudentList';
 import NewStudentDialog from '@/components/portfolio/NewStudentDialog';
-import { usePortfolioStudents, usePortfolioMetrics, useStudentActivities, useStudentIndications } from '@/hooks/usePortfolio';
+import { usePortfolioStudents, useClientsMetrics, useStudentActivities, useStudentIndications } from '@/hooks/usePortfolio';
 import type { TicketType } from '@/types';
 
 export interface PortfolioFiltersState {
@@ -33,7 +33,7 @@ export default function Portfolio() {
   const { data: students, isLoading } = usePortfolioStudents();
   const { data: activities } = useStudentActivities();
   const { data: indications } = useStudentIndications();
-  const metrics = usePortfolioMetrics();
+  const metrics = useClientsMetrics(); // Métricas baseadas em TODOS os clientes
   
   // Filter students based on search and filters
   const filteredStudents = useMemo(() => {
