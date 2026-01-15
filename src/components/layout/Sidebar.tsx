@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
+import logo from '@/assets/logo-bethel-closer.png';
 
 const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -71,10 +72,8 @@ export default function Sidebar() {
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
           {!collapsed && (
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-                <Phone className="w-4 h-4 text-sidebar-primary-foreground" />
-              </div>
+            <div className="flex items-center gap-3">
+              <img src={logo} alt="Bethel Closer" className="h-8 w-8 object-contain" />
               <span className="font-display font-bold text-sidebar-foreground">Bethel Closer</span>
             </div>
           )}

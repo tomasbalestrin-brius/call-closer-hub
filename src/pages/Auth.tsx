@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Phone, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Mail, Lock, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import logo from '@/assets/logo-bethel-closer.png';
 
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string().min(6, 'A senha deve ter pelo menos 6 caracteres');
@@ -69,9 +70,7 @@ export default function Auth() {
       <div className="hidden lg:flex lg:w-1/2 gradient-primary items-center justify-center p-12">
         <div className="max-w-md text-primary-foreground animate-fade-in">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center">
-              <Phone className="w-6 h-6 text-accent-foreground" />
-            </div>
+            <img src={logo} alt="Bethel Closer" className="w-14 h-14 object-contain" />
             <h1 className="text-3xl font-display font-bold">Bethel Closer</h1>
           </div>
           <h2 className="text-4xl font-display font-bold mb-4">
@@ -91,9 +90,7 @@ export default function Auth() {
         <Card className="w-full max-w-md shadow-card border-border/50 animate-scale-in">
           <CardHeader className="text-center">
             <div className="lg:hidden flex items-center justify-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
-                <Phone className="w-5 h-5 text-primary-foreground" />
-              </div>
+              <img src={logo} alt="Bethel Closer" className="w-10 h-10 object-contain" />
               <span className="text-xl font-display font-bold">Bethel Closer</span>
             </div>
             <CardTitle className="text-2xl font-display">Bem-vindo</CardTitle>
