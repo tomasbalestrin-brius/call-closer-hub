@@ -25,7 +25,9 @@ import {
   Calendar,
   FileText,
   Eye,
-  ChevronRight
+  ChevronRight,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { Call, TechnicalAnalysis } from '@/types';
 import { SetMonthlyGoalDialog } from '@/components/admin/SetMonthlyGoalDialog';
@@ -67,6 +69,7 @@ export default function SquadView() {
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date())
   });
+  const [reanalyzingCalls, setReanalyzingCalls] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !roleLoading && user && (isAdmin || isLeader)) {
@@ -232,6 +235,74 @@ export default function SquadView() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
+  // Verifica se uma call tem mapeamentos incompletos
+  const isCallIncomplete = (call: Call): boolean => {
+    const techAnalysis = call.technical_analysis as TechnicalAnalysis | undefined;
+    if (!techAnalysis) return false;
+    
+    const analiseEtapas = techAnalysis.analise_por_etapa as Record<string, unknown> | undefined;
+    
+    // Verifica mapeamento_empresa
+    const mapeamentoEmpresa = analiseEtapas?.mapeamento_empresa || techAnalysis?.mapeamento_empresa || techAnalysis?.mapeamento_negocio;
+    const empresaVazia = !mapeamentoEmpresa || (typeof mapeamentoEmpresa === 'object' && Object.keys(mapeamentoEmpresa as object).length === 0);
+    
+    // Verifica mapeamento_problema
+    const mapeamentoProblema = analiseEtapas?.mapeamento_problema || techAnalysis?.mapeamento_problema || techAnalysis?.mapeamento_problemas;
+    const problemaVazio = !mapeamentoProblema || (typeof mapeamentoProblema === 'object' && Object.keys(mapeamentoProblema as object).length === 0);
+    
+    return empresaVazia || problemaVazio;
+  };
+
+  // Conta calls incompletas
+  const incompleteCallsCount = closerCalls.filter(isCallIncomplete).length;
+
+  // Reanalisar calls com mapeamentos vazios
+  const handleReanalyzeIncomplete = async () => {
+    const callsToReanalyze = closerCalls.filter(isCallIncomplete);
+    
+    if (callsToReanalyze.length === 0) {
+      toast.info('Nenhuma call com análise incompleta encontrada');
+      return;
+    }
+
+    setReanalyzingCalls(true);
+    toast.info(`Iniciando reanálise de ${callsToReanalyze.length} calls...`);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const call of callsToReanalyze) {
+      try {
+        const { error } = await supabase.functions.invoke('reanalyze-call', {
+          body: { callId: call.id }
+        });
+
+        if (error) {
+          console.error(`Erro ao reanalisar call ${call.id}:`, error);
+          errorCount++;
+        } else {
+          successCount++;
+        }
+      } catch (err) {
+        console.error(`Erro ao reanalisar call ${call.id}:`, err);
+        errorCount++;
+      }
+    }
+
+    setReanalyzingCalls(false);
+
+    if (errorCount === 0) {
+      toast.success(`${successCount} calls reanalisadas com sucesso!`);
+    } else {
+      toast.warning(`${successCount} calls reanalisadas, ${errorCount} com erro`);
+    }
+
+    // Recarregar dados
+    if (selectedCloserId) {
+      fetchCloserData(selectedCloserId);
+    }
+  };
+
   if (authLoading || roleLoading) {
     return (
       <MainLayout>
@@ -384,11 +455,36 @@ export default function SquadView() {
 
             {/* Calls List */}
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Phone className="w-5 h-5" />
                   Calls de {selectedCloser.full_name}
+                  {incompleteCallsCount > 0 && (
+                    <Badge variant="destructive" className="ml-2">
+                      {incompleteCallsCount} incompleta{incompleteCallsCount > 1 ? 's' : ''}
+                    </Badge>
+                  )}
                 </CardTitle>
+                {incompleteCallsCount > 0 && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleReanalyzeIncomplete}
+                    disabled={reanalyzingCalls}
+                  >
+                    {reanalyzingCalls ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Reanalisando...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Reanalisar Incompletas
+                      </>
+                    )}
+                  </Button>
+                )}
               </CardHeader>
               <CardContent>
                 {loadingCalls ? (
@@ -428,6 +524,12 @@ export default function SquadView() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
+                          {isCallIncomplete(call) && (
+                            <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              Incompleta
+                            </Badge>
+                          )}
                           {getStatusBadge(call.status)}
                           <ChevronRight className="w-4 h-4 text-muted-foreground" />
                         </div>
