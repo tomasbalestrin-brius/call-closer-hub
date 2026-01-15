@@ -39,49 +39,66 @@ PASSO 1) IDENTIFICAR CONTEXTO E ESCOLHER O FRAMEWORK
 - empresa/nicho do lead (se aparecer)
 - houve_venda (sim/nao/nao_informado) — considere "sim" apenas se houver confirmação clara de pagamento/fechamento.
 
-1.2 REGRAS DE SELEÇÃO DO FRAMEWORK (SIGA ESTA ORDEM DE PRIORIDADE):
+1.2 REGRAS DE SELEÇÃO DO FRAMEWORK - SIGA ESTA ORDEM EXATA DE VERIFICAÇÃO:
 
-IDENTIFICAR O PRODUTO/SERVIÇO PRINCIPAL E ESCOLHER O FRAMEWORK:
+ATENÇÃO CRÍTICA:
+- A seleção do framework é baseada EXCLUSIVAMENTE no PRODUTO que está sendo vendido
+- NÃO é baseada em quem é o closer ou de qual empresa ele é
+- Todos os closers podem trabalhar na mesma empresa (Betel) mas vendem PRODUTOS DIFERENTES
+- Mencionar "Cleiton" ou "Betel" NÃO significa que é "Elite Premium"
 
-Analise o CONTEXTO GERAL da call para entender qual PRODUTO/SERVIÇO está sendo vendido.
-A escolha do framework deve ser baseada no PRODUTO PRINCIPAL que está sendo oferecido, 
-NÃO em palavras-chave isoladas. Analise o pitch, a oferta, e o que o closer está tentando vender.
+PASSO A PASSO PARA ESCOLHER O FRAMEWORK:
 
-FRAMEWORKS DISPONÍVEIS:
+VERIFICAÇÃO 1 - É "Implementação de IA (NextTrack)"?
+SIM se:
+- O closer fala de "IA" / "inteligência artificial" / "NextTrack"
+- O produto é "WhatsApp automatizado" / "robô de atendimento" / "chatbot"
+- O foco é "automação" / "SDR automatizado" / "atendente virtual"
+→ Se SIM, escolha "Implementação de IA (NextTrack)"
 
-- "Implementação de IA (NextTrack)": 
-  Quando o PRODUTO vendido é sobre IA/NextTrack/WhatsApp automatizado/atendimento automatizado/
-  SDR automatizado/automação comercial/CRM com IA/robô de atendimento/qualificação automática.
-  O pitch principal gira em torno de AUTOMAÇÃO e INTELIGÊNCIA ARTIFICIAL.
+VERIFICAÇÃO 2 - É "Mentoria Julia Ottoni"?
+SIM se:
+- O closer menciona "Julia Ottoni" como a mentora
+- O foco é "branding" / "marca pessoal" / "posicionamento visual"
+- O público são "prestadoras de serviço femininas"
+→ Se SIM, escolha "Mentoria Julia Ottoni"
 
-- "Mentoria Julia Ottoni": 
-  Quando o PRODUTO vendido é sobre Julia Ottoni/branding/posicionamento pessoal/Instagram/
-  identidade visual/fotos profissionais/conteúdo/prestadoras de serviço femininas.
-  O pitch principal gira em torno de MARCA PESSOAL e POSICIONAMENTO.
+VERIFICAÇÃO 3 - É "Programa de Implementação Comercial"?
+SIM se QUALQUER UM destes for verdadeiro:
+- O closer se apresenta como "especialista em processos comerciais"
+- O closer fala de "desenhar processo comercial" / "estruturar processo de vendas"
+- O foco é "CRM" / "follow-up" / "cadência" / "scripts de vendas" (SEM IA)
+- O closer fala de "implementar um processo comercial"
+- A Hannah faz calls focadas em processo comercial (não em mentoria Elite)
+→ Se SIM, escolha "Programa de Implementação Comercial"
 
-- "Programa de Implementação Comercial": 
-  Quando o PRODUTO vendido é sobre processo comercial/follow-up/CRM/cadência/scripts de vendas/
-  implementação comercial (SEM foco em IA/automação).
-  O pitch principal gira em torno de ESTRUTURAR PROCESSOS COMERCIAIS.
+VERIFICAÇÃO 4 - É "Elite Premium"?
+SIM APENAS se TODAS estas condições forem verdadeiras:
+- O closer menciona explicitamente "Elite Premium" ou "programa Elite"
+- O produto oferecido é "mentoria de alto nível com o Cleiton"
+- A oferta inclui estrutura COMPLETA (marketing + comercial + gestão + mentalidade)
+- O closer fala de "mastermind" ou "grupo de empresários de elite"
+→ Se SIM, escolha "Elite Premium"
 
-- "Elite Premium": 
-  Quando o PRODUTO vendido é sobre Elite Premium/Cleiton Querobin/mentoria premium/
-  alto acompanhamento/estrutura completa de empresa (marketing+comercial+gestão+mentalidade).
-  O pitch principal gira em torno de MENTORIA DE ALTO NÍVEL.
+REGRA IMPORTANTE - CLOSER NÃO DEFINE FRAMEWORK:
+- A Hannah pode vender "Implementação Comercial" mesmo mencionando que trabalha na Betel
+- Mencionar "Cleiton" como dono da empresa NÃO significa vender "Elite Premium"
+- O que define é O QUE ESTÁ SENDO VENDIDO, não QUEM está vendendo
 
-COMO DECIDIR:
-1. Leia a call inteira e identifique: O que o closer está VENDENDO?
-2. Qual é a PROPOSTA DE VALOR principal? O que o lead vai receber/comprar?
-3. Escolha o framework que MELHOR representa o produto sendo oferecido.
+REGRA DE DESEMPATE (SE AINDA HOUVER DÚVIDA):
+- Se o closer fala de "especialista em processos comerciais" → "Programa de Implementação Comercial"
+- Se o closer fala EXPLICITAMENTE de "programa Elite" ou "mentoria Elite" → "Elite Premium"
+- Mencionar CRM + follow-up + scripts SEM IA → "Programa de Implementação Comercial"
+- Na dúvida entre Elite e Implementação Comercial → escolha "Programa de Implementação Comercial"
 
 JUSTIFIQUE SUA ESCOLHA:
-- "confianca_framework" = 0.0 a 1.0 (quanto mais evidências do produto, maior a confiança)
-- "motivo_escolha_framework" = 2–4 bullets com evidências LITERAIS do texto que justificam a escolha
+- "confianca_framework" = 0.0 a 1.0
+- "motivo_escolha_framework" = 2–4 bullets com evidências LITERAIS
 
-Exemplo de justificativa boa:
-- "O closer apresentou 'nossa solução de IA para WhatsApp que atende automaticamente'"
-- "A oferta principal é 'automatizar o atendimento comercial com robô'"
-- "O pitch fala de 'aumentar vendas com SDR automatizado'"
+Exemplo de escolha CORRETA para Implementação Comercial:
+- "Hannah disse 'Eu sou especialista em processos comerciais'" 
+- "O foco é 'desenhar um processo comercial estruturado para aumentar vendas'"
+- "Não há menção de 'programa Elite' ou 'mentoria Elite' - é sobre PROCESSO COMERCIAL"
 
 ────────────────────────────────────────────────────────────────────
 PASSO 2) EXTRAÇÃO DE DADOS (SEM INTERPRETAÇÃO)
@@ -602,6 +619,40 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
   return data.choices?.[0]?.message?.content || "";
 }
 
+// Função para tentar corrigir erros comuns de JSON
+function tryFixJSON(jsonString: string): string {
+  let fixed = jsonString;
+  
+  // Remove vírgulas antes de ] ou }
+  fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+  
+  // Adiciona vírgula faltando entre propriedades (}{ ou ]["[)
+  fixed = fixed.replace(/}(\s*){/g, '},\n{');
+  fixed = fixed.replace(/](\s*)\[/g, '],\n[');
+  
+  // Corrige aspas duplas escapadas incorretamente
+  fixed = fixed.replace(/\\\\"/g, '\\"');
+  
+  // Remove aspas duplas repetidas
+  fixed = fixed.replace(/""+/g, '"');
+  
+  // Tenta balancear chaves
+  const openBraces = (fixed.match(/{/g) || []).length;
+  const closeBraces = (fixed.match(/}/g) || []).length;
+  if (openBraces > closeBraces) {
+    fixed += '}'.repeat(openBraces - closeBraces);
+  }
+  
+  // Tenta balancear colchetes
+  const openBrackets = (fixed.match(/\[/g) || []).length;
+  const closeBrackets = (fixed.match(/\]/g) || []).length;
+  if (openBrackets > closeBrackets) {
+    fixed += ']'.repeat(openBrackets - closeBrackets);
+  }
+  
+  return fixed;
+}
+
 function parseJSONFromResponse(response: string): unknown {
   console.log("Attempting to parse response, length:", response.length);
   console.log("Response preview (first 500 chars):", response.substring(0, 500));
@@ -628,25 +679,57 @@ function parseJSONFromResponse(response: string): unknown {
   // Remove control characters that can break JSON parsing (except newlines, tabs)
   jsonString = jsonString.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
   
-  // Try to parse
+  // Tentativa 1: Parse direto
   try {
     const parsed = JSON.parse(jsonString);
-    console.log("JSON parsed successfully, top-level keys:", Object.keys(parsed));
+    console.log("JSON parsed successfully (direct), top-level keys:", Object.keys(parsed));
     return parsed;
-  } catch (e) {
-    console.error("Failed to parse JSON:", e);
-    console.error("JSON length:", jsonString.length);
-    console.error("JSON that failed (first 1000 chars):", jsonString.substring(0, 1000));
-    console.error("JSON that failed (last 1000 chars):", jsonString.substring(jsonString.length - 1000));
+  } catch (e1) {
+    console.log("Direct parse failed, trying to fix JSON...");
     
-    // Log around the error position if we can extract it
-    const errorMatch = String(e).match(/position (\d+)/);
-    if (errorMatch) {
-      const pos = parseInt(errorMatch[1]);
-      console.error(`JSON around error position ${pos}:`, jsonString.substring(Math.max(0, pos - 200), pos + 200));
+    // Tentativa 2: Tenta corrigir erros comuns
+    try {
+      const fixedJSON = tryFixJSON(jsonString);
+      const parsed = JSON.parse(fixedJSON);
+      console.log("JSON parsed successfully (after fix), top-level keys:", Object.keys(parsed));
+      return parsed;
+    } catch (e2) {
+      console.log("Fixed parse failed, trying to extract valid portion...");
+      
+      // Tentativa 3: Extrai porção válida
+      try {
+        const errorMatch = String(e1).match(/position (\d+)/);
+        if (errorMatch) {
+          const pos = parseInt(errorMatch[1]);
+          let truncated = jsonString.substring(0, pos);
+          
+          const openBraces = (truncated.match(/{/g) || []).length;
+          const closeBraces = (truncated.match(/}/g) || []).length;
+          truncated += '}'.repeat(openBraces - closeBraces);
+          
+          const parsed = JSON.parse(truncated);
+          console.log("JSON parsed successfully (truncated), top-level keys:", Object.keys(parsed));
+          return parsed;
+        }
+      } catch (e3) {
+        console.log("Truncated parse also failed");
+      }
+      
+      // Log detalhado do erro
+      console.error("All JSON parse attempts failed");
+      console.error("Original error:", e1);
+      console.error("JSON length:", jsonString.length);
+      console.error("JSON that failed (first 1000 chars):", jsonString.substring(0, 1000));
+      console.error("JSON that failed (last 1000 chars):", jsonString.substring(jsonString.length - 1000));
+      
+      const errorMatch = String(e1).match(/position (\d+)/);
+      if (errorMatch) {
+        const pos = parseInt(errorMatch[1]);
+        console.error(`JSON around error position ${pos}:`, jsonString.substring(Math.max(0, pos - 200), pos + 200));
+      }
+      
+      throw new Error("Failed to parse AI response as JSON after multiple attempts");
     }
-    
-    throw new Error("Failed to parse AI response as JSON");
   }
 }
 
