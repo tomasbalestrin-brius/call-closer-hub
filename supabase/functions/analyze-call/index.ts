@@ -59,9 +59,90 @@ SIM se:
 VERIFICAÇÃO 2 - É "Mentoria Julia Ottoni"?
 SIM se:
 - O closer menciona "Julia Ottoni" como a mentora
-- O foco é "branding" / "marca pessoal" / "posicionamento visual"
+- O closer se apresenta como "Especialista da Julia Ottoni" 
+- O foco é "branding" / "marca pessoal" / "posicionamento visual" / "identidade fotográfica"
 - O público são "prestadoras de serviço femininas"
+- Mencionam os "4 Pilares": Bio Estratégica, Identidade Visual com Arquétipos, Identidade Fotográfica, Criação de Conteúdo Estratégico
 → Se SIM, escolha "Mentoria Julia Ottoni"
+
+CONTEXTO ESPECÍFICO DA MENTORIA JULIA OTTONI:
+A Julia Ottoni é empresária, mentora e considerada "Número 1 em branding no Brasil". 
+O closer representa a equipe da Julia e oferece uma "consultoria estratégica de branding gratuita" como gancho.
+
+ELEMENTOS OBRIGATÓRIOS PARA AVALIAR EM CALLS DA JULIA OTTONI:
+
+1) ABERTURA - Ancoragem Obrigatória:
+   - "150 mil alunas formadas"
+   - "3 linhas de produtos voltados para mulheres prestadoras de serviço"
+   - "Consultoria de R$2.000 gratuita por ter participado do evento/lançamento"
+   - "Se fizer sentido, apresento o próximo passo"
+
+2) MAPEAMENTO - Perguntas-Guia Específicas:
+   - Qual seu ticket médio?
+   - Como está sua agenda hoje?
+   - Qual sua rotina de criação de conteúdo?
+   - De 0 a 10, qual sua disciplina para postar?
+   - De onde vem a maioria dos seus clientes? (Indicação = problema)
+
+3) CONSULTORIA ESTRATÉGICA - Os 4 Pilares (OBRIGATÓRIOS):
+   a) Bio Estratégica: Verificar se o Instagram tem bio clara (promessa + CTA)
+   b) Identidade Visual com Arquétipos: Paleta de cores, fontes, coerência visual
+   c) Identidade Fotográfica: Fotos profissionais, expressão, posicionamento corporal
+   d) Criação de Conteúdo Estratégico: Mix de conteúdo (autoridade, conexão, desejo)
+
+4) SEEDS ESPECÍFICAS DA JULIA OTTONI (verificar se foram usadas):
+   - "Sem um posicionamento claro, você vira mais uma na multidão e o cliente escolhe pelo preço"
+   - "Depender só de indicação é viver de picos e vales"
+   - "Conteúdo sem estratégia é só entretenimento"
+   - "Prestadora de serviço sem autoridade atrai cliente que reclama de preço"
+   - "Instagram não é vitrine, é palco. Você precisa aparecer, se posicionar e gerar desejo"
+   - "Quem não é visto, não é lembrado. Quem não é lembrado, não é contratado"
+
+5) PROBLEMATIZAÇÃO - Bomba Emocional Esperada:
+   - Consequência de continuar sem posicionamento
+   - Custo de depender só de indicação
+   - O que ela perde financeiramente e emocionalmente
+
+6) SOLUÇÃO IMAGINADA - Visualização Específica:
+   - "Imagina ter posicionamento estratégico + identidade fotográfica + conteúdos que geram desejo"
+   - "Imagina abrir o Instagram e os clientes virem até você"
+   - "Imagina ter clareza do que postar e segurança para aparecer"
+
+7) PITCH - Estrutura da Mentoria:
+   - 12 semanas / 3 meses
+   - Módulos: Fundação (semana 1-4), Construção (semana 5-8), Aceleração (semana 9-12)
+   - Bônus: Encontros ao vivo semanais, Comunidade exclusiva, Templates e scripts
+
+8) OBJEÇÕES ESPECÍFICAS E SCRIPTS DE QUEBRA:
+   a) "Vou pensar / conversar com alguém":
+      → "Pensar sobre o quê especificamente?" + "O que falta para você ter certeza?"
+   
+   b) "Tá caro / não tenho dinheiro":
+      → "Quanto você perde por mês ficando sem posicionamento?" + "O que custa mais: investir agora ou continuar perdendo clientes?"
+   
+   c) "Agora não é o momento":
+      → "E quando vai ser o momento?" + "O que precisa acontecer para ser o momento?"
+   
+   d) "Preciso falar com meu sócio/marido":
+      → "Se dependesse só de você, entraria?" + "Podemos fazer uma ligação juntos?"
+   
+   e) "Já tentei outras vezes e não funcionou":
+      → "O que exatamente você tentou?" + "Por que você acha que não funcionou?"
+   
+   f) "Quero analisar outras opções":
+      → "Que outras opções você está considerando?" + "O que você está buscando especificamente?"
+   
+   g) "Deixa eu terminar um projeto antes":
+      → "E se esse projeto não der resultado porque você continua sem posicionamento?"
+   
+   h) "Tenho medo de não conseguir aplicar":
+      → "O que especificamente te gera medo?" + história de aluna que também tinha medo
+   
+   i) "Posso começar depois?":
+      → "O que muda se você esperar mais 30 dias?" + urgência: "condição especial só hoje"
+   
+   j) "Me manda por escrito pra eu analisar":
+      → "Posso mandar, mas o que você precisa analisar especificamente?"
 
 VERIFICAÇÃO 3 - É "Programa de Implementação Comercial"?
 SIM se QUALQUER UM destes for verdadeiro:
