@@ -302,6 +302,14 @@ export interface AcertoDetalhado {
   como_repetir?: string;
 }
 
+// Motivo de ausência de uma etapa
+export type MotivoAusencia = 
+  | 'call_curta'           // A call foi muito curta para abordar esta etapa
+  | 'cliente_nao_permitiu' // O cliente não deu abertura para esta discussão  
+  | 'etapa_pulada'         // O closer pulou esta etapa intencionalmente
+  | 'transicao_prematura'  // O closer avançou antes de completar
+  | 'nao_aplicavel';       // Etapa não aplicável para este tipo de call
+
 export interface StageAnalysis {
   aconteceu: 'sim' | 'parcial' | 'nao';
   nota: number;
@@ -317,6 +325,8 @@ export interface StageAnalysis {
   perguntas_de_aprofundamento?: string[];
   seeds_prova_social?: SeedsProvaSocial | string[];
   risco_principal_da_etapa?: string;
+  // Novo campo: motivo pelo qual a etapa não aconteceu
+  motivo_ausencia?: MotivoAusencia;
 }
 
 export interface TechnicalAnalysis {
