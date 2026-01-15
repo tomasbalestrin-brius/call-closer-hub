@@ -10,36 +10,105 @@ import ActiveFiltersChips from '@/components/calls/ActiveFiltersChips';
 import PeriodSummary from '@/components/calls/PeriodSummary';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Phone, Trash2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Search, Phone, Trash2, User, Eye, X } from 'lucide-react';
 import { Call, CallStatus } from '@/types';
 import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
+interface CloserProfile {
+  user_id: string;
+  full_name: string;
+}
+
 export default function Calls() {
   const { user } = useAuth();
-  const { canDeleteCalls } = useUserPermissions();
+  const { canDeleteCalls, isAdmin, isLeader, loading: permissionsLoading } = useUserPermissions();
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<CallStatus | 'all'>('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedCalls, setSelectedCalls] = useState<string[]>([]);
+  
+  // Closer filter for admin/leader
+  const [closers, setClosers] = useState<CloserProfile[]>([]);
+  const [selectedCloserId, setSelectedCloserId] = useState<string | null>(null);
+
+  // Fetch closers list for admin/leader
+  useEffect(() => {
+    if (user && (isAdmin || isLeader) && !permissionsLoading) {
+      fetchClosers();
+    }
+  }, [user, isAdmin, isLeader, permissionsLoading]);
+
+  const fetchClosers = async () => {
+    if (!user) return;
+
+    try {
+      if (isAdmin) {
+        // Admin can see all closers
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('user_id, full_name')
+          .order('full_name');
+        
+        if (error) throw error;
+        setClosers((data || []).filter(p => p.user_id !== user.id));
+      } else if (isLeader) {
+        // Leader can only see closers from their squads
+        const { data: squadMembers, error } = await supabase
+          .from('squad_members')
+          .select(`
+            user_id,
+            squads!inner(created_by)
+          `)
+          .eq('squads.created_by', user.id);
+
+        if (error) throw error;
+
+        const memberIds = (squadMembers || []).map(m => m.user_id).filter(id => id !== user.id);
+        
+        if (memberIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('user_id, full_name')
+            .in('user_id', memberIds)
+            .order('full_name');
+          
+          setClosers(profiles || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching closers:', error);
+    }
+  };
 
   useEffect(() => {
-    if (user) {
+    if (user && !permissionsLoading) {
       fetchCalls();
     }
-  }, [user, dateRange]);
+  }, [user, dateRange, selectedCloserId, permissionsLoading]);
 
   const fetchCalls = async () => {
     if (!user) return;
 
     try {
+      // Determine which closer_id to use
+      const targetCloserId = selectedCloserId || user.id;
+
       let query = supabase
         .from('calls')
         .select('*')
-        .eq('closer_id', user.id)
+        .eq('closer_id', targetCloserId)
         .is('merged_with_call_id', null) // Don't show merged calls
         .order('call_date', { ascending: false });
 
@@ -60,6 +129,8 @@ export default function Calls() {
       setLoading(false);
     }
   };
+
+  const selectedCloser = closers.find(c => c.user_id === selectedCloserId);
 
   const handleDeleteSelected = async () => {
     if (selectedCalls.length === 0) return;
@@ -102,6 +173,27 @@ export default function Calls() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* Viewing other closer banner */}
+        {selectedCloserId && selectedCloserId !== user?.id && (
+          <Alert className="bg-info/10 border-info/30">
+            <Eye className="w-4 h-4 text-info" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>
+                Visualizando calls de: <strong>{selectedCloser?.full_name}</strong>
+              </span>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSelectedCloserId(null)}
+                className="h-7 gap-1"
+              >
+                <X className="w-3 h-3" />
+                Voltar às minhas calls
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -139,6 +231,27 @@ export default function Calls() {
 
         {/* Filters */}
         <div className="flex flex-col lg:flex-row gap-4">
+          {/* Closer Filter for Admin/Leader */}
+          {(isAdmin || isLeader) && closers.length > 0 && (
+            <Select
+              value={selectedCloserId || "mine"}
+              onValueChange={(value) => setSelectedCloserId(value === "mine" ? null : value)}
+            >
+              <SelectTrigger className="w-[220px]">
+                <User className="w-4 h-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Selecione um closer" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mine">Minhas calls</SelectItem>
+                {closers.map((closer) => (
+                  <SelectItem key={closer.user_id} value={closer.user_id}>
+                    {closer.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -182,6 +183,7 @@ const copyToClipboard = (text: string) => {
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { isAdmin, isLeader, loading: permissionsLoading } = useUserPermissions();
   const navigate = useNavigate();
   const [client, setClient] = useState<Client | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
@@ -243,22 +245,27 @@ export default function ClientDetail() {
   };
 
   useEffect(() => {
-    if (user && id) {
+    if (user && id && !permissionsLoading) {
       fetchClientData();
     }
-  }, [user, id]);
+  }, [user, id, permissionsLoading]);
 
   const fetchClientData = async () => {
     if (!user || !id) return;
 
     try {
-      // Fetch client
-      const { data: clientData, error: clientError } = await supabase
+      // Fetch client - Admin/Leader can see any client, regular user only their own
+      let query = supabase
         .from('clients')
         .select('*')
-        .eq('id', id)
-        .eq('closer_id', user.id)
-        .single();
+        .eq('id', id);
+      
+      // Only filter by closer_id for regular closers
+      if (!isAdmin && !isLeader) {
+        query = query.eq('closer_id', user.id);
+      }
+
+      const { data: clientData, error: clientError } = await query.single();
 
       if (clientError) throw clientError;
       setClient(clientData as Client);
