@@ -382,6 +382,7 @@ export default function ClientDetail() {
   const planoAcao = techAnalysis?.plano_de_acao_direto as PlanoAcaoDireto | undefined;
   const detailedErrors = techAnalysis?.detailed_errors as ErroDetalhado[] | undefined;
   const detailedWins = techAnalysis?.detailed_wins as AcertoDetalhado[] | undefined;
+  const frameworkSelecionado = techAnalysis?.framework_selecionado as string | undefined;
 
   return (
     <MainLayout>
@@ -1003,7 +1004,9 @@ export default function ClientDetail() {
                 {/* Stage Analysis */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">Análise por Etapa - Framework Julia Ottoni</CardTitle>
+                    <CardTitle className="text-base">
+                      Análise por Etapa - {frameworkSelecionado || 'Framework Padrão'}
+                    </CardTitle>
                     <CardDescription>Avaliação detalhada de cada etapa da call (clique para expandir)</CardDescription>
                   </CardHeader>
                   <CardContent>
