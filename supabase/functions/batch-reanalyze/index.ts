@@ -13,54 +13,80 @@ serve(async (req) => {
   }
 
   try {
-    const { closerName, days = 7 } = await req.json();
-
-    if (!closerName) {
-      return new Response(
-        JSON.stringify({ error: 'closerName é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const { closerName, days = 7, reanalyzeAll = false } = await req.json();
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // First, find the closer's user_id by their name
-    const { data: profiles, error: profileError } = await supabase
-      .from('profiles')
-      .select('user_id, full_name')
-      .ilike('full_name', `%${closerName}%`);
+    let calls;
 
-    if (profileError) {
-      console.error('Error fetching profiles:', profileError);
-      throw new Error(`Erro ao buscar perfil: ${profileError.message}`);
-    }
+    if (reanalyzeAll) {
+      // Reanalyze ALL calls from ALL closers that have technical_analysis but missing framework_escolhido
+      console.log('Reanalyzing ALL calls from all closers...');
+      
+      const { data: allCalls, error: fetchError } = await supabase
+        .from('calls')
+        .select('id, client_name, call_date, closer_id')
+        .not('technical_analysis', 'is', null)
+        .order('call_date', { ascending: false });
 
-    if (!profiles || profiles.length === 0) {
-      return new Response(
-        JSON.stringify({ error: `Nenhum closer encontrado com nome "${closerName}"` }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+      if (fetchError) {
+        console.error('Error fetching all calls:', fetchError);
+        throw new Error(`Erro ao buscar calls: ${fetchError.message}`);
+      }
 
-    const closerIds = profiles.map(p => p.user_id);
-    console.log(`Found ${profiles.length} closers matching "${closerName}":`, profiles.map(p => p.full_name));
+      // Filter calls that don't have framework_escolhido or need reanalysis
+      calls = allCalls || [];
+      console.log(`Found ${calls.length} total calls to potentially reanalyze`);
+    } else {
+      // Original logic: reanalyze by closer name
+      if (!closerName) {
+        return new Response(
+          JSON.stringify({ error: 'closerName é obrigatório (ou use reanalyzeAll: true)' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
-    // Find calls to reanalyze
-    const dateThreshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    
-    const { data: calls, error: fetchError } = await supabase
-      .from('calls')
-      .select('id, client_name, call_date, closer_id')
-      .in('closer_id', closerIds)
-      .not('technical_analysis', 'is', null)
-      .gte('call_date', dateThreshold)
-      .order('call_date', { ascending: false });
+      // First, find the closer's user_id by their name
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_id, full_name')
+        .ilike('full_name', `%${closerName}%`);
 
-    if (fetchError) {
-      console.error('Error fetching calls:', fetchError);
-      throw new Error(`Erro ao buscar calls: ${fetchError.message}`);
+      if (profileError) {
+        console.error('Error fetching profiles:', profileError);
+        throw new Error(`Erro ao buscar perfil: ${profileError.message}`);
+      }
+
+      if (!profiles || profiles.length === 0) {
+        return new Response(
+          JSON.stringify({ error: `Nenhum closer encontrado com nome "${closerName}"` }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const closerIds = profiles.map(p => p.user_id);
+      console.log(`Found ${profiles.length} closers matching "${closerName}":`, profiles.map(p => p.full_name));
+
+      // Find calls to reanalyze
+      const dateThreshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      const { data: closerCalls, error: fetchError } = await supabase
+        .from('calls')
+        .select('id, client_name, call_date, closer_id')
+        .in('closer_id', closerIds)
+        .not('technical_analysis', 'is', null)
+        .gte('call_date', dateThreshold)
+        .order('call_date', { ascending: false });
+
+      if (fetchError) {
+        console.error('Error fetching calls:', fetchError);
+        throw new Error(`Erro ao buscar calls: ${fetchError.message}`);
+      }
+
+      calls = closerCalls || [];
+      console.log(`Found ${calls.length} calls to reanalyze for ${closerName}`);
     }
 
     if (!calls || calls.length === 0) {
@@ -70,7 +96,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Found ${calls.length} calls to reanalyze for ${closerName}`);
+    console.log(`Starting reanalysis of ${calls.length} calls...`);
 
     // Start background processing
     const reanalyzeInBackground = async () => {
