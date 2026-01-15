@@ -977,8 +977,22 @@ export default function ClientDetail() {
                   <CardContent>
                     <div className="space-y-4">
                       {stageOrder.map((key) => {
-                        // Tenta acessar a etapa primeiro em analise_por_etapa, depois diretamente
-                        const stage = analiseEtapas?.[key] || techAnalysis?.[key];
+                        // Mapeamento de chaves novas para legadas (para compatibilidade)
+                        const legacyKeyMap: Record<string, string> = {
+                          mapeamento_empresa: 'mapeamento_negocio',
+                          mapeamento_problema: 'mapeamento_problemas',
+                          objecoes_negociacao: 'contorno_objecoes',
+                        };
+                        
+                        // Tenta acessar a etapa:
+                        // 1. Primeiro em analise_por_etapa (formato novo)
+                        // 2. Depois diretamente no techAnalysis com chave nova
+                        // 3. Por fim, tenta a chave legada
+                        const legacyKey = legacyKeyMap[key];
+                        const stage = 
+                          analiseEtapas?.[key] || 
+                          techAnalysis?.[key] || 
+                          (legacyKey ? (analiseEtapas?.[legacyKey] || techAnalysis?.[legacyKey]) : undefined);
                         
                         // Se a etapa não existir ou for vazia, mostrar placeholder
                         if (!stage || (typeof stage === 'object' && Object.keys(stage as object).length === 0)) {
