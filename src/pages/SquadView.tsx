@@ -149,7 +149,7 @@ export default function SquadView() {
       setSquadMembers(enrichedMembers);
     } catch (error) {
       console.error('Error fetching squad members:', error);
-      toast.error('Erro ao carregar membros do squad');
+      toast.error('Erro ao carregar membros do time');
     } finally {
       setLoading(false);
     }
@@ -325,10 +325,10 @@ export default function SquadView() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">
-              Visualizar Squad
+              Visualizar Time
             </h1>
             <p className="text-muted-foreground">
-              Acompanhe o desempenho dos closers do seu squad
+              Acompanhe o desempenho dos closers do seu time
             </p>
           </div>
           
@@ -356,7 +356,7 @@ export default function SquadView() {
             {loading ? (
               <Skeleton className="h-10 w-full max-w-md" />
             ) : squadMembers.length === 0 ? (
-              <p className="text-muted-foreground">Nenhum closer encontrado no seu squad.</p>
+              <p className="text-muted-foreground">Nenhum closer encontrado no seu time.</p>
             ) : (
               <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
                 <SelectTrigger className="w-full max-w-md">

@@ -192,7 +192,7 @@ export function SquadMembersDialog({
   };
 
   const handleRemoveMember = async (memberId: string, memberName: string) => {
-    if (!confirm(`Remover ${memberName} do squad?`)) return;
+    if (!confirm(`Remover ${memberName} do time?`)) return;
 
     try {
       const { error } = await supabase
@@ -232,7 +232,7 @@ export function SquadMembersDialog({
             Membros: {squad.name}
           </DialogTitle>
           <DialogDescription>
-            Adicione ou remova membros do squad.
+            Adicione ou remova membros do time.
           </DialogDescription>
         </DialogHeader>
 
@@ -267,7 +267,7 @@ export function SquadMembersDialog({
             </div>
           ) : members.length === 0 ? (
             <div className="text-center py-4 text-muted-foreground text-sm">
-              Nenhum membro neste squad
+              Nenhum membro neste time
             </div>
           ) : (
             members.map((member) => (

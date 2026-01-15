@@ -69,7 +69,7 @@ export function SquadManagement() {
       setSquads(squadsWithCounts);
     } catch (error) {
       console.error('Error fetching squads:', error);
-      toast.error('Erro ao carregar squads');
+      toast.error('Erro ao carregar times');
     } finally {
       setLoading(false);
     }
@@ -77,7 +77,7 @@ export function SquadManagement() {
 
   const handleCreateSquad = async () => {
     if (!squadName.trim()) {
-      toast.error('Digite o nome do squad');
+      toast.error('Digite o nome do time');
       return;
     }
 
@@ -92,13 +92,13 @@ export function SquadManagement() {
 
       if (error) throw error;
 
-      toast.success('Squad criado com sucesso!');
+      toast.success('Time criado com sucesso!');
       setSquadName('');
       setCreateDialogOpen(false);
       fetchSquads();
     } catch (error) {
       console.error('Error creating squad:', error);
-      toast.error('Erro ao criar squad');
+      toast.error('Erro ao criar time');
     } finally {
       setSaving(false);
     }
@@ -106,7 +106,7 @@ export function SquadManagement() {
 
   const handleUpdateSquad = async () => {
     if (!selectedSquad || !squadName.trim()) {
-      toast.error('Digite o nome do squad');
+      toast.error('Digite o nome do time');
       return;
     }
 
@@ -119,21 +119,21 @@ export function SquadManagement() {
 
       if (error) throw error;
 
-      toast.success('Squad atualizado com sucesso!');
+      toast.success('Time atualizado com sucesso!');
       setSquadName('');
       setEditDialogOpen(false);
       setSelectedSquad(null);
       fetchSquads();
     } catch (error) {
       console.error('Error updating squad:', error);
-      toast.error('Erro ao atualizar squad');
+      toast.error('Erro ao atualizar time');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteSquad = async (squad: Squad) => {
-    if (!confirm(`Tem certeza que deseja excluir o squad "${squad.name}"?`)) return;
+    if (!confirm(`Tem certeza que deseja excluir o time "${squad.name}"?`)) return;
 
     try {
       const { error } = await supabase
@@ -143,11 +143,11 @@ export function SquadManagement() {
 
       if (error) throw error;
 
-      toast.success('Squad excluído com sucesso!');
+      toast.success('Time excluído com sucesso!');
       fetchSquads();
     } catch (error) {
       console.error('Error deleting squad:', error);
-      toast.error('Erro ao excluir squad');
+      toast.error('Erro ao excluir time');
     }
   };
 
@@ -182,7 +182,7 @@ export function SquadManagement() {
             <div>
               <CardTitle className="font-display flex items-center gap-2">
                 <Users2 className="w-5 h-5" />
-                Gestão de Squads
+                Gestão de Times
               </CardTitle>
               <CardDescription>
                 Crie e gerencie equipes de closers
@@ -190,14 +190,14 @@ export function SquadManagement() {
             </div>
             <Button onClick={() => setCreateDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              Novo Squad
+              Novo Time
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {squads.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              Nenhum squad criado ainda
+              Nenhum time criado ainda
             </div>
           ) : (
             <div className="space-y-3">
@@ -253,13 +253,13 @@ export function SquadManagement() {
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Criar Novo Squad</DialogTitle>
+            <DialogTitle>Criar Novo Time</DialogTitle>
             <DialogDescription>
-              Digite o nome do novo squad para criar.
+              Digite o nome do novo time para criar.
             </DialogDescription>
           </DialogHeader>
           <Input
-            placeholder="Nome do squad"
+            placeholder="Nome do time"
             value={squadName}
             onChange={(e) => setSquadName(e.target.value)}
           />
@@ -279,13 +279,13 @@ export function SquadManagement() {
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editar Squad</DialogTitle>
+            <DialogTitle>Editar Time</DialogTitle>
             <DialogDescription>
-              Altere o nome do squad.
+              Altere o nome do time.
             </DialogDescription>
           </DialogHeader>
           <Input
-            placeholder="Nome do squad"
+            placeholder="Nome do time"
             value={squadName}
             onChange={(e) => setSquadName(e.target.value)}
           />
