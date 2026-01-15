@@ -163,7 +163,7 @@ export default function Admin() {
             <Shield className="w-8 h-8 text-primary" />
             Administração
           </h1>
-          <p className="text-muted-foreground mt-1">Gerencie closers e squads do sistema</p>
+          <p className="text-muted-foreground mt-1">Gerencie closers e times do sistema</p>
         </div>
 
         <Tabs defaultValue="closers" className="space-y-6">
@@ -174,7 +174,7 @@ export default function Admin() {
             </TabsTrigger>
             <TabsTrigger value="squads" className="flex items-center gap-2">
               <Users2 className="w-4 h-4" />
-              Squads
+              Times
             </TabsTrigger>
           </TabsList>
 

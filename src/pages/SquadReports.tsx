@@ -313,7 +313,7 @@ export default function SquadReports() {
           <div>
             <h1 className="text-3xl font-display font-bold flex items-center gap-2">
               <BarChart3 className="w-8 h-8" />
-              Relatórios por Squad
+              Relatórios por Time
             </h1>
             <p className="text-muted-foreground mt-1">
               Métricas agregadas de desempenho dos membros
@@ -322,7 +322,7 @@ export default function SquadReports() {
           <div className="flex flex-col sm:flex-row gap-4">
             <Select value={selectedSquadId} onValueChange={setSelectedSquadId}>
               <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Selecione um squad" />
+                <SelectValue placeholder="Selecione um time" />
               </SelectTrigger>
               <SelectContent>
                 {squads.map((squad) => (
@@ -348,8 +348,8 @@ export default function SquadReports() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Users className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground text-center">
-                Nenhum squad encontrado.
-                {isAdmin && " Crie squads na página de Administração."}
+                Nenhum time encontrado.
+                {isAdmin && " Crie times na página de Administração."}
               </p>
             </CardContent>
           </Card>
