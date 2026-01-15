@@ -13,10 +13,28 @@ import logo from '@/assets/logo-bethel-closer.png';
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string().min(6, 'A senha deve ter pelo menos 6 caracteres');
 
+const companyValues = [
+  "Eu vim pra ser Mais!",
+  "Excelência em tudo que fazemos",
+  "Integridade acima de resultados",
+  "Servir é nossa maior honra",
+  "Fé move montanhas",
+  "Juntos somos mais fortes",
+  "Transformamos vidas através do trabalho"
+];
+
+const getDailyValue = () => {
+  const dayOfYear = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
+  );
+  return companyValues[dayOfYear % companyValues.length];
+};
+
 export default function Auth() {
   const navigate = useNavigate();
   const { user, signIn, loading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dailyValue] = useState(getDailyValue());
   
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -73,15 +91,16 @@ export default function Auth() {
             <img src={logo} alt="Bethel Closer" className="w-14 h-14 object-contain" />
             <h1 className="text-3xl font-display font-bold">Bethel Closer</h1>
           </div>
-          <h2 className="text-4xl font-display font-bold mb-4">
-            Organize suas calls.
-            <br />
-            Feche mais vendas.
+          <h2 className="text-3xl font-display font-bold mb-4 leading-tight">
+            Transformar o empreendedorismo no Brasil através da Educação e Tecnologia.
           </h2>
-          <p className="text-lg opacity-90">
-            Sistema completo para gerenciamento de calls de closers com integrações 
-            Google Drive e análise de performance em tempo real.
+          <p className="text-xl opacity-90 mb-6">
+            E transformar cada empresa em Casa de Deus.
           </p>
+          <div className="mt-8 p-4 border border-white/20 rounded-lg bg-white/5">
+            <p className="text-sm opacity-70 mb-1">Valor do dia</p>
+            <p className="text-lg font-semibold italic">"{dailyValue}"</p>
+          </div>
         </div>
       </div>
 
