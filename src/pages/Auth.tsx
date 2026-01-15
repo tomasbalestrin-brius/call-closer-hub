@@ -14,13 +14,7 @@ const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string().min(6, 'A senha deve ter pelo menos 6 caracteres');
 
 const companyValues = [
-  "Eu vim pra ser Mais!",
-  "Excelência em tudo que fazemos",
-  "Integridade acima de resultados",
-  "Servir é nossa maior honra",
-  "Fé move montanhas",
-  "Juntos somos mais fortes",
-  "Transformamos vidas através do trabalho"
+  "Eu Vim Pra ser Mais!"
 ];
 
 const getDailyValue = () => {
@@ -92,7 +86,7 @@ export default function Auth() {
             <h1 className="text-3xl font-display font-bold">Bethel Closer</h1>
           </div>
           <h2 className="text-3xl font-display font-bold mb-4 leading-tight">
-            Transformar o empreendedorismo no Brasil através da Educação e Tecnologia.
+            Transformando o empreendedorismo através da Educação e Tecnologia.
           </h2>
           <p className="text-xl opacity-90 mb-6">
             E transformar cada empresa em Casa de Deus.
