@@ -221,6 +221,12 @@ Se uma etapa NÃO aconteceu explicitamente na call:
 - Em "ponto_fraco": descreva o que deveria ter sido feito
 - Em "como_corrigir": dê orientações práticas
 - Em "risco_principal_da_etapa": explique o impacto de ter pulado essa etapa
+- Em "motivo_ausencia": OBRIGATÓRIO quando aconteceu="nao". Escolha entre:
+  * "call_curta" - A call foi muito curta para abordar esta etapa
+  * "cliente_nao_permitiu" - O cliente não deu abertura para esta discussão
+  * "etapa_pulada" - O closer pulou esta etapa intencionalmente
+  * "transicao_prematura" - O closer avançou antes de completar
+  * "nao_aplicavel" - Etapa não aplicável para este tipo de call
 - Preencha TODOS os campos mesmo assim
 
 NÃO DEIXE NENHUMA ETAPA COMO OBJETO VAZIO {}.
@@ -318,7 +324,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "abertura": {
       "aconteceu": "sim|parcial|nao",
@@ -333,7 +340,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "mapeamento_empresa": {
       "aconteceu": "sim|parcial|nao",
@@ -348,7 +356,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "mapeamento_problema": {
       "aconteceu": "sim|parcial|nao",
@@ -363,7 +372,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "consultoria": {
       "aconteceu": "sim|parcial|nao",
@@ -378,7 +388,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "problematizacao": {
       "aconteceu": "sim|parcial|nao",
@@ -393,7 +404,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "solucao_imaginada": {
       "aconteceu": "sim|parcial|nao",
@@ -408,7 +420,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "transicao": {
       "aconteceu": "sim|parcial|nao",
@@ -423,7 +436,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "pitch": {
       "aconteceu": "sim|parcial|nao",
@@ -438,7 +452,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "perguntas_compromisso": {
       "aconteceu": "sim|parcial|nao",
@@ -453,7 +468,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "fechamento": {
       "aconteceu": "sim|parcial|nao",
@@ -468,7 +484,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     },
     "objecoes_negociacao": {
       "aconteceu": "sim|parcial|nao",
@@ -483,7 +500,8 @@ SCHEMA (estrutura completa para CADA etapa):
       "frase_melhor": {"antes":"...", "depois":"..."},
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
-      "risco_principal_da_etapa": "..."
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
     }
   },
 

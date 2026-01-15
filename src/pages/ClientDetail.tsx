@@ -63,9 +63,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Client, Call, CallStatus, StageAnalysis, ChecklistItem, PlanoAcaoDireto, ErroDetalhado, AcertoDetalhado, FraseMelhor, SeedsProvaSocial } from '@/types';
+import { Client, Call, CallStatus, StageAnalysis, ChecklistItem, PlanoAcaoDireto, ErroDetalhado, AcertoDetalhado, FraseMelhor, SeedsProvaSocial, MotivoAusencia } from '@/types';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const statusConfig: Record<CallStatus, { label: string; className: string }> = {
   pendente: { label: 'Pendente', className: 'bg-secondary text-secondary-foreground' },
@@ -118,6 +119,30 @@ const checklistLabels: Record<string, string> = {
   prova_social_seeds_durante_perguntas: 'Prova Social / Seeds Durante Perguntas',
   objecao_real_vs_declarada: 'Objeção Real vs Declarada',
   negociacao_maximizar_receita: 'Negociação (Maximizar Receita)',
+};
+
+// Labels para motivos de ausência de etapas
+const motivoAusenciaLabels: Record<MotivoAusencia, { label: string; description: string }> = {
+  call_curta: { 
+    label: 'Call muito curta', 
+    description: 'A duração da call não permitiu abordar esta etapa adequadamente.'
+  },
+  cliente_nao_permitiu: { 
+    label: 'Cliente não deu abertura', 
+    description: 'O cliente não deu abertura ou não permitiu aprofundar nesta etapa.'
+  },
+  etapa_pulada: { 
+    label: 'Etapa pulada pelo closer', 
+    description: 'O closer optou por pular esta etapa durante a call.'
+  },
+  transicao_prematura: { 
+    label: 'Transição prematura', 
+    description: 'O closer avançou para a próxima etapa antes de completar esta.'
+  },
+  nao_aplicavel: { 
+    label: 'Não aplicável', 
+    description: 'Esta etapa não era aplicável para este tipo específico de call.'
+  },
 };
 
 // Helper para converter array para string
@@ -1072,6 +1097,26 @@ export default function ClientDetail() {
                               {/* Detalhes expandidos */}
                               <CollapsibleContent>
                                 <div className="mt-4 pt-4 border-t space-y-3">
+                                  {/* Alerta quando etapa não aconteceu */}
+                                  {stageData.aconteceu === 'nao' && (
+                                    <Alert variant="destructive" className="bg-destructive/10 border-destructive/30">
+                                      <AlertTriangle className="h-4 w-4" />
+                                      <AlertTitle className="flex items-center gap-2">
+                                        Etapa não realizada na call
+                                        {stageData.motivo_ausencia && (
+                                          <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50">
+                                            {motivoAusenciaLabels[stageData.motivo_ausencia]?.label || stageData.motivo_ausencia}
+                                          </Badge>
+                                        )}
+                                      </AlertTitle>
+                                      <AlertDescription className="text-sm mt-1">
+                                        {stageData.motivo_ausencia 
+                                          ? motivoAusenciaLabels[stageData.motivo_ausencia]?.description
+                                          : stageData.impacto_no_lead || 'Esta etapa não foi abordada durante a ligação. Verifique o impacto e as orientações de correção abaixo.'}
+                                      </AlertDescription>
+                                    </Alert>
+                                  )}
+
                                   {/* Função cumprida */}
                                   {stageData.funcao_cumprida && (
                                     <div>
