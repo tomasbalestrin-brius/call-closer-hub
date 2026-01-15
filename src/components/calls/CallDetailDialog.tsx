@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,13 +7,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Phone, ExternalLink } from 'lucide-react';
+import { Phone, ExternalLink, UserPlus } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { Call, CallStatus, TechnicalAnalysis } from '@/types';
 
 interface CallDetailDialogProps {
   call: Call | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCallUpdated?: () => void;
 }
 
 const statusConfig: Record<CallStatus, { label: string; className: string }> = {
@@ -24,8 +28,9 @@ const statusConfig: Record<CallStatus, { label: string; className: string }> = {
   perdido: { label: 'Perdido', className: 'bg-destructive text-destructive-foreground' },
 };
 
-export default function CallDetailDialog({ call, open, onOpenChange }: CallDetailDialogProps) {
+export default function CallDetailDialog({ call, open, onOpenChange, onCallUpdated }: CallDetailDialogProps) {
   const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
 
   if (!call) return null;
 
@@ -38,6 +43,46 @@ export default function CallDetailDialog({ call, open, onOpenChange }: CallDetai
     }
   };
 
+  const handleCreateClient = async () => {
+    setCreating(true);
+    try {
+      // Criar cliente com dados da call
+      const { data: newClient, error: clientError } = await supabase
+        .from('clients')
+        .insert({
+          name: call.client_name,
+          company: call.company_name || null,
+          niche: call.niche || null,
+          main_pain: call.main_pain || null,
+          closer_id: call.closer_id,
+          status: 'lead',
+          source: 'manual'
+        })
+        .select()
+        .single();
+
+      if (clientError) throw clientError;
+
+      // Atualizar call com o client_id
+      const { error: updateError } = await supabase
+        .from('calls')
+        .update({ client_id: newClient.id })
+        .eq('id', call.id);
+
+      if (updateError) throw updateError;
+
+      toast.success('Cliente criado com sucesso!');
+      onCallUpdated?.();
+      onOpenChange(false);
+      navigate(`/clients/${newClient.id}`);
+    } catch (error) {
+      console.error('Erro ao criar cliente:', error);
+      toast.error('Erro ao criar cliente');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]">
@@ -47,10 +92,15 @@ export default function CallDetailDialog({ call, open, onOpenChange }: CallDetai
               <Phone className="w-5 h-5" />
               Detalhes da Call: {call.client_name}
             </DialogTitle>
-            {call.client_id && (
+            {call.client_id ? (
               <Button variant="outline" size="sm" onClick={handleViewClient}>
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Ver Cliente
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={handleCreateClient} disabled={creating}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                {creating ? 'Criando...' : 'Criar Cliente'}
               </Button>
             )}
           </div>
