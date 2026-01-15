@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.reanalyze-call]
 verify_jwt = false
+
+[functions.batch-reanalyze]
+verify_jwt = false
