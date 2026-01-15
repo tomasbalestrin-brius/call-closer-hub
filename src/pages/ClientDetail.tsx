@@ -64,7 +64,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Client, Call, CallStatus, StageAnalysis, ChecklistItem, PlanoAcaoDireto, ErroDetalhado, AcertoDetalhado, FraseMelhor, SeedsProvaSocial, MotivoAusencia } from '@/types';
+import { Client, Call, CallStatus, StageAnalysis, ChecklistItem, PlanoAcaoDireto, ErroDetalhado, AcertoDetalhado, FraseMelhor, SeedsProvaSocial, MotivoAusencia, TomadorDecisao } from '@/types';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -143,6 +143,10 @@ const motivoAusenciaLabels: Record<MotivoAusencia, { label: string; description:
   nao_aplicavel: { 
     label: 'Não aplicável', 
     description: 'Esta etapa não era aplicável para este tipo específico de call.'
+  },
+  reagendamento_tomador_decisao: { 
+    label: 'Reagendamento (Tomador ausente)', 
+    description: 'Etapa não realizada pois houve reagendamento devido à ausência do tomador de decisão.'
   },
 };
 
@@ -383,6 +387,7 @@ export default function ClientDetail() {
   const detailedErrors = techAnalysis?.detailed_errors as ErroDetalhado[] | undefined;
   const detailedWins = techAnalysis?.detailed_wins as AcertoDetalhado[] | undefined;
   const frameworkSelecionado = techAnalysis?.framework_selecionado as string | undefined;
+  const tomadorDecisao = techAnalysis?.tomador_decisao as TomadorDecisao | undefined;
 
   return (
     <MainLayout>
@@ -1001,6 +1006,45 @@ export default function ClientDetail() {
                   </Card>
                 )}
 
+                {/* Banner Tomador de Decisão Ausente */}
+                {tomadorDecisao && tomadorDecisao.presente === false && (
+                  <Alert variant={tomadorDecisao.reagendamento_realizado ? "default" : "destructive"} className={cn(
+                    tomadorDecisao.reagendamento_realizado 
+                      ? "bg-warning/10 border-warning/30" 
+                      : "bg-destructive/10 border-destructive/30"
+                  )}>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle className="flex items-center gap-2">
+                      Tomador de Decisão Ausente
+                      {tomadorDecisao.reagendamento_realizado ? (
+                        <Badge className="bg-success/20 text-success border-success/30">
+                          Reagendamento Realizado
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-destructive/20 text-destructive border-destructive/30">
+                          Sem Reagendamento - Nota 0
+                        </Badge>
+                      )}
+                    </AlertTitle>
+                    <AlertDescription className="mt-2">
+                      {tomadorDecisao.reagendamento_realizado 
+                        ? `O closer identificou a ausência do tomador de decisão e realizou reagendamento na etapa "${tomadorDecisao.etapa_do_reagendamento || 'não identificada'}". Etapas posteriores foram desconsideradas da média.`
+                        : "O closer NÃO realizou reagendamento após identificar a ausência do tomador de decisão. Nota geral: 0."
+                      }
+                      {tomadorDecisao.evidencia && (
+                        <span className="block text-xs italic mt-1 text-muted-foreground">
+                          Evidência: "{tomadorDecisao.evidencia}"
+                        </span>
+                      )}
+                      {tomadorDecisao.evidencia_reagendamento && (
+                        <span className="block text-xs italic mt-1 text-muted-foreground">
+                          Reagendamento: "{tomadorDecisao.evidencia_reagendamento}"
+                        </span>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {/* Stage Analysis */}
                 <Card>
                   <CardHeader>
@@ -1072,6 +1116,11 @@ export default function ClientDetail() {
                                       {stageData.aconteceu === 'sim' ? 'Sim' : 
                                        stageData.aconteceu === 'parcial' ? 'Parcial' : 'Não'}
                                     </Badge>
+                                    {stageData.excluir_da_media && (
+                                      <Badge variant="outline" className="text-muted-foreground border-muted bg-muted/30 text-xs">
+                                        Excluída da média
+                                      </Badge>
+                                    )}
                                     <span className={cn("font-bold", getScoreColor(stageData.nota || 0))}>
                                       {stageData.nota || 0}/10
                                     </span>
@@ -1109,20 +1158,36 @@ export default function ClientDetail() {
                                 <div className="mt-4 pt-4 border-t space-y-3">
                                   {/* Alerta quando etapa não aconteceu */}
                                   {stageData.aconteceu === 'nao' && (
-                                    <Alert variant="destructive" className="bg-destructive/10 border-destructive/30">
+                                    <Alert variant="destructive" className={cn(
+                                      stageData.excluir_da_media 
+                                        ? "bg-muted/20 border-muted/50" 
+                                        : "bg-destructive/10 border-destructive/30"
+                                    )}>
                                       <AlertTriangle className="h-4 w-4" />
-                                      <AlertTitle className="flex items-center gap-2">
+                                      <AlertTitle className="flex items-center gap-2 flex-wrap">
                                         Etapa não realizada na call
                                         {stageData.motivo_ausencia && (
-                                          <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50">
+                                          <Badge variant="outline" className={cn(
+                                            stageData.motivo_ausencia === 'reagendamento_tomador_decisao'
+                                              ? "text-blue-600 border-blue-300 bg-blue-50"
+                                              : "text-orange-600 border-orange-300 bg-orange-50"
+                                          )}>
                                             {motivoAusenciaLabels[stageData.motivo_ausencia]?.label || stageData.motivo_ausencia}
+                                          </Badge>
+                                        )}
+                                        {stageData.excluir_da_media && (
+                                          <Badge variant="outline" className="text-muted-foreground border-muted bg-muted/30">
+                                            Não penaliza a média
                                           </Badge>
                                         )}
                                       </AlertTitle>
                                       <AlertDescription className="text-sm mt-1">
-                                        {stageData.motivo_ausencia 
-                                          ? motivoAusenciaLabels[stageData.motivo_ausencia]?.description
-                                          : stageData.impacto_no_lead || 'Esta etapa não foi abordada durante a ligação. Verifique o impacto e as orientações de correção abaixo.'}
+                                        {/* Prioridade: contexto_ausencia > descrição do motivo > impacto_no_lead */}
+                                        {stageData.contexto_ausencia 
+                                          ? stageData.contexto_ausencia
+                                          : stageData.motivo_ausencia 
+                                            ? motivoAusenciaLabels[stageData.motivo_ausencia]?.description
+                                            : stageData.impacto_no_lead || 'Esta etapa não foi abordada durante a ligação. Verifique o impacto e as orientações de correção abaixo.'}
                                       </AlertDescription>
                                     </Alert>
                                   )}

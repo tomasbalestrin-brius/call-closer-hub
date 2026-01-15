@@ -325,9 +325,53 @@ Se uma etapa NÃO aconteceu explicitamente na call:
   * "etapa_pulada" - O closer pulou esta etapa intencionalmente
   * "transicao_prematura" - O closer avançou antes de completar
   * "nao_aplicavel" - Etapa não aplicável para este tipo de call
+  * "reagendamento_tomador_decisao" - Etapa não realizada por reagendamento devido ausência do tomador de decisão
+- Em "contexto_ausencia": OBRIGATÓRIO quando aconteceu="nao". Extraia da transcrição o MOTIVO REAL e ESPECÍFICO pelo qual esta etapa não aconteceu.
+  INCLUA OBRIGATORIAMENTE:
+  - Evidência literal da transcrição (quote do cliente ou closer) 
+  - Timestamp se disponível
+  - Explicação clara do que aconteceu
+  
+  Exemplos de contextos válidos:
+  - "O cliente disse 'Preciso ir agora, meu filho chegou' (minuto 45:20), encerrando a call antes do pitch"
+  - "O closer pulou direto para o preço após o mapeamento, não fez a problematização"
+  - "A call teve apenas 15 minutos de duração, insuficiente para chegar nesta etapa"
+  - "O cliente ficou objetando preço durante 20 minutos, não houve espaço para esta etapa"
+  - "Houve reagendamento na etapa anterior pois o tomador de decisão não estava presente"
+- Em "excluir_da_media": OBRIGATÓRIO quando motivo_ausencia="reagendamento_tomador_decisao". Marque como true para excluir esta etapa do cálculo da nota geral.
 - Preencha TODOS os campos mesmo assim
 
 NÃO DEIXE NENHUMA ETAPA COMO OBJETO VAZIO {}.
+
+────────────────────────────────────────────────────────────────────
+VERIFICAÇÃO CRÍTICA - TOMADOR DE DECISÃO
+
+ANTES de avaliar as etapas, verifique:
+1. O tomador de decisão estava presente na call? (quem tem poder de compra/decisão)
+2. Se NÃO estava presente, o closer identificou isso durante a call?
+3. Se identificou, o closer fez o REAGENDAMENTO na própria call?
+
+CENÁRIOS E TRATAMENTO:
+
+A) Tomador de decisão PRESENTE → Análise normal
+
+B) Tomador de decisão AUSENTE + Closer NÃO reagendou:
+   - "tomador_decisao.presente": false
+   - "tomador_decisao.reagendamento_realizado": false
+   - "nota_geral": 0
+   - "justificativa_nota_geral": ["Tomador de decisão ausente e closer não realizou reagendamento na call"]
+   - Avaliar todas as etapas normalmente para feedback
+
+C) Tomador de decisão AUSENTE + Closer REAGENDOU na call:
+   - "tomador_decisao.presente": false
+   - "tomador_decisao.reagendamento_realizado": true
+   - "tomador_decisao.etapa_do_reagendamento": "nome_da_etapa_onde_reagendou"
+   - Para etapas APÓS o reagendamento: 
+     * "aconteceu": "nao"
+     * "excluir_da_media": true
+     * "motivo_ausencia": "reagendamento_tomador_decisao"
+     * "contexto_ausencia": "Etapa excluída da análise pois houve reagendamento na etapa X devido à ausência do tomador de decisão"
+   - A nota_geral deve considerar APENAS as etapas até o reagendamento (redistribuir pesos proporcionalmente)
 
 ────────────────────────────────────────────────────────────────────
 FORMATO DE SAÍDA (OBRIGATÓRIO)
@@ -399,6 +443,14 @@ SCHEMA (estrutura completa para CADA etapa):
     "gatilhos_que_mais_pesaram": ["..."]
   },
 
+  "tomador_decisao": {
+    "presente": true,
+    "evidencia": "string|null - quote da transcrição que indica se o tomador estava presente",
+    "reagendamento_realizado": false,
+    "evidencia_reagendamento": "string|null - quote do reagendamento se houver",
+    "etapa_do_reagendamento": "string|null - nome da etapa onde ocorreu o reagendamento"
+  },
+
   "checklist_erros_recorrentes": {
     "abertura_ancoragem_script": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
     "profundidade_nao_fugir_assunto": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
@@ -423,7 +475,9 @@ SCHEMA (estrutura completa para CADA etapa):
       "perguntas_de_aprofundamento": ["..."],
       "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
       "risco_principal_da_etapa": "...",
-      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|null"
+      "motivo_ausencia": "call_curta|cliente_nao_permitiu|etapa_pulada|transicao_prematura|nao_aplicavel|reagendamento_tomador_decisao|null",
+      "contexto_ausencia": "string|null - OBRIGATÓRIO quando aconteceu=nao. Motivo específico extraído da transcrição com evidência literal",
+      "excluir_da_media": false
     },
     "abertura": {
       "aconteceu": "sim|parcial|nao",

@@ -304,11 +304,12 @@ export interface AcertoDetalhado {
 
 // Motivo de ausência de uma etapa
 export type MotivoAusencia = 
-  | 'call_curta'           // A call foi muito curta para abordar esta etapa
-  | 'cliente_nao_permitiu' // O cliente não deu abertura para esta discussão  
-  | 'etapa_pulada'         // O closer pulou esta etapa intencionalmente
-  | 'transicao_prematura'  // O closer avançou antes de completar
-  | 'nao_aplicavel';       // Etapa não aplicável para este tipo de call
+  | 'call_curta'                    // A call foi muito curta para abordar esta etapa
+  | 'cliente_nao_permitiu'          // O cliente não deu abertura para esta discussão  
+  | 'etapa_pulada'                  // O closer pulou esta etapa intencionalmente
+  | 'transicao_prematura'           // O closer avançou antes de completar
+  | 'nao_aplicavel'                 // Etapa não aplicável para este tipo de call
+  | 'reagendamento_tomador_decisao'; // Etapa excluída por reagendamento devido tomador de decisão ausente
 
 export interface StageAnalysis {
   aconteceu: 'sim' | 'parcial' | 'nao';
@@ -327,6 +328,19 @@ export interface StageAnalysis {
   risco_principal_da_etapa?: string;
   // Novo campo: motivo pelo qual a etapa não aconteceu
   motivo_ausencia?: MotivoAusencia;
+  // Novo campo: contexto específico da transcrição explicando porque a etapa não aconteceu
+  contexto_ausencia?: string;
+  // Novo campo: indica se a etapa deve ser excluída do cálculo da média (ex: reagendamento)
+  excluir_da_media?: boolean;
+}
+
+// Interface para dados do tomador de decisão
+export interface TomadorDecisao {
+  presente: boolean;
+  evidencia?: string;
+  reagendamento_realizado?: boolean;
+  evidencia_reagendamento?: string;
+  etapa_do_reagendamento?: string;
 }
 
 export interface TechnicalAnalysis {
@@ -337,6 +351,8 @@ export interface TechnicalAnalysis {
   // Dados detalhados (extras retornados pela análise)
   detailed_errors?: ErroDetalhado[];
   detailed_wins?: AcertoDetalhado[];
+  // Tomador de decisão
+  tomador_decisao?: TomadorDecisao;
   // Etapas diretas (compatibilidade legada)
   conexao?: StageAnalysis;
   abertura?: StageAnalysis;
