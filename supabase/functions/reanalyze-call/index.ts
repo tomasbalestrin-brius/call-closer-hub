@@ -937,11 +937,29 @@ serve(async (req) => {
     const updateData: Record<string, unknown> = {
       // technical_analysis contém a análise completa para o frontend
       technical_analysis: {
+        // Campos do framework - CRÍTICOS para exibição
+        framework_selecionado: analysis.framework_selecionado,
+        confianca_framework: analysis.confianca_framework,
+        motivo_escolha_framework: analysis.motivo_escolha_framework,
+        // Identificação
+        identificacao: analysis.identificacao,
+        // Dados extraídos
+        dados_extraidos: analysis.dados_extraidos,
+        // Análise por etapa
         analise_por_etapa: analysis.analise_por_etapa,
+        // Checklist e plano de ação
         checklist_erros_recorrentes: analysis.checklist_erros_recorrentes,
         plano_de_acao_direto: analysis.plano_de_acao_direto,
+        // Erros e acertos detalhados
         detailed_errors: analysis.maiores_erros,
         detailed_wins: analysis.maiores_acertos,
+        // Nota e justificativa
+        nota_geral: analysis.nota_geral,
+        justificativa_nota_geral: analysis.justificativa_nota_geral,
+        // Ponto de perda / porque comprou
+        ponto_de_perda_da_venda: analysis.ponto_de_perda_da_venda,
+        sinais_da_perda: analysis.sinais_da_perda,
+        se_vendeu: analysis.se_vendeu,
       },
       analyzed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

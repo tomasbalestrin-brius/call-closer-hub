@@ -983,9 +983,26 @@ serve(async (req) => {
       
       // Technical analysis (full object for detailed view)
       technical_analysis: {
+        // Campos do framework - CRÍTICOS para exibição
+        framework_selecionado: data.framework_selecionado,
+        confianca_framework: data.confianca_framework,
+        motivo_escolha_framework: data.motivo_escolha_framework,
+        // Identificação
+        identificacao: data.identificacao,
+        // Dados extraídos
+        dados_extraidos: data.dados_extraidos,
+        // Análise por etapa
         analise_por_etapa: data.analise_por_etapa,
+        // Checklist e plano de ação
         checklist_erros_recorrentes: data.checklist_erros_recorrentes,
         plano_de_acao_direto: data.plano_de_acao_direto,
+        // Nota e justificativa
+        nota_geral: data.nota_geral,
+        justificativa_nota_geral: data.justificativa_nota_geral,
+        // Ponto de perda / porque comprou
+        ponto_de_perda_da_venda: data.ponto_de_perda_da_venda,
+        sinais_da_perda: data.sinais_da_perda,
+        se_vendeu: data.se_vendeu,
       },
       
       // Scores and evaluation
