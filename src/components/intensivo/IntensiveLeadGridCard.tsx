@@ -3,6 +3,7 @@ import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { safeDate } from '@/lib/dateUtils';
 import { Phone, Building2, Calendar, Clock, Mail, User } from 'lucide-react';
 import { IntensiveLead, INTENSIVE_COLUMNS, INTENSIVE_STATUS_LABELS } from '@/types/intensivo';
 
@@ -13,15 +14,23 @@ interface IntensiveLeadGridCardProps {
 
 export function IntensiveLeadGridCard({ lead, onClick }: IntensiveLeadGridCardProps) {
   const currentColumn = INTENSIVE_COLUMNS.find(c => c.id === lead.status);
-  const formattedDate = format(new Date(lead.created_at), "dd 'de' MMM", { locale: ptBR });
   
-  const timeInStatus = formatDistanceToNow(new Date(lead.status_changed_at), {
-    addSuffix: false,
-    locale: ptBR,
-  });
+  const createdAtDate = safeDate(lead.created_at);
+  const formattedDate = createdAtDate 
+    ? format(createdAtDate, "dd 'de' MMM", { locale: ptBR })
+    : 'Data inválida';
+  
+  const statusChangedDate = safeDate(lead.status_changed_at);
+  const timeInStatus = statusChangedDate
+    ? formatDistanceToNow(statusChangedDate, { addSuffix: false, locale: ptBR })
+    : 'desconhecido';
 
   const isPositiveStatus = ['confirmados', 'ingresso_retirado', 'compareceram'].includes(lead.status);
   const isNegativeStatus = ['nao_compareceram', 'sem_interesse'].includes(lead.status);
+
+  const confirmedDate = safeDate(lead.confirmed_at);
+  const ticketRetrievedDate = safeDate(lead.ticket_retrieved_at);
+  const attendedDate = safeDate(lead.attended_at);
 
   return (
     <Card 
@@ -86,24 +95,24 @@ export function IntensiveLeadGridCard({ lead, onClick }: IntensiveLeadGridCardPr
         </div>
 
         {/* Timestamps */}
-        {(lead.confirmed_at || lead.ticket_retrieved_at || lead.attended_at) && (
+        {(confirmedDate || ticketRetrievedDate || attendedDate) && (
           <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-            {lead.confirmed_at && (
+            {confirmedDate && (
               <div className="flex items-center gap-1">
                 <span className="text-green-500">✓</span>
-                <span>Confirmado: {format(new Date(lead.confirmed_at), 'dd/MM/yyyy')}</span>
+                <span>Confirmado: {format(confirmedDate, 'dd/MM/yyyy')}</span>
               </div>
             )}
-            {lead.ticket_retrieved_at && (
+            {ticketRetrievedDate && (
               <div className="flex items-center gap-1">
                 <span className="text-emerald-500">🎫</span>
-                <span>Ingresso: {format(new Date(lead.ticket_retrieved_at), 'dd/MM/yyyy')}</span>
+                <span>Ingresso: {format(ticketRetrievedDate, 'dd/MM/yyyy')}</span>
               </div>
             )}
-            {lead.attended_at && (
+            {attendedDate && (
               <div className="flex items-center gap-1">
                 <span className="text-green-700">👤</span>
-                <span>Compareceu: {format(new Date(lead.attended_at), 'dd/MM/yyyy')}</span>
+                <span>Compareceu: {format(attendedDate, 'dd/MM/yyyy')}</span>
               </div>
             )}
           </div>

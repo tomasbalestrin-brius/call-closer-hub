@@ -14,6 +14,7 @@ import { IntensiveLeadGridCard } from '@/components/intensivo/IntensiveLeadGridC
 import { IntensiveLeadDetailDialog } from '@/components/intensivo/IntensiveLeadDetailDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Search, Flame, Trash2, LayoutGrid, Columns } from 'lucide-react';
+import { Plus, Search, Flame, Trash2, LayoutGrid, Columns, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { IntensiveLead, IntensiveLeadStatus } from '@/types/intensivo';
@@ -42,7 +43,30 @@ export default function IntensivoCRM() {
   const [selectedLead, setSelectedLead] = useState<IntensiveLead | null>(null);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
 
-  const { editions, leads, loadingEditions, loadingLeads, isAdmin } = useIntensivoCRM(selectedEditionId || undefined);
+  const { 
+    editions, 
+    leads, 
+    loadingEditions, 
+    loadingLeads, 
+    editionsError,
+    leadsError,
+    isAdmin 
+  } = useIntensivoCRM(selectedEditionId || undefined);
+
+  // Debug logging for troubleshooting blank page
+  useEffect(() => {
+    console.log('IntensivoCRM render state:', { 
+      user: !!user, 
+      authLoading, 
+      editions: editions?.length ?? 0,
+      leads: leads?.length ?? 0,
+      loadingEditions,
+      loadingLeads,
+      editionsError,
+      leadsError,
+      selectedEditionId
+    });
+  }, [user, authLoading, editions, leads, loadingEditions, loadingLeads, editionsError, leadsError, selectedEditionId]);
 
   // Auto-select first active edition
   useEffect(() => {
@@ -64,6 +88,32 @@ export default function IntensivoCRM() {
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // Error state handling
+  if (editionsError || leadsError) {
+    return (
+      <MainLayout>
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <Alert variant="destructive" className="max-w-md">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Erro ao carregar dados</AlertTitle>
+            <AlertDescription>
+              Ocorreu um problema ao carregar os dados do CRM Intensivo. 
+              Verifique sua conexão e tente novamente.
+            </AlertDescription>
+          </Alert>
+          <Button 
+            onClick={() => window.location.reload()} 
+            variant="outline"
+            className="gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Recarregar página
+          </Button>
+        </div>
+      </MainLayout>
+    );
   }
 
   // Get unique sources for filter

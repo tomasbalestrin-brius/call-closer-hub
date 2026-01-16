@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, Ticket, CheckCircle } from 'lucide-react';
 import { IntensiveLead, IntensiveEdition } from '@/types/intensivo';
+import { safeDate } from '@/lib/dateUtils';
 
 interface IntensivePeriodSummaryProps {
   leads: IntensiveLead[];
@@ -13,8 +14,12 @@ interface IntensivePeriodSummaryProps {
 export function IntensivePeriodSummary({ leads, edition }: IntensivePeriodSummaryProps) {
   if (!edition) return null;
 
-  const daysUntilEvent = differenceInDays(new Date(edition.event_date), new Date());
-  const eventDate = format(new Date(edition.event_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+  const eventDate = safeDate(edition.event_date);
+  
+  if (!eventDate) return null;
+
+  const daysUntilEvent = differenceInDays(eventDate, new Date());
+  const formattedEventDate = format(eventDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 
   // Calculate stats
   const confirmed = leads.filter(l => 
@@ -43,7 +48,7 @@ export function IntensivePeriodSummary({ leads, edition }: IntensivePeriodSummar
             <div>
               <h3 className="font-semibold text-lg">{edition.name}</h3>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{eventDate}</span>
+                <span>{formattedEventDate}</span>
                 {edition.location && (
                   <>
                     <span>•</span>
