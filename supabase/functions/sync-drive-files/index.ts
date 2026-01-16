@@ -6,6 +6,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Safe JSON parser that handles empty/truncated responses
+async function safeReadJson(response: Response): Promise<{ data: unknown; error: string | null }> {
+  try {
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      console.error("Empty response received");
+      return { data: null, error: "Empty response from function" };
+    }
+    try {
+      const data = JSON.parse(text);
+      return { data, error: null };
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError, "Raw text (first 500 chars):", text.substring(0, 500));
+      return { data: { __raw: text }, error: `JSON parse error: ${parseError}` };
+    }
+  } catch (readError) {
+    console.error("Failed to read response:", readError);
+    return { data: null, error: `Failed to read response: ${readError}` };
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -65,12 +86,19 @@ serve(async (req) => {
       }),
     });
 
-    if (!listResponse.ok) {
-      const error = await listResponse.json();
-      throw new Error(error.error || "Failed to list files");
+    const { data: listResult, error: listError } = await safeReadJson(listResponse);
+
+    if (listError || !listResponse.ok) {
+      const errorMsg = listError || (listResult as { error?: string })?.error || "Failed to list files";
+      throw new Error(errorMsg);
     }
 
-    const { files } = await listResponse.json();
+    interface DriveFile {
+      id: string;
+      name: string;
+    }
+    
+    const files = ((listResult as { files?: DriveFile[] })?.files || []) as DriveFile[];
     console.log(`Found ${files.length} files since last sync`);
 
     if (files.length === 0) {
@@ -91,7 +119,7 @@ serve(async (req) => {
     }
 
     // Get already imported files - ONLY consider "completed" as truly imported
-    const fileIds = files.map((f: { id: string }) => f.id);
+    const fileIds = files.map((f) => f.id);
     const { data: importedFiles } = await supabase
       .from("imported_files")
       .select("drive_file_id, status")
@@ -105,16 +133,16 @@ serve(async (req) => {
         .map(f => f.drive_file_id)
     );
     
-    const newFiles = files.filter((f: { id: string }) => !completedIds.has(f.id));
+    const newFiles = files.filter((f) => !completedIds.has(f.id));
 
     console.log(`${newFiles.length} files to process (excluding ${completedIds.size} completed)`);
 
     // Filter by name patterns if configured
-    let filesToImport = newFiles;
+    let filesToImport: DriveFile[] = newFiles;
     const patterns = profile.drive_name_patterns as string[] | null;
     
     if (patterns && patterns.length > 0) {
-      filesToImport = newFiles.filter((file: { name: string }) => {
+      filesToImport = newFiles.filter((file) => {
         return patterns.some(pattern => {
           const regex = new RegExp(pattern.replace(/\*/g, ".*"), "i");
           return regex.test(file.name);
@@ -139,10 +167,12 @@ serve(async (req) => {
       );
     }
 
-    // Process new files
+    // Process new files SEQUENTIALLY with robust error handling
     const results: { fileId: string; fileName: string; success: boolean; error?: string }[] = [];
+    const maxFilesPerExecution = 5; // Limit to prevent timeout
+    const filesToProcess = filesToImport.slice(0, maxFilesPerExecution);
     
-    for (const file of filesToImport) {
+    for (const file of filesToProcess) {
       try {
         const importResponse = await fetch(`${SUPABASE_URL}/functions/v1/import-and-analyze`, {
           method: "POST",
@@ -157,10 +187,14 @@ serve(async (req) => {
           }),
         });
 
-        const result = await importResponse.json();
+        const { data: result, error: parseError } = await safeReadJson(importResponse);
         
-        if (!importResponse.ok) {
-          results.push({ fileId: file.id, fileName: file.name, success: false, error: result.error });
+        if (parseError) {
+          console.error(`Failed to parse response for ${file.name}:`, parseError);
+          results.push({ fileId: file.id, fileName: file.name, success: false, error: parseError });
+        } else if (!importResponse.ok) {
+          const errorMsg = (result as { error?: string })?.error || "Unknown error";
+          results.push({ fileId: file.id, fileName: file.name, success: false, error: errorMsg });
         } else {
           results.push({ fileId: file.id, fileName: file.name, success: true });
         }
@@ -185,6 +219,7 @@ serve(async (req) => {
       .eq("user_id", userId);
 
     const successCount = results.filter(r => r.success).length;
+    const remainingCount = filesToImport.length - filesToProcess.length;
 
     // Create notification if new files were synced
     if (successCount > 0) {
@@ -193,17 +228,18 @@ serve(async (req) => {
         .insert({
           user_id: userId,
           title: "Novas calls sincronizadas",
-          message: `${successCount} novas calls foram importadas e analisadas automaticamente.`,
+          message: `${successCount} novas calls foram importadas e analisadas automaticamente.${remainingCount > 0 ? ` ${remainingCount} aguardando.` : ""}`,
           type: "info",
         });
     }
 
-    console.log(`Sync complete: ${successCount} imported`);
+    console.log(`Sync complete: ${successCount} imported, ${remainingCount} remaining`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         synced: successCount,
+        remaining: remainingCount,
         total: filesToImport.length,
         results,
       }),
