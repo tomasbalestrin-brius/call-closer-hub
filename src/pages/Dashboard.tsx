@@ -29,6 +29,12 @@ export default function Dashboard() {
       mentoriaJulia: 0,
       implementacaoIA: 0,
     },
+    salesByProduct: {
+      elitePremium: 0,
+      implementacaoComercial: 0,
+      mentoriaJulia: 0,
+      implementacaoIA: 0,
+    },
   });
   const [loading, setLoading] = useState(true);
   const [selectedFunnel, setSelectedFunnel] = useState<string | null>(null);
@@ -85,6 +91,7 @@ export default function Dashboard() {
             totalEntryValue: 0,
             conversionRate: 0,
             offersByProduct: { elitePremium: 0, implementacaoComercial: 0, mentoriaJulia: 0, implementacaoIA: 0 },
+            salesByProduct: { elitePremium: 0, implementacaoComercial: 0, mentoriaJulia: 0, implementacaoIA: 0 },
           });
           setLoading(false);
           return;
@@ -172,6 +179,22 @@ export default function Dashboard() {
         ).length,
       };
 
+      // Count sales by product from sold clients
+      const salesByProduct = {
+        elitePremium: soldClients.filter(c => 
+          c.product_offered === 'Mentoria Elite Premium'
+        ).length,
+        implementacaoComercial: soldClients.filter(c => 
+          c.product_offered === 'Implementacao Comercial'
+        ).length,
+        mentoriaJulia: soldClients.filter(c => 
+          c.product_offered === 'Mentoria Premium'
+        ).length,
+        implementacaoIA: soldClients.filter(c => 
+          c.product_offered === 'Implementacao de IA'
+        ).length,
+      };
+
       setStats({
         totalCalls,
         averageScore: Math.round(averageScore * 10) / 10,
@@ -180,6 +203,7 @@ export default function Dashboard() {
         totalEntryValue,
         conversionRate: Math.round(conversionRate),
         offersByProduct,
+        salesByProduct,
       });
 
     } catch (error) {
@@ -282,24 +306,28 @@ export default function Dashboard() {
             <StatsCard
               title="Elite Premium"
               value={stats.offersByProduct.elitePremium}
+              subtitle={`${stats.totalCalls > 0 ? Math.round((stats.offersByProduct.elitePremium / stats.totalCalls) * 100) : 0}% das calls | ${stats.salesByProduct.elitePremium} vendas (${stats.offersByProduct.elitePremium > 0 ? Math.round((stats.salesByProduct.elitePremium / stats.offersByProduct.elitePremium) * 100) : 0}% conv.)`}
               icon={Crown}
               variant="accent"
             />
             <StatsCard
               title="Implementação Comercial"
               value={stats.offersByProduct.implementacaoComercial}
+              subtitle={`${stats.totalCalls > 0 ? Math.round((stats.offersByProduct.implementacaoComercial / stats.totalCalls) * 100) : 0}% das calls | ${stats.salesByProduct.implementacaoComercial} vendas (${stats.offersByProduct.implementacaoComercial > 0 ? Math.round((stats.salesByProduct.implementacaoComercial / stats.offersByProduct.implementacaoComercial) * 100) : 0}% conv.)`}
               icon={Briefcase}
               variant="default"
             />
             <StatsCard
               title="Mentoria Premium Julia"
               value={stats.offersByProduct.mentoriaJulia}
+              subtitle={`${stats.totalCalls > 0 ? Math.round((stats.offersByProduct.mentoriaJulia / stats.totalCalls) * 100) : 0}% das calls | ${stats.salesByProduct.mentoriaJulia} vendas (${stats.offersByProduct.mentoriaJulia > 0 ? Math.round((stats.salesByProduct.mentoriaJulia / stats.offersByProduct.mentoriaJulia) * 100) : 0}% conv.)`}
               icon={GraduationCap}
               variant="success"
             />
             <StatsCard
               title="Implementação de IA"
               value={stats.offersByProduct.implementacaoIA}
+              subtitle={`${stats.totalCalls > 0 ? Math.round((stats.offersByProduct.implementacaoIA / stats.totalCalls) * 100) : 0}% das calls | ${stats.salesByProduct.implementacaoIA} vendas (${stats.offersByProduct.implementacaoIA > 0 ? Math.round((stats.salesByProduct.implementacaoIA / stats.offersByProduct.implementacaoIA) * 100) : 0}% conv.)`}
               icon={Bot}
               variant="warning"
             />
