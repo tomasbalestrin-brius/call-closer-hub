@@ -156,27 +156,19 @@ export default function Dashboard() {
       const totalEntryValue = soldClients.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
       const conversionRate = totalCalls > 0 ? (totalSales / totalCalls) * 100 : 0;
 
-      // Count offers by product from clients.product_offered
+      // Count offers by product from clients.product_offered (exact match)
       const offersByProduct = {
         elitePremium: allClientsWithProduct.filter(c => 
-          c.product_offered?.toLowerCase().includes('elite') || 
-          c.product_offered?.toLowerCase().includes('80k')
+          c.product_offered === 'Mentoria Elite Premium'
         ).length,
         implementacaoComercial: allClientsWithProduct.filter(c => 
-          c.product_offered?.toLowerCase().includes('implementação comercial') || 
-          c.product_offered?.toLowerCase().includes('implementacao comercial') ||
-          c.product_offered?.toLowerCase().includes('programa comercial') ||
-          c.product_offered?.toLowerCase().includes('programa de implementação')
+          c.product_offered === 'Implementacao Comercial'
         ).length,
         mentoriaJulia: allClientsWithProduct.filter(c => 
-          c.product_offered?.toLowerCase().includes('mentoria') ||
-          c.product_offered?.toLowerCase().includes('julia') ||
-          c.product_offered?.toLowerCase().includes('cleiton')
+          c.product_offered === 'Mentoria Premium'
         ).length,
         implementacaoIA: allClientsWithProduct.filter(c => 
-          c.product_offered?.toLowerCase().includes('ia') || 
-          c.product_offered?.toLowerCase().includes('inteligência artificial') ||
-          c.product_offered?.toLowerCase().includes('inteligencia artificial')
+          c.product_offered === 'Implementacao de IA'
         ).length,
       };
 
