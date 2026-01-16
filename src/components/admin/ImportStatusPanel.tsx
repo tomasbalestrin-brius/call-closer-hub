@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,8 @@ import {
   AlertCircle, 
   Loader2,
   FileText,
-  Play
+  Play,
+  Zap
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -32,11 +33,24 @@ interface ImportSummary {
   total: number;
 }
 
+interface LiveProgress {
+  sessionId: string;
+  totalFiles: number;
+  processedFiles: number;
+  successCount: number;
+  errorCount: number;
+  currentFileName: string | null;
+  currentCloserName: string | null;
+  status: 'running' | 'completed' | 'error';
+  startedAt: Date;
+}
+
 export function ImportStatusPanel() {
   const [closerStatuses, setCloserStatuses] = useState<CloserImportStatus[]>([]);
   const [summary, setSummary] = useState<ImportSummary>({ totalCompleted: 0, totalPending: 0, totalErrors: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [liveProgress, setLiveProgress] = useState<LiveProgress | null>(null);
   const [lastProcessResult, setLastProcessResult] = useState<{
     processed: number;
     success: number;
@@ -47,6 +61,62 @@ export function ImportStatusPanel() {
   useEffect(() => {
     fetchImportStatuses();
   }, []);
+
+  // Subscribe to realtime progress updates
+  useEffect(() => {
+    if (!processing) {
+      setLiveProgress(null);
+      return;
+    }
+
+    console.log('Setting up realtime subscription for import progress...');
+
+    const channel = supabase
+      .channel('import-progress-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'import_progress',
+        },
+        (payload) => {
+          console.log('Realtime update received:', payload);
+          const data = payload.new as Record<string, unknown>;
+          
+          if (data && data.status) {
+            setLiveProgress({
+              sessionId: data.session_id as string,
+              totalFiles: data.total_files as number,
+              processedFiles: data.processed_files as number,
+              successCount: data.success_count as number,
+              errorCount: data.error_count as number,
+              currentFileName: data.current_file_name as string | null,
+              currentCloserName: data.current_closer_name as string | null,
+              status: data.status as 'running' | 'completed' | 'error',
+              startedAt: new Date(data.started_at as string),
+            });
+
+            // If completed, stop processing state
+            if (data.status === 'completed' || data.status === 'error') {
+              console.log('Processing completed or error, will refresh...');
+              setTimeout(() => {
+                setProcessing(false);
+                fetchImportStatuses();
+              }, 1000);
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
+
+    return () => {
+      console.log('Cleaning up realtime subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [processing]);
 
   const fetchImportStatuses = async () => {
     try {
@@ -125,9 +195,24 @@ export function ImportStatusPanel() {
     }
   };
 
+  const estimateTimeRemaining = useCallback((progress: LiveProgress | null) => {
+    if (!progress || progress.processedFiles === 0) return '...';
+    
+    const elapsed = Date.now() - progress.startedAt.getTime();
+    const avgTimePerFile = elapsed / progress.processedFiles;
+    const remaining = progress.totalFiles - progress.processedFiles;
+    const estimatedMs = remaining * avgTimePerFile;
+    
+    const minutes = Math.ceil(estimatedMs / 60000);
+    if (minutes < 1) return 'menos de 1 min';
+    if (minutes === 1) return '1 minuto';
+    return `${minutes} minutos`;
+  }, []);
+
   const processAllPending = async () => {
     setProcessing(true);
     setLastProcessResult(null);
+    setLiveProgress(null);
 
     try {
       toast.info('Iniciando processamento de arquivos pendentes...');
@@ -163,11 +248,16 @@ export function ImportStatusPanel() {
       toast.error('Erro ao processar arquivos pendentes');
     } finally {
       setProcessing(false);
+      setLiveProgress(null);
     }
   };
 
   const progressPercent = summary.total > 0 
     ? Math.round((summary.totalCompleted / summary.total) * 100) 
+    : 0;
+
+  const liveProgressPercent = liveProgress && liveProgress.totalFiles > 0
+    ? Math.round((liveProgress.processedFiles / liveProgress.totalFiles) * 100)
     : 0;
 
   if (loading) {
@@ -198,7 +288,7 @@ export function ImportStatusPanel() {
               variant="outline" 
               size="sm"
               onClick={fetchImportStatuses}
-              disabled={loading}
+              disabled={loading || processing}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
@@ -224,6 +314,79 @@ export function ImportStatusPanel() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Live Progress Panel */}
+        {processing && (
+          <div className="p-4 rounded-lg border-2 border-primary/30 bg-primary/5 space-y-4 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Zap className="w-5 h-5 text-primary animate-pulse" />
+                  <div className="absolute inset-0 bg-primary/30 blur-md rounded-full animate-pulse" />
+                </div>
+                <span className="font-semibold text-primary">Processando em Tempo Real</span>
+              </div>
+              {liveProgress && (
+                <Badge variant="outline" className="bg-primary/10 border-primary/30">
+                  {liveProgress.processedFiles} / {liveProgress.totalFiles}
+                </Badge>
+              )}
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <Progress 
+                value={liveProgressPercent} 
+                className="h-3"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{liveProgressPercent}% concluído</span>
+                {liveProgress && (
+                  <span>~{estimateTimeRemaining(liveProgress)} restantes</span>
+                )}
+              </div>
+            </div>
+
+            {/* Current File */}
+            {liveProgress?.currentFileName && (
+              <div className="flex items-center gap-2 p-3 rounded-md bg-background/80 border">
+                <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{liveProgress.currentFileName}</p>
+                  {liveProgress.currentCloserName && (
+                    <p className="text-xs text-muted-foreground">
+                      Closer: {liveProgress.currentCloserName}
+                    </p>
+                  )}
+                </div>
+                <Loader2 className="w-4 h-4 animate-spin text-primary flex-shrink-0" />
+              </div>
+            )}
+
+            {/* Live Counters */}
+            {liveProgress && (
+              <div className="flex gap-4 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-success" />
+                  <span className="font-medium">{liveProgress.successCount}</span>
+                  <span className="text-muted-foreground">sucesso</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-destructive" />
+                  <span className="font-medium">{liveProgress.errorCount}</span>
+                  <span className="text-muted-foreground">erros</span>
+                </div>
+              </div>
+            )}
+
+            {!liveProgress && (
+              <div className="flex items-center justify-center py-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Aguardando início do processamento...
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Summary Stats */}
         <div className="grid gap-4 md:grid-cols-4">
           <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
@@ -274,7 +437,7 @@ export function ImportStatusPanel() {
         </div>
 
         {/* Last Process Result */}
-        {lastProcessResult && (
+        {lastProcessResult && !processing && (
           <div className="p-4 rounded-lg bg-muted/30 border border-border">
             <h4 className="font-medium mb-2">Último Processamento</h4>
             <div className="grid grid-cols-4 gap-4 text-sm">

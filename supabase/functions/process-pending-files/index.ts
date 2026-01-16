@@ -92,6 +92,33 @@ serve(async (req) => {
       }
     }
 
+    // Count total pending files for progress tracking
+    const { count: totalPendingCount } = await supabase
+      .from("imported_files")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending");
+
+    const totalPending = totalPendingCount || 0;
+
+    // Create progress tracking record
+    const sessionId = crypto.randomUUID();
+    console.log(`Creating progress session: ${sessionId}, total files: ${totalPending}`);
+
+    const { error: progressInsertError } = await supabase
+      .from("import_progress")
+      .insert({
+        session_id: sessionId,
+        total_files: totalPending,
+        processed_files: 0,
+        success_count: 0,
+        error_count: 0,
+        status: "running",
+      });
+
+    if (progressInsertError) {
+      console.error("Failed to create progress record:", progressInsertError);
+    }
+
     const results: Array<{
       userId: string;
       userName: string;
@@ -101,6 +128,10 @@ serve(async (req) => {
       errors: number;
       details: Array<{ fileName: string; success: boolean; error?: string }>;
     }> = [];
+
+    let globalProcessed = 0;
+    let globalSuccess = 0;
+    let globalErrors = 0;
 
     for (const user of users) {
       // Get pending files for this user
@@ -146,6 +177,19 @@ serve(async (req) => {
       for (const file of pendingFiles) {
         console.log(`Processing: ${file.file_name}`);
 
+        // Update progress BEFORE processing
+        globalProcessed++;
+        await supabase
+          .from("import_progress")
+          .update({
+            processed_files: globalProcessed,
+            success_count: globalSuccess,
+            error_count: globalErrors,
+            current_file_name: file.file_name,
+            current_closer_name: user.full_name,
+          })
+          .eq("session_id", sessionId);
+
         try {
           const response = await fetch(`${SUPABASE_URL}/functions/v1/import-and-analyze`, {
             method: "POST",
@@ -168,6 +212,7 @@ serve(async (req) => {
             const errorMsg = parseError || (result as { error?: string })?.error || "Unknown error";
             console.error(`Error processing ${file.file_name}:`, errorMsg);
             userResult.errors++;
+            globalErrors++;
             userResult.details.push({
               fileName: file.file_name,
               success: false,
@@ -176,6 +221,7 @@ serve(async (req) => {
           } else if ((result as { alreadyImported?: boolean })?.alreadyImported) {
             console.log(`File already imported: ${file.file_name}`);
             userResult.success++;
+            globalSuccess++;
             userResult.details.push({
               fileName: file.file_name,
               success: true,
@@ -183,20 +229,40 @@ serve(async (req) => {
           } else {
             console.log(`Successfully processed: ${file.file_name}`);
             userResult.success++;
+            globalSuccess++;
             userResult.details.push({
               fileName: file.file_name,
               success: true,
             });
           }
+
+          // Update progress AFTER processing
+          await supabase
+            .from("import_progress")
+            .update({
+              success_count: globalSuccess,
+              error_count: globalErrors,
+            })
+            .eq("session_id", sessionId);
+
         } catch (err) {
           console.error(`Exception processing ${file.file_name}:`, err);
           userResult.processed++;
           userResult.errors++;
+          globalErrors++;
           userResult.details.push({
             fileName: file.file_name,
             success: false,
             error: err instanceof Error ? err.message : "Unknown error",
           });
+
+          // Update progress on error
+          await supabase
+            .from("import_progress")
+            .update({
+              error_count: globalErrors,
+            })
+            .eq("session_id", sessionId);
         }
 
         // Small delay between files to avoid rate limiting
@@ -217,11 +283,26 @@ serve(async (req) => {
       .select("*", { count: "exact", head: true })
       .eq("status", "pending");
 
+    // Mark progress as completed
+    await supabase
+      .from("import_progress")
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        current_file_name: null,
+        current_closer_name: null,
+        processed_files: globalProcessed,
+        success_count: globalSuccess,
+        error_count: globalErrors,
+      })
+      .eq("session_id", sessionId);
+
     console.log(`Batch complete. Processed: ${totalProcessed}, Success: ${totalSuccess}, Errors: ${totalErrors}, Remaining: ${remainingPending}`);
 
     return new Response(
       JSON.stringify({
         success: true,
+        sessionId,
         summary: {
           usersProcessed: results.length,
           totalProcessed,

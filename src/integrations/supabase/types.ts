@@ -596,6 +596,51 @@ export type Database = {
         }
         Relationships: []
       }
+      import_progress: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          current_closer_name: string | null
+          current_file_name: string | null
+          error_count: number
+          id: string
+          processed_files: number
+          session_id: string
+          started_at: string
+          status: string
+          success_count: number
+          total_files: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          current_closer_name?: string | null
+          current_file_name?: string | null
+          error_count?: number
+          id?: string
+          processed_files?: number
+          session_id: string
+          started_at?: string
+          status?: string
+          success_count?: number
+          total_files?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          current_closer_name?: string | null
+          current_file_name?: string | null
+          error_count?: number
+          id?: string
+          processed_files?: number
+          session_id?: string
+          started_at?: string
+          status?: string
+          success_count?: number
+          total_files?: number
+        }
+        Relationships: []
+      }
       imported_files: {
         Row: {
           call_id: string | null
