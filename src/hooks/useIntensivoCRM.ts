@@ -11,7 +11,7 @@ export function useIntensivoCRM(editionId?: string) {
   const queryClient = useQueryClient();
 
   // Fetch editions
-  const { data: editions = [], isLoading: loadingEditions } = useQuery({
+  const { data: editions = [], isLoading: loadingEditions, isError: editionsError } = useQuery({
     queryKey: ['intensive-editions'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -23,10 +23,11 @@ export function useIntensivoCRM(editionId?: string) {
       return data as IntensiveEdition[];
     },
     enabled: !!user,
+    retry: 2,
   });
 
   // Fetch leads for selected edition
-  const { data: leads = [], isLoading: loadingLeads } = useQuery({
+  const { data: leads = [], isLoading: loadingLeads, isError: leadsError } = useQuery({
     queryKey: ['intensive-leads', editionId],
     queryFn: async () => {
       if (!editionId) return [];
@@ -41,6 +42,7 @@ export function useIntensivoCRM(editionId?: string) {
       return data as IntensiveLead[];
     },
     enabled: !!user && !!editionId,
+    retry: 2,
   });
 
   // Create edition mutation
@@ -242,6 +244,8 @@ export function useIntensivoCRM(editionId?: string) {
     leads,
     loadingEditions,
     loadingLeads,
+    editionsError,
+    leadsError,
     createEdition,
     updateEdition,
     deleteEdition,

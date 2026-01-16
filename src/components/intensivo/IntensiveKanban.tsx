@@ -1,11 +1,11 @@
-import { useState, useRef } from 'react';
-import { format, formatDistanceToNow, differenceInDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { useState } from 'react';
+import { differenceInDays } from 'date-fns';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { IntensiveLeadCard } from './IntensiveLeadCard';
 import { IntensiveLeadDetailDialog } from './IntensiveLeadDetailDialog';
 import { useIntensivoCRM } from '@/hooks/useIntensivoCRM';
+import { safeDate } from '@/lib/dateUtils';
 import { INTENSIVE_COLUMNS, type IntensiveLead, type IntensiveLeadStatus, type IntensiveEdition } from '@/types/intensivo';
 import { 
   MessageSquare, 
@@ -48,9 +48,10 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
   const [draggedLead, setDraggedLead] = useState<IntensiveLead | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
-  // Calculate days until event
-  const daysUntilEvent = edition 
-    ? differenceInDays(new Date(edition.event_date), new Date())
+  // Calculate days until event with safe date parsing
+  const eventDate = edition ? safeDate(edition.event_date) : null;
+  const daysUntilEvent = eventDate 
+    ? differenceInDays(eventDate, new Date())
     : null;
 
   const handleDragStart = (e: React.DragEvent, lead: IntensiveLead) => {

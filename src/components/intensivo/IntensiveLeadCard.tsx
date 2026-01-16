@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Phone, Building2, GripVertical } from 'lucide-react';
 import type { IntensiveLead } from '@/types/intensivo';
 import { cn } from '@/lib/utils';
+import { safeDate } from '@/lib/dateUtils';
 
 interface IntensiveLeadCardProps {
   lead: IntensiveLead;
@@ -14,10 +15,10 @@ interface IntensiveLeadCardProps {
 }
 
 export function IntensiveLeadCard({ lead, onClick, onDragStart, isDragging }: IntensiveLeadCardProps) {
-  const timeInStatus = formatDistanceToNow(new Date(lead.status_changed_at), {
-    addSuffix: false,
-    locale: ptBR,
-  });
+  const statusChangedDate = safeDate(lead.status_changed_at);
+  const timeInStatus = statusChangedDate
+    ? formatDistanceToNow(statusChangedDate, { addSuffix: false, locale: ptBR })
+    : 'desconhecido';
 
   return (
     <Card

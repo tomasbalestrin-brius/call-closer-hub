@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { IntensiveEdition } from '@/types/intensivo';
+import { safeDate } from '@/lib/dateUtils';
 
 interface EditionSelectorProps {
   editions: IntensiveEdition[];
@@ -28,6 +29,12 @@ export function EditionSelector({
     );
   }
 
+  const formatEditionDate = (dateString: string) => {
+    const date = safeDate(dateString);
+    if (!date) return 'Data inválida';
+    return format(date, 'dd/MM/yyyy', { locale: ptBR });
+  };
+
   return (
     <Select value={selectedEditionId || ''} onValueChange={onSelect}>
       <SelectTrigger className="w-64">
@@ -39,7 +46,7 @@ export function EditionSelector({
             <div className="flex items-center gap-2">
               <span>{edition.name}</span>
               <span className="text-xs text-muted-foreground">
-                ({format(new Date(edition.event_date), 'dd/MM/yyyy', { locale: ptBR })})
+                ({formatEditionDate(edition.event_date)})
               </span>
               {!edition.is_active && (
                 <span className="text-xs bg-muted px-1.5 py-0.5 rounded">Encerrado</span>
