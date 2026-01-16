@@ -19,7 +19,8 @@ import {
   Loader2,
   Users2,
   Target,
-  Key
+  Key,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
@@ -31,6 +32,23 @@ import { SetMonthlyGoalDialog } from '@/components/admin/SetMonthlyGoalDialog';
 import { ResetPasswordDialog } from '@/components/admin/ResetPasswordDialog';
 import { Navigate } from 'react-router-dom';
 import { UserRole } from '@/types';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface CloserWithProfile {
   id: string;
@@ -63,6 +81,14 @@ export default function Admin() {
   const [leaderSquad, setLeaderSquad] = useState<LeaderSquad | null>(null);
   const [squadMembersDialogOpen, setSquadMembersDialogOpen] = useState(false);
   const [closerGoals, setCloserGoals] = useState<Map<string, number>>(new Map());
+  const [closerSales, setCloserSales] = useState<Map<string, number>>(new Map());
+  const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false);
+  const [selectedCloserForDelete, setSelectedCloserForDelete] = useState<{
+    id: string;
+    user_id: string;
+    full_name: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (isAdmin || isLeader) {
@@ -187,6 +213,7 @@ export default function Admin() {
     const currentYear = new Date().getFullYear();
 
     try {
+      // Fetch goals
       const { data, error } = await supabase
         .from('monthly_goals')
         .select('closer_id, goal_value')
@@ -199,8 +226,66 @@ export default function Admin() {
       const goalsMap = new Map<string, number>();
       (data || []).forEach(g => goalsMap.set(g.closer_id, g.goal_value));
       setCloserGoals(goalsMap);
+
+      // Fetch sales for current month
+      const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+      const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd') + 'T23:59:59';
+
+      const { data: salesData, error: salesError } = await supabase
+        .from('clients')
+        .select('closer_id, entry_value')
+        .in('closer_id', closerIds)
+        .eq('is_sold', true)
+        .gte('sold_at', monthStart)
+        .lte('sold_at', monthEnd);
+
+      if (salesError) {
+        console.error('Error fetching sales:', salesError);
+        return;
+      }
+
+      // Group sales by closer
+      const salesMap = new Map<string, number>();
+      closerIds.forEach(id => salesMap.set(id, 0));
+      (salesData || []).forEach(s => {
+        const current = salesMap.get(s.closer_id) || 0;
+        salesMap.set(s.closer_id, current + (Number(s.entry_value) || 0));
+      });
+      setCloserSales(salesMap);
     } catch (error) {
       console.error('Error fetching monthly goals:', error);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedCloserForDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+        body: { userId: selectedCloserForDelete.user_id }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Log audit
+      await logAction({
+        actionType: 'user_deleted',
+        entityType: 'user',
+        targetUserId: selectedCloserForDelete.user_id,
+        metadata: { deleted_user_name: selectedCloserForDelete.full_name },
+      });
+
+      toast.success(`Usuário "${selectedCloserForDelete.full_name}" excluído com sucesso`);
+      setDeleteUserDialogOpen(false);
+      setSelectedCloserForDelete(null);
+      fetchClosers();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao excluir usuário');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -448,10 +533,23 @@ export default function Admin() {
                             onValueChange={(newLevel) => updateCloserLevel(closer.id, newLevel)}
                           />
                           {closerGoals.has(closer.user_id) ? (
-                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                              <Target className="w-3 h-3 mr-1" />
-                              R$ {(closerGoals.get(closer.user_id)! / 1000).toFixed(0)}k
-                            </Badge>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 cursor-default">
+                                    <Target className="w-3 h-3 mr-1" />
+                                    R$ {((closerSales.get(closer.user_id) || 0) / 1000).toFixed(0)}k / {(closerGoals.get(closer.user_id)! / 1000).toFixed(0)}k
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="text-sm space-y-1">
+                                    <p><strong>Meta:</strong> R$ {closerGoals.get(closer.user_id)?.toLocaleString('pt-BR')}</p>
+                                    <p><strong>Vendido:</strong> R$ {(closerSales.get(closer.user_id) || 0).toLocaleString('pt-BR')}</p>
+                                    <p><strong>Progresso:</strong> {Math.round(((closerSales.get(closer.user_id) || 0) / closerGoals.get(closer.user_id)!) * 100)}%</p>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           ) : (
                             <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
                               <Target className="w-3 h-3 mr-1" />
@@ -492,6 +590,22 @@ export default function Admin() {
                           >
                             {closer.status === 'active' ? 'Desativar' : 'Ativar'}
                           </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCloserForDelete({
+                                  id: closer.id,
+                                  user_id: closer.user_id,
+                                  full_name: closer.full_name
+                                });
+                                setDeleteUserDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -523,6 +637,7 @@ export default function Admin() {
         open={goalDialogOpen}
         onOpenChange={setGoalDialogOpen}
         onSuccess={() => {
+          fetchClosers();
           setGoalDialogOpen(false);
         }}
         closers={closers}
@@ -542,6 +657,37 @@ export default function Admin() {
           onMembersChange={fetchClosers}
         />
       )}
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={deleteUserDialogOpen} onOpenChange={setDeleteUserDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir usuário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O usuário "{selectedCloserForDelete?.full_name}" 
+              será removido permanentemente do sistema, incluindo todos os seus dados associados 
+              (metas, participação em squads, etc.).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteUser}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                'Excluir'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MainLayout>
   );
 }

@@ -31,6 +31,7 @@ import {
   Save
 } from 'lucide-react';
 import { useIntensivoCRM } from '@/hooks/useIntensivoCRM';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { INTENSIVE_COLUMNS, INTENSIVE_STATUS_LABELS, type IntensiveLead, type IntensiveLeadStatus } from '@/types/intensivo';
 import {
   AlertDialog,
@@ -57,9 +58,12 @@ export function IntensiveLeadDetailDialog({
   editionId 
 }: IntensiveLeadDetailDialogProps) {
   const { updateLead, deleteLead, moveLeadStatus } = useIntensivoCRM(editionId);
+  const { isAdmin, isLeader } = useUserPermissions();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [editedLead, setEditedLead] = useState<Partial<IntensiveLead>>({});
+
+  const canDeleteLead = isAdmin || isLeader;
 
   if (!lead) return null;
 
@@ -223,16 +227,18 @@ export function IntensiveLeadDetailDialog({
 
           {/* Actions */}
           <div className="flex justify-between pt-4">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowDeleteAlert(true)}
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Excluir
-            </Button>
+            {canDeleteLead && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteAlert(true)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Excluir
+              </Button>
+            )}
 
-            <div className="flex gap-2">
+            <div className={`flex gap-2 ${!canDeleteLead ? 'ml-auto' : ''}`}>
               {isEditing ? (
                 <>
                   <Button variant="outline" onClick={() => setIsEditing(false)}>

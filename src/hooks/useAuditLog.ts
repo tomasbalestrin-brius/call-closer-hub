@@ -7,13 +7,15 @@ export type AuditActionType =
   | 'goal_updated' 
   | 'role_changed' 
   | 'level_changed' 
-  | 'status_changed';
+  | 'status_changed'
+  | 'user_deleted';
 
 export type AuditEntityType = 
   | 'monthly_goal' 
   | 'user_role' 
   | 'closer_level' 
-  | 'closer_status';
+  | 'closer_status'
+  | 'user';
 
 interface AuditLogParams {
   actionType: AuditActionType;
