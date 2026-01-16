@@ -65,12 +65,18 @@ serve(async (req) => {
       );
     }
 
+    // Data mínima fixa: apenas arquivos de janeiro de 2026 em diante
+    const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
+
     // Use last sync time or 7 days ago as fallback
     const lastSync = profile.drive_last_sync 
       ? new Date(profile.drive_last_sync).toISOString()
       : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    console.log(`Syncing files for user ${userId} since ${lastSync}`);
+    // Garantir que não puxe arquivos anteriores a janeiro de 2026
+    const effectiveDate = lastSync < MIN_IMPORT_DATE ? MIN_IMPORT_DATE : lastSync;
+
+    console.log(`Syncing files for user ${userId} since ${effectiveDate} (MIN: ${MIN_IMPORT_DATE})`);
 
     // List new files since last sync
     const listResponse = await fetch(`${SUPABASE_URL}/functions/v1/list-drive-files`, {
@@ -82,7 +88,7 @@ serve(async (req) => {
       body: JSON.stringify({ 
         userId, 
         folderId: profile.drive_folder_id,
-        dateFrom: lastSync,
+        dateFrom: effectiveDate, // Usar data efetiva (respeitando MIN_IMPORT_DATE)
       }),
     });
 
