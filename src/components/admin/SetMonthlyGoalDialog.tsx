@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useAuditLog } from '@/hooks/useAuditLog';
 import {
   Dialog,
   DialogContent,
@@ -57,12 +58,12 @@ export function SetMonthlyGoalDialog({
   closers 
 }: SetMonthlyGoalDialogProps) {
   const { user } = useAuth();
+  const { logAction } = useAuditLog();
   const [loading, setLoading] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState<string>('');
   const [goalValue, setGoalValue] = useState<string>('');
   const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
   const [year, setYear] = useState<number>(new Date().getFullYear());
-
   useEffect(() => {
     if (open) {
       // Reset form when dialog opens
@@ -91,17 +92,21 @@ export function SetMonthlyGoalDialog({
 
     setLoading(true);
 
+    const selectedCloser = closers.find(c => c.user_id === selectedCloserId);
+
     try {
       // Check if goal already exists
       const { data: existingGoal } = await supabase
         .from('monthly_goals')
-        .select('id')
+        .select('id, goal_value')
         .eq('closer_id', selectedCloserId)
         .eq('month', month)
         .eq('year', year)
         .maybeSingle();
 
       if (existingGoal) {
+        const oldValue = existingGoal.goal_value;
+        
         // Update existing goal
         const { error } = await supabase
           .from('monthly_goals')
@@ -113,10 +118,26 @@ export function SetMonthlyGoalDialog({
           .eq('id', existingGoal.id);
 
         if (error) throw error;
+
+        // Log audit
+        await logAction({
+          actionType: 'goal_updated',
+          entityType: 'monthly_goal',
+          targetUserId: selectedCloserId,
+          entityId: existingGoal.id,
+          oldValue: { goal_value: oldValue },
+          newValue: { goal_value: value },
+          metadata: { 
+            closer_name: selectedCloser?.full_name,
+            month,
+            year 
+          },
+        });
+
         toast.success('Meta atualizada com sucesso!');
       } else {
         // Create new goal
-        const { error } = await supabase
+        const { data: newGoal, error } = await supabase
           .from('monthly_goals')
           .insert({
             closer_id: selectedCloserId,
@@ -124,9 +145,26 @@ export function SetMonthlyGoalDialog({
             year,
             goal_value: value,
             set_by_user_id: user.id,
-          });
+          })
+          .select('id')
+          .single();
 
         if (error) throw error;
+
+        // Log audit
+        await logAction({
+          actionType: 'goal_created',
+          entityType: 'monthly_goal',
+          targetUserId: selectedCloserId,
+          entityId: newGoal?.id,
+          newValue: { goal_value: value },
+          metadata: { 
+            closer_name: selectedCloser?.full_name,
+            month,
+            year 
+          },
+        });
+
         toast.success('Meta definida com sucesso!');
       }
 
