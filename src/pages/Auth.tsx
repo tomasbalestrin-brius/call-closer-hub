@@ -14,7 +14,14 @@ const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string().min(6, 'A senha deve ter pelo menos 6 caracteres');
 
 const companyValues = [
-  "Eu Vim Pra ser Mais!"
+  "Você veio pra ser mais.",
+  "Nosso propósito de vida é realizado com o trabalho.",
+  "Não nos pergunte se fomos capazes, nos dê a missão.",
+  "Nossa liderança inspira confiança e ação.",
+  "Superamos expectativas e alcançamos resultados acima da média.",
+  "Sempre gratos, porém insatisfeitos!",
+  "Assumimos a responsabilidade e agimos rapidamente para resolver qualquer desafio.",
+  "Nosso ambiente é de frequência elevada, inspirando alta performance e crescimento contínuo."
 ];
 
 const getDailyValue = () => {
