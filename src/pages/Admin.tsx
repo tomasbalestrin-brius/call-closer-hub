@@ -20,7 +20,8 @@ import {
   Users2,
   Target,
   Key,
-  Trash2
+  Trash2,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
@@ -30,6 +31,7 @@ import { CloserLevelSelect, type CloserLevel } from '@/components/admin/CloserLe
 import { UserRoleSelect } from '@/components/admin/UserRoleSelect';
 import { SetMonthlyGoalDialog } from '@/components/admin/SetMonthlyGoalDialog';
 import { ResetPasswordDialog } from '@/components/admin/ResetPasswordDialog';
+import { ImportStatusPanel } from '@/components/admin/ImportStatusPanel';
 import { Navigate } from 'react-router-dom';
 import { UserRole } from '@/types';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
@@ -395,10 +397,16 @@ export default function Admin() {
               {isLeaderOnly ? 'Meu Time' : 'Closers'}
             </TabsTrigger>
             {isAdmin && (
-              <TabsTrigger value="squads" className="flex items-center gap-2">
-                <Users2 className="w-4 h-4" />
-                Times
-              </TabsTrigger>
+              <>
+                <TabsTrigger value="squads" className="flex items-center gap-2">
+                  <Users2 className="w-4 h-4" />
+                  Times
+                </TabsTrigger>
+                <TabsTrigger value="imports" className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Importações
+                </TabsTrigger>
+              </>
             )}
           </TabsList>
 
@@ -616,9 +624,14 @@ export default function Admin() {
           </TabsContent>
 
           {isAdmin && (
-            <TabsContent value="squads">
-              <SquadManagement />
-            </TabsContent>
+            <>
+              <TabsContent value="squads">
+                <SquadManagement />
+              </TabsContent>
+              <TabsContent value="imports">
+                <ImportStatusPanel />
+              </TabsContent>
+            </>
           )}
         </Tabs>
       </div>
