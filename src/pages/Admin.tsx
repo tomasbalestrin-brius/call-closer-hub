@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
 import { SquadManagement } from '@/components/admin/SquadManagement';
+import { SquadMembersDialog } from '@/components/admin/SquadMembersDialog';
 import { CloserLevelSelect, type CloserLevel } from '@/components/admin/CloserLevelSelect';
 import { UserRoleSelect } from '@/components/admin/UserRoleSelect';
 import { SetMonthlyGoalDialog } from '@/components/admin/SetMonthlyGoalDialog';
@@ -44,9 +45,14 @@ interface CloserWithProfile {
   role: UserRole;
 }
 
+interface LeaderSquad {
+  id: string;
+  name: string;
+}
+
 export default function Admin() {
   const { user } = useAuth();
-  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { isAdmin, isLeader, loading: roleLoading } = useUserRole();
   const { logAction } = useAuditLog();
   const [closers, setClosers] = useState<CloserWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,22 +60,89 @@ export default function Admin() {
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [selectedCloserForReset, setSelectedCloserForReset] = useState<{ user_id: string; full_name: string } | null>(null);
+  const [leaderSquad, setLeaderSquad] = useState<LeaderSquad | null>(null);
+  const [squadMembersDialogOpen, setSquadMembersDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin || isLeader) {
+      if (isLeader && !isAdmin) {
+        fetchLeaderSquad();
+      } else {
+        fetchClosers();
+      }
+    }
+  }, [isAdmin, isLeader]);
+
+  useEffect(() => {
+    if (leaderSquad) {
       fetchClosers();
     }
-  }, [isAdmin]);
+  }, [leaderSquad]);
+
+  const fetchLeaderSquad = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('squad_members')
+        .select('squad_id, squads(id, name)')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      if (data && data.squads) {
+        const squad = data.squads as unknown as LeaderSquad;
+        setLeaderSquad({ id: squad.id, name: squad.name });
+      }
+    } catch (error) {
+      console.error('Error fetching leader squad:', error);
+      setLoading(false);
+    }
+  };
 
   const fetchClosers = async () => {
     try {
-      // Buscar perfis
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let profilesData;
 
-      if (profilesError) throw profilesError;
+      if (isAdmin) {
+        // Admin vê todos os closers
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        profilesData = data;
+      } else if (isLeader && leaderSquad) {
+        // Líder vê apenas membros do seu squad
+        const { data: squadMembers, error: squadError } = await supabase
+          .from('squad_members')
+          .select('user_id')
+          .eq('squad_id', leaderSquad.id);
+
+        if (squadError) throw squadError;
+
+        const memberIds = (squadMembers || []).map(m => m.user_id);
+        
+        if (memberIds.length === 0) {
+          setClosers([]);
+          setLoading(false);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('user_id', memberIds)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        profilesData = data;
+      } else {
+        setLoading(false);
+        return;
+      }
 
       // Buscar roles de todos os usuários
       const userIds = (profilesData || []).map(p => p.user_id);
@@ -178,9 +251,11 @@ export default function Admin() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !isLeader) {
     return <Navigate to="/" replace />;
   }
+
+  const isLeaderOnly = isLeader && !isAdmin;
 
   return (
     <MainLayout>
@@ -189,21 +264,28 @@ export default function Admin() {
         <div>
           <h1 className="text-3xl font-display font-bold flex items-center gap-2">
             <Shield className="w-8 h-8 text-primary" />
-            Administração
+            {isLeaderOnly ? 'Painel do Time' : 'Administração'}
           </h1>
-          <p className="text-muted-foreground mt-1">Gerencie closers e times do sistema</p>
+          <p className="text-muted-foreground mt-1">
+            {isLeaderOnly 
+              ? `Gerencie os membros do time ${leaderSquad?.name || ''}`
+              : 'Gerencie closers e times do sistema'
+            }
+          </p>
         </div>
 
         <Tabs defaultValue="closers" className="space-y-6">
           <TabsList>
             <TabsTrigger value="closers" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
-              Closers
+              {isLeaderOnly ? 'Meu Time' : 'Closers'}
             </TabsTrigger>
-            <TabsTrigger value="squads" className="flex items-center gap-2">
-              <Users2 className="w-4 h-4" />
-              Times
-            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="squads" className="flex items-center gap-2">
+                <Users2 className="w-4 h-4" />
+                Times
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="closers" className="space-y-6">
@@ -211,7 +293,9 @@ export default function Admin() {
             <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total de Closers</CardTitle>
+                  <CardTitle className="text-sm font-medium">
+                    {isLeaderOnly ? 'Membros do Time' : 'Total de Closers'}
+                  </CardTitle>
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -246,9 +330,14 @@ export default function Admin() {
               <CardHeader>
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
-                    <CardTitle className="font-display">Closers Cadastrados</CardTitle>
+                    <CardTitle className="font-display">
+                      {isLeaderOnly ? 'Membros do Time' : 'Closers Cadastrados'}
+                    </CardTitle>
                     <CardDescription>
-                      Lista de todos os closers registrados no sistema
+                      {isLeaderOnly 
+                        ? `Lista de closers do time ${leaderSquad?.name || ''}`
+                        : 'Lista de todos os closers registrados no sistema'
+                      }
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
@@ -259,6 +348,15 @@ export default function Admin() {
                       <Target className="w-4 h-4 mr-2" />
                       Definir Meta
                     </Button>
+                    {isLeaderOnly && leaderSquad && (
+                      <Button 
+                        onClick={() => setSquadMembersDialogOpen(true)} 
+                        variant="outline"
+                      >
+                        <Users2 className="w-4 h-4 mr-2" />
+                        Gerenciar Time
+                      </Button>
+                    )}
                     <Button onClick={() => setDialogOpen(true)} className="gradient-primary">
                       <UserPlus className="w-4 h-4 mr-2" />
                       Novo Closer
@@ -273,7 +371,7 @@ export default function Admin() {
                   </div>
                 ) : closers.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    Nenhum closer cadastrado ainda
+                    {isLeaderOnly ? 'Nenhum membro no time ainda' : 'Nenhum closer cadastrado ainda'}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -305,15 +403,17 @@ export default function Admin() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3 flex-wrap">
-                          <UserRoleSelect
-                            userId={closer.user_id}
-                            currentRole={closer.role}
-                            onRoleChange={(newRole) => {
-                              setClosers(prev => prev.map(c => 
-                                c.id === closer.id ? { ...c, role: newRole } : c
-                              ));
-                            }}
-                          />
+                          {isAdmin && (
+                            <UserRoleSelect
+                              userId={closer.user_id}
+                              currentRole={closer.role}
+                              onRoleChange={(newRole) => {
+                                setClosers(prev => prev.map(c => 
+                                  c.id === closer.id ? { ...c, role: newRole } : c
+                                ));
+                              }}
+                            />
+                          )}
                           <CloserLevelSelect
                             value={closer.closer_level}
                             onValueChange={(newLevel) => updateCloserLevel(closer.id, newLevel)}
@@ -361,9 +461,11 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="squads">
-            <SquadManagement />
-          </TabsContent>
+          {isAdmin && (
+            <TabsContent value="squads">
+              <SquadManagement />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 
@@ -374,6 +476,7 @@ export default function Admin() {
           fetchClosers();
           setDialogOpen(false);
         }}
+        leaderSquadId={isLeaderOnly ? leaderSquad?.id : undefined}
       />
 
       <SetMonthlyGoalDialog
@@ -390,6 +493,15 @@ export default function Admin() {
         onOpenChange={setResetPasswordDialogOpen}
         closer={selectedCloserForReset}
       />
+
+      {isLeaderOnly && leaderSquad && (
+        <SquadMembersDialog
+          open={squadMembersDialogOpen}
+          onOpenChange={setSquadMembersDialogOpen}
+          squad={leaderSquad}
+          onMembersChange={fetchClosers}
+        />
+      )}
     </MainLayout>
   );
 }
