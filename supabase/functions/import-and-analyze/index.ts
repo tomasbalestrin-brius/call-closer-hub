@@ -50,6 +50,27 @@ const extractDateFromFileName = (name: string): string => {
   return new Date().toISOString().split("T")[0];
 };
 
+// Safe JSON parser that handles empty/truncated responses
+async function safeReadJson(response: Response): Promise<{ data: unknown; error: string | null }> {
+  try {
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      console.error("Empty response received");
+      return { data: null, error: "Empty response from function" };
+    }
+    try {
+      const data = JSON.parse(text);
+      return { data, error: null };
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError, "Raw text (first 500 chars):", text.substring(0, 500));
+      return { data: { __raw: text }, error: `JSON parse error: ${parseError}` };
+    }
+  } catch (readError) {
+    console.error("Failed to read response:", readError);
+    return { data: null, error: `Failed to read response: ${readError}` };
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -122,7 +143,7 @@ serve(async (req) => {
     importRecordId = importRecord.id;
     console.log(`Processing file: ${fileName} (${fileId})`);
 
-    // Fetch document content
+    // Fetch document content with safe JSON parsing
     const fetchResponse = await fetch(`${SUPABASE_URL}/functions/v1/fetch-drive-document`, {
       method: "POST",
       headers: {
@@ -132,9 +153,11 @@ serve(async (req) => {
       body: JSON.stringify({ userId, fileId }),
     });
 
-    if (!fetchResponse.ok) {
-      const error = await fetchResponse.json();
-      const errorMsg = error.error || "Failed to fetch document";
+    const { data: fetchResult, error: fetchParseError } = await safeReadJson(fetchResponse);
+
+    if (fetchParseError) {
+      const errorMsg = `Erro ao ler documento: ${fetchParseError}`;
+      console.error(errorMsg);
       await supabase
         .from("imported_files")
         .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
@@ -142,10 +165,28 @@ serve(async (req) => {
       throw new Error(errorMsg);
     }
 
-    const { content } = await fetchResponse.json();
+    if (!fetchResponse.ok) {
+      const errorMsg = (fetchResult as { error?: string })?.error || "Failed to fetch document";
+      await supabase
+        .from("imported_files")
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+      throw new Error(errorMsg);
+    }
+
+    const content = (fetchResult as { content?: string })?.content;
+    if (!content) {
+      const errorMsg = "Documento vazio ou sem conteúdo";
+      await supabase
+        .from("imported_files")
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+      throw new Error(errorMsg);
+    }
+    
     console.log(`Document fetched, content length: ${content.length}`);
 
-    // Analyze the call
+    // Analyze the call with safe JSON parsing
     const analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
       method: "POST",
       headers: {
@@ -155,9 +196,11 @@ serve(async (req) => {
       body: JSON.stringify({ transcription: content, fileName }),
     });
 
-    if (!analyzeResponse.ok) {
-      const error = await analyzeResponse.json();
-      const errorMsg = error.error || "Failed to analyze call";
+    const { data: analyzeResult, error: analyzeParseError } = await safeReadJson(analyzeResponse);
+
+    if (analyzeParseError) {
+      const errorMsg = `Erro ao analisar call: ${analyzeParseError}`;
+      console.error(errorMsg);
       await supabase
         .from("imported_files")
         .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
@@ -165,13 +208,31 @@ serve(async (req) => {
       throw new Error(errorMsg);
     }
 
-    const { analysis } = await analyzeResponse.json();
+    if (!analyzeResponse.ok) {
+      const errorMsg = (analyzeResult as { error?: string })?.error || "Failed to analyze call";
+      await supabase
+        .from("imported_files")
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+      throw new Error(errorMsg);
+    }
+
+    const analysis = (analyzeResult as { analysis?: Record<string, unknown> })?.analysis;
+    if (!analysis) {
+      const errorMsg = "Análise retornou vazia";
+      await supabase
+        .from("imported_files")
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+      throw new Error(errorMsg);
+    }
+    
     console.log("Analysis complete:", analysis.client_name);
 
     // Check if client exists or create new one
     let clientId: string | null = null;
     const clientName = analysis.client_name && analysis.client_name !== 'nao_informado' 
-      ? analysis.client_name 
+      ? analysis.client_name as string
       : `Lead - ${extractDateFromFileName(fileName || "")}`;
     
     const { data: existingClient } = await supabase
@@ -266,7 +327,7 @@ serve(async (req) => {
 
     if (callError) {
       console.error("Failed to create call:", callError);
-      const errorMsg = `Erro ao criar call: ${callError.message}`;
+      const errorMsg = `Erro ao criar call: ${callError.message} (code: ${callError.code}, details: ${callError.details || 'none'})`;
       await supabase
         .from("imported_files")
         .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })

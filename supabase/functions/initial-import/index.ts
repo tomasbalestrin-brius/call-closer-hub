@@ -13,6 +13,27 @@ interface DriveFile {
   createdTime?: string;
 }
 
+// Safe JSON parser that handles empty/truncated responses
+async function safeReadJson(response: Response): Promise<{ data: unknown; error: string | null }> {
+  try {
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      console.error("Empty response received");
+      return { data: null, error: "Empty response from function" };
+    }
+    try {
+      const data = JSON.parse(text);
+      return { data, error: null };
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError, "Raw text (first 500 chars):", text.substring(0, 500));
+      return { data: { __raw: text }, error: `JSON parse error: ${parseError}` };
+    }
+  } catch (readError) {
+    console.error("Failed to read response:", readError);
+    return { data: null, error: `Failed to read response: ${readError}` };
+  }
+}
+
 async function refreshTokenIfNeeded(
   supabaseUrl: string,
   serviceRoleKey: string,
@@ -223,56 +244,55 @@ serve(async (req) => {
         }, { onConflict: "user_id,drive_file_id" });
     }
 
-    // Process files in batches
+    // Process files SEQUENTIALLY (batchSize = 1) to avoid timeout/connection issues
     const results: { fileId: string; fileName: string; success: boolean; error?: string }[] = [];
-    const batchSize = 3;
+    const maxFilesPerExecution = 5; // Limit files per execution to prevent timeout
+    const filesToProcess = filesToImport.slice(0, maxFilesPerExecution);
 
-    for (let i = 0; i < filesToImport.length; i += batchSize) {
-      const batch = filesToImport.slice(i, i + batchSize);
-      
-      const batchPromises = batch.map(async (file: DriveFile) => {
-        try {
-          console.log(`Processing file: ${file.name} (${file.id})`);
-          
-          const importResponse = await fetch(`${SUPABASE_URL}/functions/v1/import-and-analyze`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            },
-            body: JSON.stringify({ 
-              userId, 
-              fileId: file.id,
-              fileName: file.name,
-            }),
-          });
+    for (const file of filesToProcess) {
+      try {
+        console.log(`Processing file: ${file.name} (${file.id})`);
+        
+        const importResponse = await fetch(`${SUPABASE_URL}/functions/v1/import-and-analyze`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({ 
+            userId, 
+            fileId: file.id,
+            fileName: file.name,
+          }),
+        });
 
-          const result = await importResponse.json();
-          
-          if (!importResponse.ok) {
-            console.error(`Failed to import ${file.name}:`, result.error);
-            return { fileId: file.id, fileName: file.name, success: false, error: result.error };
-          }
-          
-          console.log(`Successfully imported: ${file.name}`);
-          return { fileId: file.id, fileName: file.name, success: true };
-        } catch (error) {
-          console.error(`Error importing ${file.name}:`, error);
-          return { 
-            fileId: file.id, 
-            fileName: file.name, 
-            success: false, 
-            error: error instanceof Error ? error.message : "Unknown error" 
-          };
+        const { data: result, error: parseError } = await safeReadJson(importResponse);
+        
+        if (parseError) {
+          console.error(`Failed to parse response for ${file.name}:`, parseError);
+          results.push({ fileId: file.id, fileName: file.name, success: false, error: parseError });
+          continue;
         }
-      });
-
-      const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults);
-
-      // Small delay between batches
-      if (i + batchSize < filesToImport.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        if (!importResponse.ok) {
+          const errorMsg = (result as { error?: string })?.error || "Unknown error";
+          console.error(`Failed to import ${file.name}:`, errorMsg);
+          results.push({ fileId: file.id, fileName: file.name, success: false, error: errorMsg });
+        } else {
+          console.log(`Successfully imported: ${file.name}`);
+          results.push({ fileId: file.id, fileName: file.name, success: true });
+        }
+        
+        // Small delay between files to prevent overwhelming
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error(`Error importing ${file.name}:`, error);
+        results.push({ 
+          fileId: file.id, 
+          fileName: file.name, 
+          success: false, 
+          error: error instanceof Error ? error.message : "Unknown error" 
+        });
       }
     }
 
@@ -284,8 +304,9 @@ serve(async (req) => {
 
     const successCount = results.filter(r => r.success).length;
     const errorCount = results.filter(r => !r.success).length;
+    const remainingCount = filesToImport.length - filesToProcess.length;
 
-    console.log(`Initial import complete: ${successCount} success, ${errorCount} errors`);
+    console.log(`Initial import complete: ${successCount} success, ${errorCount} errors, ${remainingCount} remaining`);
 
     // Create notification about import
     await supabase
@@ -293,7 +314,7 @@ serve(async (req) => {
       .insert({
         user_id: userId,
         title: "Importação inicial concluída",
-        message: `${successCount} calls importadas e analisadas.${errorCount > 0 ? ` ${errorCount} falharam.` : ""}`,
+        message: `${successCount} calls importadas e analisadas.${errorCount > 0 ? ` ${errorCount} falharam.` : ""}${remainingCount > 0 ? ` ${remainingCount} aguardando.` : ""}`,
         type: errorCount > 0 ? "warning" : "success",
       });
 
@@ -302,6 +323,7 @@ serve(async (req) => {
         success: true, 
         imported: successCount,
         errors: errorCount,
+        remaining: remainingCount,
         total: filesToImport.length,
         results,
       }),

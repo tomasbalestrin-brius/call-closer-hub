@@ -734,6 +734,8 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
         { role: "system", content: systemPrompt },
         { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nFORMATO DE RESPOSTA OBRIGATÓRIO:\n- Retorne APENAS o JSON, sem texto adicional antes ou depois\n- NÃO use markdown code blocks (\`\`\`json ou \`\`\`)\n- Comece sua resposta diretamente com { e termine com }\n- Certifique-se de que todas as strings estão corretamente escapadas (aspas internas como \\", quebras de linha como \\n)\n- Use aspas duplas para strings, nunca aspas simples\n\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.\n\nQUALIDADE DOS PONTOS FORTES E FRACOS (OBRIGATÓRIO):\n- Cada ponto_forte deve ser ESPECÍFICO: cite o que o closer fez, quando fez, e porque foi bom. Exemplo: "Na abertura, ancorou autoridade mencionando '500 empresas atendidas e R$50M em vendas', o que criou credibilidade imediata"\n- Cada ponto_fraco deve ter DIAGNÓSTICO + IMPACTO: o que faltou, quando faltou, e qual foi a consequência. Exemplo: "Não explorou a dor pessoal quando o lead mencionou 'estou sobrecarregado' - perdeu oportunidade de criar urgência emocional"\n- EVITE frases genéricas como "explicou o objetivo" ou "identificou a estrutura" - seja ESPECÍFICO sobre COMO e QUANDO\n- Cada campo pode ter 2-3 frases se necessário para ser específico\n\nLIMITES DE TAMANHO:\n- Máximo 2 evidências por etapa\n- Máximo 2 itens em como_corrigir\n- Máximo 2 perguntas em perguntas_de_aprofundamento` },
       ],
+      temperature: 0, // Deterministic output for consistent JSON
+      response_format: { type: "json_object" }, // Force JSON response
       max_tokens: 16000,
     }),
   });
@@ -748,6 +750,45 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
     const errorText = await response.text();
     console.error("OpenAI API error:", response.status, errorText);
     throw new Error(`OpenAI API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
+// Fallback: Try to repair invalid JSON using a short model call
+async function repairJSONWithAI(brokenJSON: string): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+
+  console.log("Attempting to repair JSON with AI...");
+  
+  // Truncate to avoid token limits
+  const truncated = brokenJSON.substring(0, 50000);
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are a JSON repair assistant. You receive broken or truncated JSON and return a valid, complete JSON object. Do not add new data, just fix structural issues (missing braces, quotes, commas). If content is truncated, close all open objects/arrays properly." },
+        { role: "user", content: `Fix this broken JSON and return ONLY valid JSON:\n\n${truncated}` },
+      ],
+      temperature: 0,
+      response_format: { type: "json_object" },
+      max_tokens: 16000,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("JSON repair API call failed");
   }
 
   const data = await response.json();
@@ -788,7 +829,7 @@ function tryFixJSON(jsonString: string): string {
   return fixed;
 }
 
-function parseJSONFromResponse(response: string): unknown {
+async function parseJSONFromResponse(response: string): Promise<unknown> {
   console.log("Attempting to parse response, length:", response.length);
   console.log("Response preview (first 500 chars):", response.substring(0, 500));
   console.log("Response preview (last 500 chars):", response.substring(response.length - 500));
@@ -847,7 +888,17 @@ function parseJSONFromResponse(response: string): unknown {
           return parsed;
         }
       } catch (e3) {
-        console.log("Truncated parse also failed");
+        console.log("Truncated parse also failed, trying AI repair...");
+        
+        // Tentativa 4: Use AI to repair the JSON
+        try {
+          const repairedJSON = await repairJSONWithAI(jsonString);
+          const parsed = JSON.parse(repairedJSON);
+          console.log("JSON parsed successfully (AI repaired), top-level keys:", Object.keys(parsed));
+          return parsed;
+        } catch (e4) {
+          console.log("AI repair also failed:", e4);
+        }
       }
       
       // Log detalhado do erro
@@ -961,7 +1012,7 @@ serve(async (req) => {
     console.log("Raw response length:", masterResponse.length);
 
     // Parse the response
-    const data = parseJSONFromResponse(masterResponse) as AnalysisData;
+    const data = await parseJSONFromResponse(masterResponse) as AnalysisData;
     
     // Ensure all 12 stages exist with complete structure (fallback)
     const requiredStages = [
