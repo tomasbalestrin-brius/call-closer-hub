@@ -111,16 +111,37 @@ export default function Dashboard() {
         clientsQuery = clientsQuery.eq('funnel_source', selectedFunnel);
       }
 
-      const [callsResult, clientsResult] = await Promise.all([
+      // Query for all clients with product_offered (for offers count)
+      let allClientsQuery = supabase
+        .from('clients')
+        .select('id, product_offered')
+        .eq('closer_id', user.id)
+        .not('product_offered', 'is', null);
+
+      if (dateRange?.from) {
+        allClientsQuery = allClientsQuery.gte('created_at', format(dateRange.from, 'yyyy-MM-dd'));
+      }
+      if (dateRange?.to) {
+        allClientsQuery = allClientsQuery.lte('created_at', format(dateRange.to, 'yyyy-MM-dd') + 'T23:59:59');
+      }
+      
+      if (selectedFunnel) {
+        allClientsQuery = allClientsQuery.eq('funnel_source', selectedFunnel);
+      }
+
+      const [callsResult, clientsResult, allClientsResult] = await Promise.all([
         callsQuery,
-        clientsQuery
+        clientsQuery,
+        allClientsQuery
       ]);
 
       if (callsResult.error) throw callsResult.error;
       if (clientsResult.error) throw clientsResult.error;
+      if (allClientsResult.error) throw allClientsResult.error;
 
       const calls = callsResult.data || [];
       const soldClients = clientsResult.data || [];
+      const allClientsWithProduct = allClientsResult.data || [];
 
       // Calculate call-based stats
       const totalCalls = calls.length;
@@ -135,26 +156,27 @@ export default function Dashboard() {
       const totalEntryValue = soldClients.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
       const conversionRate = totalCalls > 0 ? (totalSales / totalCalls) * 100 : 0;
 
-      // Count offers by product from calls
+      // Count offers by product from clients.product_offered
       const offersByProduct = {
-        elitePremium: calls.filter(c => 
-          c.product?.toLowerCase().includes('elite') || c.product?.toLowerCase().includes('80k')
+        elitePremium: allClientsWithProduct.filter(c => 
+          c.product_offered?.toLowerCase().includes('elite') || 
+          c.product_offered?.toLowerCase().includes('80k')
         ).length,
-        implementacaoComercial: calls.filter(c => 
-          c.product?.toLowerCase().includes('implementação comercial') || 
-          c.product?.toLowerCase().includes('implementacao comercial') ||
-          c.product?.toLowerCase().includes('programa comercial') ||
-          c.product?.toLowerCase().includes('programa de implementação')
+        implementacaoComercial: allClientsWithProduct.filter(c => 
+          c.product_offered?.toLowerCase().includes('implementação comercial') || 
+          c.product_offered?.toLowerCase().includes('implementacao comercial') ||
+          c.product_offered?.toLowerCase().includes('programa comercial') ||
+          c.product_offered?.toLowerCase().includes('programa de implementação')
         ).length,
-        mentoriaJulia: calls.filter(c => 
-          c.product?.toLowerCase().includes('mentoria') ||
-          c.product?.toLowerCase().includes('julia') ||
-          c.product?.toLowerCase().includes('cleiton')
+        mentoriaJulia: allClientsWithProduct.filter(c => 
+          c.product_offered?.toLowerCase().includes('mentoria') ||
+          c.product_offered?.toLowerCase().includes('julia') ||
+          c.product_offered?.toLowerCase().includes('cleiton')
         ).length,
-        implementacaoIA: calls.filter(c => 
-          c.product?.toLowerCase().includes('ia') || 
-          c.product?.toLowerCase().includes('inteligência artificial') ||
-          c.product?.toLowerCase().includes('inteligencia artificial')
+        implementacaoIA: allClientsWithProduct.filter(c => 
+          c.product_offered?.toLowerCase().includes('ia') || 
+          c.product_offered?.toLowerCase().includes('inteligência artificial') ||
+          c.product_offered?.toLowerCase().includes('inteligencia artificial')
         ).length,
       };
 
