@@ -458,6 +458,7 @@ export interface DashboardStats {
   totalEntryValue: number;
   conversionRate: number;
   offersByProduct: OffersByProduct;
+  salesByProduct: OffersByProduct;
 }
 
 export interface Squad {
