@@ -48,6 +48,30 @@ const stats = [
 export function IntensiveStatsBar({ leads, onStatusFilter, activeStatus }: IntensiveStatsBarProps) {
   const getCount = (status: IntensiveLeadStatus | 'all') => {
     if (status === 'all') return leads.length;
+    
+    // Confirmados: count those who passed through confirmados (confirmed_at not null)
+    // except those who went back to aguardando_confirmacao
+    if (status === 'confirmados') {
+      return leads.filter(lead => 
+        lead.confirmed_at !== null && 
+        lead.status !== 'aguardando_confirmacao'
+      ).length;
+    }
+    
+    // Ingresso Retirado: count those who passed through ingresso_retirado
+    // except those who went back to earlier statuses
+    if (status === 'ingresso_retirado') {
+      const statusesBeforeIngresso = [
+        'abordagem_inicial', 'nivel_consciencia', 'convite_intensivo',
+        'aguardando_confirmacao', 'confirmados'
+      ];
+      return leads.filter(lead => 
+        lead.ticket_retrieved_at !== null && 
+        !statusesBeforeIngresso.includes(lead.status)
+      ).length;
+    }
+    
+    // Other statuses: count normally
     return leads.filter(lead => lead.status === status).length;
   };
 

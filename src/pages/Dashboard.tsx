@@ -8,8 +8,9 @@ import DailyVerse from '@/components/dashboard/DailyVerse';
 import QuotaProgressBar from '@/components/dashboard/QuotaProgressBar';
 import MonthlyGoalBar from '@/components/dashboard/MonthlyGoalBar';
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
-import { Phone, Star, TrendingUp, DollarSign, Wallet, Target } from 'lucide-react';
-import { DashboardStats } from '@/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Phone, Star, TrendingUp, DollarSign, Wallet, Target, Crown, Briefcase, GraduationCap, Bot } from 'lucide-react';
+import { DashboardStats, FUNNEL_SOURCES } from '@/types';
 import { DateRange } from 'react-day-picker';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
@@ -22,8 +23,15 @@ export default function Dashboard() {
     totalSaleValue: 0,
     totalEntryValue: 0,
     conversionRate: 0,
+    offersByProduct: {
+      elitePremium: 0,
+      implementacaoComercial: 0,
+      mentoriaJulia: 0,
+      implementacaoIA: 0,
+    },
   });
   const [loading, setLoading] = useState(true);
+  const [selectedFunnel, setSelectedFunnel] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
@@ -33,13 +41,24 @@ export default function Dashboard() {
     if (user) {
       fetchDashboardData();
     }
-  }, [user, dateRange]);
+  }, [user, dateRange, selectedFunnel]);
 
   const fetchDashboardData = async () => {
     if (!user) return;
 
     try {
       setLoading(true);
+      
+      // First get client IDs if funnel filter is active
+      let clientIdsForFunnel: string[] | null = null;
+      if (selectedFunnel) {
+        const { data: filteredClients } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('closer_id', user.id)
+          .eq('funnel_source', selectedFunnel);
+        clientIdsForFunnel = filteredClients?.map(c => c.id) || [];
+      }
       
       // Build calls query with date filter
       let callsQuery = supabase
@@ -52,6 +71,25 @@ export default function Dashboard() {
       }
       if (dateRange?.to) {
         callsQuery = callsQuery.lte('call_date', format(dateRange.to, 'yyyy-MM-dd'));
+      }
+      
+      // Filter calls by client_id if funnel is selected
+      if (clientIdsForFunnel !== null) {
+        if (clientIdsForFunnel.length === 0) {
+          // No clients match funnel - return empty stats
+          setStats({
+            totalCalls: 0,
+            averageScore: 0,
+            totalSales: 0,
+            totalSaleValue: 0,
+            totalEntryValue: 0,
+            conversionRate: 0,
+            offersByProduct: { elitePremium: 0, implementacaoComercial: 0, mentoriaJulia: 0, implementacaoIA: 0 },
+          });
+          setLoading(false);
+          return;
+        }
+        callsQuery = callsQuery.in('client_id', clientIdsForFunnel);
       }
 
       // Build clients query with date filter for sales
@@ -66,6 +104,11 @@ export default function Dashboard() {
       }
       if (dateRange?.to) {
         clientsQuery = clientsQuery.lte('sold_at', format(dateRange.to, 'yyyy-MM-dd') + 'T23:59:59');
+      }
+      
+      // Filter clients by funnel if selected
+      if (selectedFunnel) {
+        clientsQuery = clientsQuery.eq('funnel_source', selectedFunnel);
       }
 
       const [callsResult, clientsResult] = await Promise.all([
@@ -92,6 +135,29 @@ export default function Dashboard() {
       const totalEntryValue = soldClients.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
       const conversionRate = totalCalls > 0 ? (totalSales / totalCalls) * 100 : 0;
 
+      // Count offers by product from calls
+      const offersByProduct = {
+        elitePremium: calls.filter(c => 
+          c.product?.toLowerCase().includes('elite') || c.product?.toLowerCase().includes('80k')
+        ).length,
+        implementacaoComercial: calls.filter(c => 
+          c.product?.toLowerCase().includes('implementação comercial') || 
+          c.product?.toLowerCase().includes('implementacao comercial') ||
+          c.product?.toLowerCase().includes('programa comercial') ||
+          c.product?.toLowerCase().includes('programa de implementação')
+        ).length,
+        mentoriaJulia: calls.filter(c => 
+          c.product?.toLowerCase().includes('mentoria') ||
+          c.product?.toLowerCase().includes('julia') ||
+          c.product?.toLowerCase().includes('cleiton')
+        ).length,
+        implementacaoIA: calls.filter(c => 
+          c.product?.toLowerCase().includes('ia') || 
+          c.product?.toLowerCase().includes('inteligência artificial') ||
+          c.product?.toLowerCase().includes('inteligencia artificial')
+        ).length,
+      };
+
       setStats({
         totalCalls,
         averageScore: Math.round(averageScore * 10) / 10,
@@ -99,6 +165,7 @@ export default function Dashboard() {
         totalSaleValue,
         totalEntryValue,
         conversionRate: Math.round(conversionRate),
+        offersByProduct,
       });
 
     } catch (error) {
@@ -121,10 +188,28 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <DashboardHeader />
-          <DateRangePicker 
-            dateRange={dateRange} 
-            onDateRangeChange={setDateRange} 
-          />
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <Select
+              value={selectedFunnel || 'all'}
+              onValueChange={(value) => setSelectedFunnel(value === 'all' ? null : value)}
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Todos os Funis" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Funis</SelectItem>
+                {FUNNEL_SOURCES.map((funnel) => (
+                  <SelectItem key={funnel} value={funnel}>
+                    {funnel}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <DateRangePicker 
+              dateRange={dateRange} 
+              onDateRangeChange={setDateRange} 
+            />
+          </div>
         </div>
 
         {/* Daily Verse */}
@@ -174,6 +259,37 @@ export default function Dashboard() {
             icon={Star}
             variant="warning"
           />
+        </div>
+
+        {/* Offers by Product */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Número de Ofertas por Produto</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatsCard
+              title="Elite Premium"
+              value={stats.offersByProduct.elitePremium}
+              icon={Crown}
+              variant="accent"
+            />
+            <StatsCard
+              title="Implementação Comercial"
+              value={stats.offersByProduct.implementacaoComercial}
+              icon={Briefcase}
+              variant="default"
+            />
+            <StatsCard
+              title="Mentoria Premium Julia"
+              value={stats.offersByProduct.mentoriaJulia}
+              icon={GraduationCap}
+              variant="success"
+            />
+            <StatsCard
+              title="Implementação de IA"
+              value={stats.offersByProduct.implementacaoIA}
+              icon={Bot}
+              variant="warning"
+            />
+          </div>
         </div>
 
       </div>

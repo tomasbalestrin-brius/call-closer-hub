@@ -443,6 +443,13 @@ export interface ImportedFile {
   created_at: string;
 }
 
+export interface OffersByProduct {
+  elitePremium: number;
+  implementacaoComercial: number;
+  mentoriaJulia: number;
+  implementacaoIA: number;
+}
+
 export interface DashboardStats {
   totalCalls: number;
   averageScore: number;
@@ -450,6 +457,7 @@ export interface DashboardStats {
   totalSaleValue: number;
   totalEntryValue: number;
   conversionRate: number;
+  offersByProduct: OffersByProduct;
 }
 
 export interface Squad {

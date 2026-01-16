@@ -85,6 +85,34 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
     return leads.filter(lead => lead.status === status);
   };
 
+  // Get count for column badge - persistent for confirmados and ingresso_retirado
+  const getColumnCount = (status: IntensiveLeadStatus) => {
+    // Confirmados: count those who passed through confirmados (confirmed_at not null)
+    // except those who went back to aguardando_confirmacao
+    if (status === 'confirmados') {
+      return leads.filter(lead => 
+        lead.confirmed_at !== null && 
+        lead.status !== 'aguardando_confirmacao'
+      ).length;
+    }
+    
+    // Ingresso Retirado: count those who passed through ingresso_retirado
+    // except those who went back to earlier statuses
+    if (status === 'ingresso_retirado') {
+      const statusesBeforeIngresso = [
+        'abordagem_inicial', 'nivel_consciencia', 'convite_intensivo',
+        'aguardando_confirmacao', 'confirmados'
+      ];
+      return leads.filter(lead => 
+        lead.ticket_retrieved_at !== null && 
+        !statusesBeforeIngresso.includes(lead.status)
+      ).length;
+    }
+    
+    // Other statuses: count leads currently in this status
+    return leads.filter(lead => lead.status === status).length;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -137,7 +165,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
                       <span className="font-medium text-sm">{column.title}</span>
                     </div>
                     <Badge variant="secondary" className="bg-white/20 text-white hover:bg-white/30">
-                      {columnLeads.length}
+                      {getColumnCount(column.id)}
                     </Badge>
                   </div>
                 </div>

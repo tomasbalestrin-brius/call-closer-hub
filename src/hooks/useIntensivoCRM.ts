@@ -157,6 +157,28 @@ export function useIntensivoCRM(editionId?: string) {
     mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: IntensiveLeadStatus }) => {
       const updates: Partial<IntensiveLead> = { status: newStatus };
       
+      // Define status order for comparison
+      const statusOrder: IntensiveLeadStatus[] = [
+        'abordagem_inicial',
+        'nivel_consciencia', 
+        'convite_intensivo',
+        'aguardando_confirmacao',
+        'confirmados',
+        'ingresso_retirado',
+        'aquecimento_30d',
+        'aquecimento_15d',
+        'aquecimento_7d',
+        'aquecimento_1d',
+        'compareceram',
+        'nao_compareceram',
+        'sem_interesse',
+        'proximo_intensivo'
+      ];
+      
+      const confirmadosIndex = statusOrder.indexOf('confirmados');
+      const ingressoIndex = statusOrder.indexOf('ingresso_retirado');
+      const newStatusIndex = statusOrder.indexOf(newStatus);
+      
       // Add timestamp based on status
       if (newStatus === 'confirmados') {
         updates.confirmed_at = new Date().toISOString();
@@ -164,6 +186,16 @@ export function useIntensivoCRM(editionId?: string) {
         updates.ticket_retrieved_at = new Date().toISOString();
       } else if (newStatus === 'compareceram') {
         updates.attended_at = new Date().toISOString();
+      }
+      
+      // Clear timestamps when moving backwards
+      if (newStatusIndex < confirmadosIndex) {
+        // Moving to before confirmados - clear confirmed_at
+        updates.confirmed_at = null;
+      }
+      if (newStatusIndex < ingressoIndex) {
+        // Moving to before ingresso_retirado - clear ticket_retrieved_at  
+        updates.ticket_retrieved_at = null;
       }
       
       const { data, error } = await supabase
