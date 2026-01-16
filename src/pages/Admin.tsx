@@ -62,6 +62,7 @@ export default function Admin() {
   const [selectedCloserForReset, setSelectedCloserForReset] = useState<{ user_id: string; full_name: string } | null>(null);
   const [leaderSquad, setLeaderSquad] = useState<LeaderSquad | null>(null);
   const [squadMembersDialogOpen, setSquadMembersDialogOpen] = useState(false);
+  const [closerGoals, setCloserGoals] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (isAdmin || isLeader) {
@@ -167,11 +168,39 @@ export default function Admin() {
       })) as CloserWithProfile[];
 
       setClosers(closersWithRoles);
+
+      // Buscar metas mensais
+      const closerUserIds = closersWithRoles.map(c => c.user_id);
+      await fetchMonthlyGoals(closerUserIds);
     } catch (error) {
       console.error('Error fetching closers:', error);
       toast.error('Erro ao carregar closers');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMonthlyGoals = async (closerIds: string[]) => {
+    if (closerIds.length === 0) return;
+
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+
+    try {
+      const { data, error } = await supabase
+        .from('monthly_goals')
+        .select('closer_id, goal_value')
+        .in('closer_id', closerIds)
+        .eq('month', currentMonth)
+        .eq('year', currentYear);
+
+      if (error) throw error;
+
+      const goalsMap = new Map<string, number>();
+      (data || []).forEach(g => goalsMap.set(g.closer_id, g.goal_value));
+      setCloserGoals(goalsMap);
+    } catch (error) {
+      console.error('Error fetching monthly goals:', error);
     }
   };
 
@@ -418,6 +447,17 @@ export default function Admin() {
                             value={closer.closer_level}
                             onValueChange={(newLevel) => updateCloserLevel(closer.id, newLevel)}
                           />
+                          {closerGoals.has(closer.user_id) ? (
+                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                              <Target className="w-3 h-3 mr-1" />
+                              R$ {(closerGoals.get(closer.user_id)! / 1000).toFixed(0)}k
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+                              <Target className="w-3 h-3 mr-1" />
+                              Sem meta
+                            </Badge>
+                          )}
                           {closer.google_connected ? (
                             <Badge variant="default" className="bg-success">
                               <CheckCircle className="w-3 h-3 mr-1" />
