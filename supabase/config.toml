@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.batch-reanalyze]
 verify_jwt = false
+
+[functions.admin-delete-user]
+verify_jwt = false
