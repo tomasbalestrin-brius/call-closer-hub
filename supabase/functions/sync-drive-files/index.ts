@@ -169,11 +169,15 @@ serve(async (req) => {
 
     // Process new files SEQUENTIALLY with robust error handling
     const results: { fileId: string; fileName: string; success: boolean; error?: string }[] = [];
-    const maxFilesPerExecution = 5; // Limit to prevent timeout
+    const maxFilesPerExecution = 20; // Increased for faster processing
     const filesToProcess = filesToImport.slice(0, maxFilesPerExecution);
+    
+    console.log(`Processing ${filesToProcess.length} files out of ${filesToImport.length} total`);
     
     for (const file of filesToProcess) {
       try {
+        console.log(`Importing file: ${file.name} (${file.id})`);
+        
         const importResponse = await fetch(`${SUPABASE_URL}/functions/v1/import-and-analyze`, {
           method: "POST",
           headers: {
@@ -194,13 +198,15 @@ serve(async (req) => {
           results.push({ fileId: file.id, fileName: file.name, success: false, error: parseError });
         } else if (!importResponse.ok) {
           const errorMsg = (result as { error?: string })?.error || "Unknown error";
+          console.error(`Import failed for ${file.name}:`, errorMsg);
           results.push({ fileId: file.id, fileName: file.name, success: false, error: errorMsg });
         } else {
+          console.log(`Successfully imported: ${file.name}`);
           results.push({ fileId: file.id, fileName: file.name, success: true });
         }
 
-        // Small delay between imports
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Reduced delay between imports for faster processing
+        await new Promise(resolve => setTimeout(resolve, 200));
       } catch (error) {
         console.error(`Error importing ${file.name}:`, error);
         results.push({ 
