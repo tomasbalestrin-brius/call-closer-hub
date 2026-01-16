@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useAuditLog } from '@/hooks/useAuditLog';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ interface CloserWithProfile {
 export default function Admin() {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { logAction } = useAuditLog();
   const [closers, setClosers] = useState<CloserWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -101,6 +103,9 @@ export default function Admin() {
   };
 
   const updateCloserLevel = async (closerId: string, newLevel: CloserLevel) => {
+    const closer = closers.find(c => c.id === closerId);
+    const oldLevel = closer?.closer_level;
+
     try {
       const { error } = await supabase
         .from('profiles')
@@ -109,6 +114,17 @@ export default function Admin() {
 
       if (error) throw error;
       
+      // Log audit
+      await logAction({
+        actionType: 'level_changed',
+        entityType: 'closer_level',
+        targetUserId: closer?.user_id,
+        entityId: closerId,
+        oldValue: { closer_level: oldLevel },
+        newValue: { closer_level: newLevel },
+        metadata: { closer_name: closer?.full_name },
+      });
+
       setClosers(prev => prev.map(c => 
         c.id === closerId ? { ...c, closer_level: newLevel } : c
       ));
@@ -121,6 +137,7 @@ export default function Admin() {
 
   const toggleCloserStatus = async (closerId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    const closer = closers.find(c => c.id === closerId);
     
     try {
       const { error } = await supabase
@@ -130,6 +147,17 @@ export default function Admin() {
 
       if (error) throw error;
       
+      // Log audit
+      await logAction({
+        actionType: 'status_changed',
+        entityType: 'closer_status',
+        targetUserId: closer?.user_id,
+        entityId: closerId,
+        oldValue: { status: currentStatus },
+        newValue: { status: newStatus },
+        metadata: { closer_name: closer?.full_name },
+      });
+
       setClosers(prev => prev.map(c => 
         c.id === closerId ? { ...c, status: newStatus } : c
       ));

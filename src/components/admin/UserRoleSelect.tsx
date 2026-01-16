@@ -9,6 +9,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { UserRole } from '@/types';
+import { useAuditLog } from '@/hooks/useAuditLog';
 
 interface UserRoleSelectProps {
   userId: string;
@@ -24,6 +25,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 export function UserRoleSelect({ userId, currentRole, onRoleChange }: UserRoleSelectProps) {
   const [loading, setLoading] = useState(false);
+  const { logAction } = useAuditLog();
 
   const handleRoleChange = async (newRole: UserRole) => {
     if (newRole === currentRole) return;
@@ -55,6 +57,15 @@ export function UserRoleSelect({ userId, currentRole, onRoleChange }: UserRoleSe
 
         if (insertError) throw insertError;
       }
+
+      // Log audit
+      await logAction({
+        actionType: 'role_changed',
+        entityType: 'user_role',
+        targetUserId: userId,
+        oldValue: { role: currentRole },
+        newValue: { role: newRole },
+      });
 
       toast.success(`Role atualizada para ${ROLE_LABELS[newRole]}`);
       onRoleChange?.(newRole);
