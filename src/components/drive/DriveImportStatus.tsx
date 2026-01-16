@@ -11,12 +11,19 @@ import {
   AlertCircle, 
   Clock,
   Loader2,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { ImportedFile, ImportStatus } from '@/types';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface DriveImportStatusProps {
   onImportComplete?: () => void;
@@ -54,6 +61,7 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [importFrequency, setImportFrequency] = useState<string | null>(null);
   const [reimportingFile, setReimportingFile] = useState<string | null>(null);
+  const [reprocessingAll, setReprocessingAll] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -72,7 +80,6 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
         .eq('user_id', user.id)
         .single();
       
-      // Check if auto-sync is configured on server
       setAutoSyncEnabled(!!profile?.google_connected && !!profile?.drive_auto_import);
       setImportFrequency(profile?.drive_import_frequency || null);
     } catch (error) {
@@ -84,18 +91,16 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
     if (!user) return;
 
     try {
-      // Fetch recent imports
       const { data: importsData, error: importsError } = await supabase
         .from('imported_files')
         .select('*')
         .eq('user_id', user.id)
         .order('imported_at', { ascending: false })
-        .limit(10);
+        .limit(20);
 
       if (importsError) throw importsError;
       setImports((importsData || []) as ImportedFile[]);
 
-      // Fetch last sync time from profile
       const { data: profile } = await supabase
         .from('profiles')
         .select('drive_last_sync')
@@ -218,6 +223,60 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
     }
   };
 
+  const handleReprocessAll = async () => {
+    if (!user || reprocessingAll) return;
+
+    const failedFiles = imports.filter(i => i.status === 'error' || i.status === 'processing');
+    if (failedFiles.length === 0) {
+      toast.info('Nenhum arquivo para reprocessar');
+      return;
+    }
+
+    setReprocessingAll(true);
+    toast.info(`Reprocessando ${failedFiles.length} arquivos...`);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const file of failedFiles) {
+      try {
+        // Delete the existing record
+        await supabase
+          .from('imported_files')
+          .delete()
+          .eq('id', file.id);
+
+        // Re-import the file
+        const response = await supabase.functions.invoke('import-and-analyze', {
+          body: { 
+            userId: user.id, 
+            fileId: file.drive_file_id,
+            fileName: file.file_name
+          },
+        });
+
+        if (response.error) {
+          errorCount++;
+        } else {
+          successCount++;
+        }
+      } catch {
+        errorCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`${successCount} arquivos reprocessados com sucesso!`);
+      onImportComplete?.();
+    }
+    if (errorCount > 0) {
+      toast.warning(`${errorCount} arquivos ainda com erro`);
+    }
+
+    fetchImportStatus();
+    setReprocessingAll(false);
+  };
+
   const completedCount = imports.filter(i => i.status === 'completed').length;
   const errorCount = imports.filter(i => i.status === 'error').length;
   const pendingCount = imports.filter(i => i.status === 'pending' || i.status === 'processing').length;
@@ -233,128 +292,158 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Status de Importação
-          </CardTitle>
-          <div className="flex gap-2">
-            <Button 
-              variant="default" 
-              size="sm" 
-              onClick={handleInitialImport}
-              disabled={syncing}
+    <TooltipProvider>
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Status de Importação
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={handleInitialImport}
+                disabled={syncing || reprocessingAll}
+              >
+                {syncing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <FileText className="w-4 h-4 mr-2" />
+                )}
+                Importar Mês
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleSync}
+                disabled={syncing || reprocessingAll}
+              >
+                {syncing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Sincronizar
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Summary */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="p-2 rounded-lg bg-success/10">
+              <div className="text-2xl font-bold text-success">{completedCount}</div>
+              <div className="text-xs text-muted-foreground">Importados</div>
+            </div>
+            <div className="p-2 rounded-lg bg-warning/10">
+              <div className="text-2xl font-bold text-warning">{pendingCount}</div>
+              <div className="text-xs text-muted-foreground">Pendentes</div>
+            </div>
+            <div className="p-2 rounded-lg bg-destructive/10">
+              <div className="text-2xl font-bold text-destructive">{errorCount}</div>
+              <div className="text-xs text-muted-foreground">Erros</div>
+            </div>
+          </div>
+
+          {/* Reprocess all button */}
+          {(errorCount > 0 || pendingCount > 0) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReprocessAll}
+              disabled={syncing || reprocessingAll}
+              className="w-full"
             >
-              {syncing ? (
+              {reprocessingAll ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <FileText className="w-4 h-4 mr-2" />
+                <RotateCcw className="w-4 h-4 mr-2" />
               )}
-              Importar Mês
+              Reprocessar {errorCount + pendingCount} pendências
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleSync}
-              disabled={syncing}
-            >
-              {syncing ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4 mr-2" />
-              )}
-              Sincronizar
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Summary */}
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="p-2 rounded-lg bg-success/10">
-            <div className="text-2xl font-bold text-success">{completedCount}</div>
-            <div className="text-xs text-muted-foreground">Importados</div>
-          </div>
-          <div className="p-2 rounded-lg bg-warning/10">
-            <div className="text-2xl font-bold text-warning">{pendingCount}</div>
-            <div className="text-xs text-muted-foreground">Pendentes</div>
-          </div>
-          <div className="p-2 rounded-lg bg-destructive/10">
-            <div className="text-2xl font-bold text-destructive">{errorCount}</div>
-            <div className="text-xs text-muted-foreground">Erros</div>
-          </div>
-        </div>
+          )}
 
-        {/* Last sync and auto-sync status */}
-        <div className="text-sm text-muted-foreground text-center space-y-1">
-          {lastSync && (
-            <div>
-              Última sincronização: {format(new Date(lastSync), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+          {/* Last sync and auto-sync status */}
+          <div className="text-sm text-muted-foreground text-center space-y-1">
+            {lastSync && (
+              <div>
+                Última sincronização: {format(new Date(lastSync), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </div>
+            )}
+            {autoSyncEnabled && importFrequency && (
+              <div className="flex items-center justify-center gap-2 text-xs">
+                <Badge variant="secondary" className="bg-success/10 text-success border-success/20">
+                  <Clock className="w-3 h-3 mr-1" />
+                  Sync automático: {importFrequency === 'hourly' ? 'A cada hora' : importFrequency === 'daily' ? 'Diário' : importFrequency}
+                </Badge>
+              </div>
+            )}
+          </div>
+
+          {/* Recent imports */}
+          {imports.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Arquivos recentes</h4>
+              <div className="max-h-[200px] overflow-y-auto space-y-2">
+                {imports.map((file) => {
+                  const config = statusConfig[file.status];
+                  const isReimporting = reimportingFile === file.id;
+                  return (
+                    <div 
+                      key={file.id} 
+                      className="flex items-center justify-between p-2 rounded-lg bg-secondary/30 gap-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {config.icon}
+                        <span className="text-sm truncate">{file.file_name}</span>
+                        {file.status === 'error' && file.error_message && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertTriangle className="w-4 h-4 text-destructive shrink-0 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              <p className="text-xs">{file.error_message}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {(file.status === 'error' || file.status === 'processing') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleReimport(file)}
+                            disabled={isReimporting || syncing || reprocessingAll}
+                            className="h-7 px-2"
+                          >
+                            {isReimporting ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <RotateCcw className="w-3 h-3" />
+                            )}
+                            <span className="ml-1 text-xs">Reimportar</span>
+                          </Button>
+                        )}
+                        <Badge className={config.className}>
+                          {config.label}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
-          {autoSyncEnabled && importFrequency && (
-            <div className="flex items-center justify-center gap-2 text-xs">
-              <Badge variant="secondary" className="bg-success/10 text-success border-success/20">
-                <Clock className="w-3 h-3 mr-1" />
-                Sync automático: {importFrequency === 'hourly' ? 'A cada hora' : importFrequency === 'daily' ? 'Diário' : importFrequency}
-              </Badge>
+
+          {imports.length === 0 && (
+            <div className="text-center py-4 text-muted-foreground text-sm">
+              Nenhum arquivo importado ainda
             </div>
           )}
-        </div>
-
-        {/* Recent imports */}
-        {imports.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium">Arquivos recentes</h4>
-            <div className="max-h-[200px] overflow-y-auto space-y-2">
-              {imports.map((file) => {
-                const config = statusConfig[file.status];
-                const isReimporting = reimportingFile === file.id;
-                return (
-                  <div 
-                    key={file.id} 
-                    className="flex items-center justify-between p-2 rounded-lg bg-secondary/30 gap-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      {config.icon}
-                      <span className="text-sm truncate">{file.file_name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {file.status === 'error' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleReimport(file)}
-                          disabled={isReimporting || syncing}
-                          className="h-7 px-2"
-                        >
-                          {isReimporting ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <RotateCcw className="w-3 h-3" />
-                          )}
-                          <span className="ml-1 text-xs">Reimportar</span>
-                        </Button>
-                      )}
-                      <Badge className={config.className}>
-                        {config.label}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {imports.length === 0 && (
-          <div className="text-center py-4 text-muted-foreground text-sm">
-            Nenhum arquivo importado ainda
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 }

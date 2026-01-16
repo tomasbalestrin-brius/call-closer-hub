@@ -90,18 +90,24 @@ serve(async (req) => {
       );
     }
 
-    // Get already imported files
+    // Get already imported files - ONLY consider "completed" as truly imported
     const fileIds = files.map((f: { id: string }) => f.id);
     const { data: importedFiles } = await supabase
       .from("imported_files")
-      .select("drive_file_id")
+      .select("drive_file_id, status")
       .eq("user_id", userId)
       .in("drive_file_id", fileIds);
 
-    const importedIds = new Set((importedFiles || []).map(f => f.drive_file_id));
-    const newFiles = files.filter((f: { id: string }) => !importedIds.has(f.id));
+    // Only skip files that were successfully completed
+    const completedIds = new Set(
+      (importedFiles || [])
+        .filter(f => f.status === 'completed')
+        .map(f => f.drive_file_id)
+    );
+    
+    const newFiles = files.filter((f: { id: string }) => !completedIds.has(f.id));
 
-    console.log(`${newFiles.length} new files to import`);
+    console.log(`${newFiles.length} files to process (excluding ${completedIds.size} completed)`);
 
     // Filter by name patterns if configured
     let filesToImport = newFiles;
@@ -115,6 +121,22 @@ serve(async (req) => {
         });
       });
       console.log(`After pattern filter: ${filesToImport.length} files`);
+    }
+
+    if (filesToImport.length === 0) {
+      await supabase
+        .from("profiles")
+        .update({ drive_last_sync: new Date().toISOString() })
+        .eq("user_id", userId);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "No new files to import",
+          synced: 0,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Process new files

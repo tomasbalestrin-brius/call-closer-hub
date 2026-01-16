@@ -6,20 +6,77 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper function to safely convert to integer
+const toInt = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    if (value === 'nao_informado' || value === '') return null;
+    const num = parseFloat(value);
+    return isNaN(num) ? null : Math.round(num);
+  }
+  const num = Number(value);
+  return isNaN(num) ? null : Math.round(num);
+};
+
+// Helper function to safely convert to number
+const toNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    if (value === 'nao_informado' || value === '') return null;
+    const num = parseFloat(value.replace(/[^\d.-]/g, ''));
+    return isNaN(num) ? null : num;
+  }
+  const num = Number(value);
+  return isNaN(num) ? null : num;
+};
+
+// Helper function to safely convert boolean
+const toBool = (value: unknown): boolean | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    if (value.toLowerCase() === 'sim' || value.toLowerCase() === 'true') return true;
+    if (value.toLowerCase() === 'nao' || value.toLowerCase() === 'não' || value.toLowerCase() === 'false') return false;
+  }
+  return null;
+};
+
+// Extract date from filename pattern: "xxx (2026-01-06 18:29 GMT-3) - Transcript"
+const extractDateFromFileName = (name: string): string => {
+  const dateMatch = name.match(/\((\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}/);
+  if (dateMatch && dateMatch[1]) {
+    return dateMatch[1];
+  }
+  return new Date().toISOString().split("T")[0];
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Server configuration error");
-    }
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return new Response(
+      JSON.stringify({ error: "Server configuration error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
-    const { userId, fileId, fileName } = await req.json();
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  
+  let userId: string | null = null;
+  let fileId: string | null = null;
+  let fileName: string | null = null;
+  let importRecordId: string | null = null;
+
+  try {
+    const body = await req.json();
+    userId = body.userId;
+    fileId = body.fileId;
+    fileName = body.fileName;
     
     if (!userId || !fileId) {
       return new Response(
@@ -28,24 +85,19 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Check if file was already imported
+    // Check if file was already imported successfully
     const { data: existingImport } = await supabase
       .from("imported_files")
       .select("id, status")
       .eq("user_id", userId)
       .eq("drive_file_id", fileId)
-      .single();
+      .maybeSingle();
 
-    if (existingImport) {
-      if (existingImport.status === "completed") {
-        return new Response(
-          JSON.stringify({ error: "File already imported", alreadyImported: true }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      // If pending or error, we'll retry
+    if (existingImport?.status === "completed") {
+      return new Response(
+        JSON.stringify({ error: "File already imported", alreadyImported: true }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Create or update import record as processing
@@ -56,6 +108,8 @@ serve(async (req) => {
         drive_file_id: fileId,
         file_name: fileName || "Unknown",
         status: "processing",
+        imported_at: new Date().toISOString(),
+        error_message: null,
       }, { onConflict: "user_id,drive_file_id" })
       .select()
       .single();
@@ -65,6 +119,7 @@ serve(async (req) => {
       throw new Error("Failed to create import record");
     }
 
+    importRecordId = importRecord.id;
     console.log(`Processing file: ${fileName} (${fileId})`);
 
     // Fetch document content
@@ -79,11 +134,12 @@ serve(async (req) => {
 
     if (!fetchResponse.ok) {
       const error = await fetchResponse.json();
+      const errorMsg = error.error || "Failed to fetch document";
       await supabase
         .from("imported_files")
-        .update({ status: "error", error_message: error.error || "Failed to fetch document" })
-        .eq("id", importRecord.id);
-      throw new Error(error.error || "Failed to fetch document");
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+      throw new Error(errorMsg);
     }
 
     const { content } = await fetchResponse.json();
@@ -101,11 +157,12 @@ serve(async (req) => {
 
     if (!analyzeResponse.ok) {
       const error = await analyzeResponse.json();
+      const errorMsg = error.error || "Failed to analyze call";
       await supabase
         .from("imported_files")
-        .update({ status: "error", error_message: error.error || "Failed to analyze call" })
-        .eq("id", importRecord.id);
-      throw new Error(error.error || "Failed to analyze call");
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+      throw new Error(errorMsg);
     }
 
     const { analysis } = await analyzeResponse.json();
@@ -113,40 +170,47 @@ serve(async (req) => {
 
     // Check if client exists or create new one
     let clientId: string | null = null;
+    const clientName = analysis.client_name && analysis.client_name !== 'nao_informado' 
+      ? analysis.client_name 
+      : `Lead - ${extractDateFromFileName(fileName || "")}`;
     
     const { data: existingClient } = await supabase
       .from("clients")
       .select("id")
       .eq("closer_id", userId)
-      .ilike("name", analysis.client_name)
-      .single();
+      .ilike("name", clientName)
+      .maybeSingle();
 
     if (existingClient) {
       clientId = existingClient.id;
       // Update client with latest data from analysis
-      await supabase
+      const { error: updateError } = await supabase
         .from("clients")
         .update({
-          niche: analysis.niche,
-          revenue: analysis.revenue,
-          has_partner: analysis.has_partner,
-          main_difficulty: analysis.main_difficulty,
-          main_pain: analysis.main_pain,
+          niche: analysis.niche && analysis.niche !== 'nao_informado' ? analysis.niche : null,
+          revenue: toNumber(analysis.revenue),
+          has_partner: toBool(analysis.has_partner),
+          main_difficulty: analysis.main_difficulty && analysis.main_difficulty !== 'nao_informado' ? analysis.main_difficulty : null,
+          main_pain: analysis.main_pain && analysis.main_pain !== 'nao_informado' ? analysis.main_pain : null,
           source: "google_drive",
         })
         .eq("id", clientId);
+      
+      if (updateError) {
+        console.error("Failed to update client:", updateError);
+      }
     } else {
       // Create new client
       const { data: newClient, error: clientError } = await supabase
         .from("clients")
         .insert({
           closer_id: userId,
-          name: analysis.client_name,
-          niche: analysis.niche,
-          revenue: analysis.revenue,
-          has_partner: analysis.has_partner,
-          main_difficulty: analysis.main_difficulty,
-          main_pain: analysis.main_pain,
+          name: clientName,
+          niche: analysis.niche && analysis.niche !== 'nao_informado' ? analysis.niche : null,
+          revenue: toNumber(analysis.revenue),
+          has_partner: toBool(analysis.has_partner),
+          main_difficulty: analysis.main_difficulty && analysis.main_difficulty !== 'nao_informado' ? analysis.main_difficulty : null,
+          main_pain: analysis.main_pain && analysis.main_pain !== 'nao_informado' ? analysis.main_pain : null,
           source: "google_drive",
         })
         .select()
@@ -154,6 +218,7 @@ serve(async (req) => {
 
       if (clientError) {
         console.error("Failed to create client:", clientError);
+        // Continue anyway - we can still create the call without a client reference
       } else {
         clientId = newClient.id;
       }
@@ -161,30 +226,6 @@ serve(async (req) => {
 
     // Determine status based on classification
     const callStatus = analysis.lead_classification === "pos_venda" ? "vendido" : "follow_up";
-
-    // Helper function to safely convert to integer
-    const toInt = (value: unknown): number | null => {
-      if (value === null || value === undefined) return null;
-      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
-      return isNaN(num) ? null : Math.round(num);
-    };
-
-    // Helper function to safely convert to number
-    const toNumber = (value: unknown): number | null => {
-      if (value === null || value === undefined) return null;
-      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
-      return isNaN(num) ? null : num;
-    };
-
-    // Extract date from filename pattern: "xxx (2026-01-06 18:29 GMT-3) - Transcript"
-    const extractDateFromFileName = (name: string): string => {
-      const dateMatch = name.match(/\((\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}/);
-      if (dateMatch && dateMatch[1]) {
-        return dateMatch[1];
-      }
-      return new Date().toISOString().split("T")[0];
-    };
-
     const callDate = extractDateFromFileName(fileName || "");
     console.log(`Extracted call date: ${callDate} from file: ${fileName}`);
 
@@ -194,26 +235,26 @@ serve(async (req) => {
       .insert({
         closer_id: userId,
         client_id: clientId,
-        client_name: analysis.client_name,
+        client_name: clientName,
         call_date: callDate,
         status: callStatus,
-        product: analysis.product,
+        product: analysis.product && analysis.product !== 'nao_informado' ? analysis.product : null,
         transcription: content,
         score: toInt(analysis.call_score),
         duration_minutes: toInt(analysis.duration_minutes),
-        niche: analysis.niche,
-        has_partner: analysis.has_partner,
-        main_difficulty: analysis.main_difficulty,
-        main_pain: analysis.main_pain,
-        consciousness_level: analysis.consciousness_level,
-        decision_reason: analysis.decision_reason,
+        niche: analysis.niche && analysis.niche !== 'nao_informado' ? analysis.niche : null,
+        has_partner: toBool(analysis.has_partner),
+        main_difficulty: analysis.main_difficulty && analysis.main_difficulty !== 'nao_informado' ? analysis.main_difficulty : null,
+        main_pain: analysis.main_pain && analysis.main_pain !== 'nao_informado' ? analysis.main_pain : null,
+        consciousness_level: analysis.consciousness_level && analysis.consciousness_level !== 'nao_informado' ? analysis.consciousness_level : null,
+        decision_reason: analysis.decision_reason && analysis.decision_reason !== 'nao_informado' ? analysis.decision_reason : null,
         ai_summary: analysis.ai_summary,
         lead_classification: analysis.lead_classification,
         closer_classification: analysis.closer_classification,
         technical_analysis: analysis.technical_analysis,
         main_errors: analysis.main_errors,
         main_wins: analysis.main_wins,
-        loss_point: analysis.loss_point,
+        loss_point: analysis.loss_point && analysis.loss_point !== 'nao_informado' ? analysis.loss_point : null,
         next_contact_date: analysis.next_contact_date,
         entry_value: toNumber(analysis.entry_value),
         sale_value: toNumber(analysis.sale_value),
@@ -225,11 +266,12 @@ serve(async (req) => {
 
     if (callError) {
       console.error("Failed to create call:", callError);
+      const errorMsg = `Erro ao criar call: ${callError.message}`;
       await supabase
         .from("imported_files")
-        .update({ status: "error", error_message: "Failed to create call record" })
-        .eq("id", importRecord.id);
-      throw new Error("Failed to create call record");
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+      throw new Error(errorMsg);
     }
 
     // Update import record as completed
@@ -239,8 +281,9 @@ serve(async (req) => {
         status: "completed", 
         call_id: callRecord.id,
         error_message: null,
+        imported_at: new Date().toISOString(),
       })
-      .eq("id", importRecord.id);
+      .eq("id", importRecordId);
 
     // Create notification for the user
     await supabase
@@ -248,7 +291,7 @@ serve(async (req) => {
       .insert({
         user_id: userId,
         title: "Nova call analisada",
-        message: `A transcrição de ${analysis.client_name} foi analisada. Nota: ${analysis.call_score}/10`,
+        message: `A transcrição de ${clientName} foi analisada. Nota: ${analysis.call_score ?? 'N/A'}/10`,
         type: "info",
       });
 
@@ -260,7 +303,7 @@ serve(async (req) => {
         callId: callRecord.id,
         clientId,
         analysis: {
-          client_name: analysis.client_name,
+          client_name: clientName,
           call_score: analysis.call_score,
           lead_classification: analysis.lead_classification,
           closer_classification: analysis.closer_classification,
@@ -271,6 +314,24 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error("Error in import-and-analyze:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
+    
+    // Ensure we always update the import record to error status
+    if (userId && fileId) {
+      try {
+        await supabase
+          .from("imported_files")
+          .update({ 
+            status: "error", 
+            error_message: message,
+            imported_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId)
+          .eq("drive_file_id", fileId);
+      } catch (updateError) {
+        console.error("Failed to update import status to error:", updateError);
+      }
+    }
+    
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
