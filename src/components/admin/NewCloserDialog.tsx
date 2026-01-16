@@ -23,9 +23,10 @@ interface NewCloserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  leaderSquadId?: string; // Squad do líder para auto-adicionar
 }
 
-export function NewCloserDialog({ open, onOpenChange, onSuccess }: NewCloserDialogProps) {
+export function NewCloserDialog({ open, onOpenChange, onSuccess, leaderSquadId }: NewCloserDialogProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
@@ -87,6 +88,21 @@ export function NewCloserDialog({ open, onOpenChange, onSuccess }: NewCloserDial
             console.error('Error updating profile:', profileError);
           }
         }
+
+        // Se o líder está criando, adicionar automaticamente ao squad do líder
+        if (leaderSquadId) {
+          const { error: squadError } = await supabase
+            .from('squad_members')
+            .insert({
+              squad_id: leaderSquadId,
+              user_id: authData.user.id,
+            });
+
+          if (squadError) {
+            console.error('Error adding to squad:', squadError);
+            toast.warning('Closer criado, mas houve erro ao adicionar ao time');
+          }
+        }
       }
 
       toast.success('Closer cadastrado com sucesso!');
@@ -122,7 +138,10 @@ export function NewCloserDialog({ open, onOpenChange, onSuccess }: NewCloserDial
         <DialogHeader>
           <DialogTitle className="font-display">Novo Closer</DialogTitle>
           <DialogDescription>
-            Cadastre um novo closer no sistema. Ele receberá as credenciais de acesso.
+            {leaderSquadId 
+              ? 'Cadastre um novo closer. Ele será automaticamente adicionado ao seu time.'
+              : 'Cadastre um novo closer no sistema. Ele receberá as credenciais de acesso.'
+            }
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
