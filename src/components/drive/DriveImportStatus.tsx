@@ -12,7 +12,8 @@ import {
   Clock,
   Loader2,
   RotateCcw,
-  AlertTriangle
+  AlertTriangle,
+  Download
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -52,6 +53,9 @@ const statusConfig: Record<ImportStatus, { label: string; icon: React.ReactNode;
   },
 };
 
+// Data mínima fixa para importações
+const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
+
 export default function DriveImportStatus({ onImportComplete }: DriveImportStatusProps) {
   const { user } = useAuth();
   const [imports, setImports] = useState<ImportedFile[]>([]);
@@ -62,6 +66,7 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const [importFrequency, setImportFrequency] = useState<string | null>(null);
   const [reimportingFile, setReimportingFile] = useState<string | null>(null);
   const [reprocessingAll, setReprocessingAll] = useState(false);
+  const [fullImporting, setFullImporting] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -117,6 +122,55 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
     }
   };
 
+  // Importação completa: reseta a data para MIN_IMPORT_DATE e importa tudo
+  const handleFullImport = async () => {
+    if (!user || fullImporting) return;
+
+    setFullImporting(true);
+    try {
+      toast.info('Iniciando importação completa de janeiro/2026 em diante...');
+      
+      // 1. Resetar drive_last_sync para 01/01/2026
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ drive_last_sync: MIN_IMPORT_DATE })
+        .eq('user_id', user.id);
+
+      if (updateError) {
+        console.error('Error resetting drive_last_sync:', updateError);
+        throw new Error('Falha ao resetar data de sincronização');
+      }
+
+      // 2. Chamar sync-drive-files para importar todos os arquivos
+      const response = await supabase.functions.invoke('sync-drive-files', {
+        body: { userId: user.id },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to import');
+      }
+
+      const data = response.data;
+      
+      if (data.synced > 0) {
+        const remainingMsg = data.remaining > 0 
+          ? ` (${data.remaining} restantes - clique novamente para continuar)` 
+          : '';
+        toast.success(`${data.synced} arquivos importados!${remainingMsg}`);
+        onImportComplete?.();
+      } else {
+        toast.info('Nenhum arquivo novo para importar');
+      }
+
+      fetchImportStatus();
+    } catch (error) {
+      console.error('Error on full import:', error);
+      toast.error('Erro na importação completa');
+    } finally {
+      setFullImporting(false);
+    }
+  };
+
   const handleSync = async () => {
     if (!user || syncing) return;
 
@@ -133,7 +187,10 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
       const data = response.data;
       
       if (data.synced > 0) {
-        toast.success(`${data.synced} arquivos sincronizados e analisados!`);
+        const remainingMsg = data.remaining > 0 
+          ? ` (${data.remaining} restantes)` 
+          : '';
+        toast.success(`${data.synced} arquivos sincronizados e analisados!${remainingMsg}`);
         onImportComplete?.();
       } else {
         toast.info('Nenhum arquivo novo para importar');
@@ -301,32 +358,52 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
               Status de Importação
             </CardTitle>
             <div className="flex gap-2">
-              <Button 
-                variant="default" 
-                size="sm" 
-                onClick={handleInitialImport}
-                disabled={syncing || reprocessingAll}
-              >
-                {syncing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <FileText className="w-4 h-4 mr-2" />
-                )}
-                Importar Mês
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleSync}
-                disabled={syncing || reprocessingAll}
-              >
-                {syncing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                )}
-                Sincronizar
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    onClick={handleFullImport}
+                    disabled={syncing || reprocessingAll || fullImporting}
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                  >
+                    {fullImporting ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    Importar Tudo
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs">
+                  <p className="text-xs">
+                    Importa TODAS as transcrições de janeiro/2026 em diante.
+                    Use quando configurar o Drive pela primeira vez.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleSync}
+                    disabled={syncing || reprocessingAll || fullImporting}
+                  >
+                    {syncing ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                    )}
+                    Sincronizar
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs">
+                  <p className="text-xs">
+                    Busca novos arquivos desde a última sincronização.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </CardHeader>
