@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import ClientEditDialog from '@/components/clients/ClientEditDialog';
+import ClientNotesSection from '@/components/clients/ClientNotesSection';
 import IntensiveParticipationDialog from '@/components/clients/IntensiveParticipationDialog';
 import MentoriaExtraDialog from '@/components/clients/MentoriaExtraDialog';
 import ClientIndicationsDialog from '@/components/clients/ClientIndicationsDialog';
@@ -625,6 +626,43 @@ export default function ClientDetail() {
             </CardContent>
           </Card>
         )}
+
+        {/* Informações Gerais e Observações - SEMPRE VISÍVEL */}
+        <Card className="border-primary/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary" />
+              Informações Gerais e Observações
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Observações Gerais do Cliente (campo notes) */}
+            {client.notes ? (
+              <div className="p-3 rounded-lg bg-muted/50 border">
+                <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                  <Quote className="w-3 h-3" />
+                  Observações Gerais
+                </p>
+                <p className="text-sm whitespace-pre-wrap">{client.notes}</p>
+              </div>
+            ) : (
+              <div className="p-3 rounded-lg bg-muted/30 border border-dashed text-center">
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma observação geral cadastrada. 
+                  <span className="text-primary ml-1 cursor-pointer hover:underline" onClick={() => {
+                    const editButton = document.querySelector('[data-client-edit-trigger]') as HTMLButtonElement;
+                    if (editButton) editButton.click();
+                  }}>
+                    Adicionar
+                  </span>
+                </p>
+              </div>
+            )}
+            
+            {/* Seção de Notas Dinâmicas */}
+            <ClientNotesSection clientId={client.id} />
+          </CardContent>
+        </Card>
 
         {/* Tabs */}
         <Tabs defaultValue="calls" className="w-full">
