@@ -56,6 +56,7 @@ async function refreshTokenIfNeeded(
       } as Record<string, unknown>)
       .eq("user_id", profile.user_id);
     
+    console.log("Token refreshed successfully");
     return tokens.access_token;
   }
   
@@ -174,16 +175,23 @@ serve(async (req) => {
       );
     }
 
-    // Get already imported files
+    // Get already imported files - ONLY consider "completed" as truly imported
+    // Files with pending/processing/error status should be eligible for retry
     const { data: importedFiles } = await supabase
       .from("imported_files")
-      .select("drive_file_id")
+      .select("drive_file_id, status")
       .eq("user_id", userId);
 
-    const importedIds = new Set((importedFiles || []).map(f => f.drive_file_id));
-    const filesToImport = files.filter((f: DriveFile) => !importedIds.has(f.id));
+    // Only skip files that were successfully completed
+    const completedIds = new Set(
+      (importedFiles || [])
+        .filter(f => f.status === 'completed')
+        .map(f => f.drive_file_id)
+    );
+    
+    const filesToImport = files.filter((f: DriveFile) => !completedIds.has(f.id));
 
-    console.log(`${filesToImport.length} new files to import`);
+    console.log(`${filesToImport.length} files to import (excluding ${completedIds.size} completed)`);
 
     if (filesToImport.length === 0) {
       await supabase
@@ -202,7 +210,7 @@ serve(async (req) => {
       );
     }
 
-    // Create pending records for all files
+    // Create or update pending records for all files
     for (const file of filesToImport) {
       await supabase
         .from("imported_files")
@@ -211,6 +219,7 @@ serve(async (req) => {
           drive_file_id: file.id,
           file_name: file.name,
           status: "pending",
+          imported_at: new Date().toISOString(),
         }, { onConflict: "user_id,drive_file_id" });
     }
 
