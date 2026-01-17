@@ -170,22 +170,7 @@ export interface Indication {
   updated_at: string;
 }
 
-// Tags System
-export interface ClientTag {
-  id: string;
-  user_id: string;
-  name: string;
-  color: string;
-  icon: string;
-  created_at: string;
-}
-
-export interface ClientTagAssignment {
-  id: string;
-  client_id: string;
-  tag_id: string;
-  created_at: string;
-}
+// Column Settings
 
 // Column Settings
 export interface CRMColumnSettings {

@@ -7,7 +7,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useAutomations, TRIGGER_TYPE_LABELS, ACTION_TYPE_LABELS } from '@/hooks/useAutomations';
-import { useClientTags } from '@/hooks/useClientTags';
 import { CRMAutomation, AutomationTriggerType, AutomationActionType, ClientStatus } from '@/types';
 
 const COLUMN_OPTIONS: { value: ClientStatus; label: string }[] = [
@@ -23,6 +22,14 @@ const COLUMN_OPTIONS: { value: ClientStatus; label: string }[] = [
   { value: 'pos_21_carterizacao', label: 'Pós 21 dias (Carterização)' },
 ];
 
+// Filter out tag-related triggers and actions
+const AVAILABLE_TRIGGERS = Object.entries(TRIGGER_TYPE_LABELS).filter(
+  ([key]) => key !== 'tag_added'
+);
+const AVAILABLE_ACTIONS = Object.entries(ACTION_TYPE_LABELS).filter(
+  ([key]) => key !== 'add_tag' && key !== 'remove_tag'
+);
+
 interface AutomationFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -35,7 +42,6 @@ export default function AutomationFormDialog({
   automation 
 }: AutomationFormDialogProps) {
   const { createAutomation, updateAutomation } = useAutomations();
-  const { tags } = useClientTags();
   const [saving, setSaving] = useState(false);
 
   // Form state
@@ -140,28 +146,6 @@ export default function AutomationFormDialog({
             />
           </div>
         );
-      case 'tag_added':
-        return (
-          <div className="space-y-2">
-            <Label>Tag</Label>
-            <Select
-              value={(triggerConfig.tag_id as string) || ''}
-              onValueChange={(v) => {
-                const tag = tags.find(t => t.id === v);
-                setTriggerConfig({ ...triggerConfig, tag_id: v, tag_name: tag?.name });
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma tag" />
-              </SelectTrigger>
-              <SelectContent>
-                {tags.map((tag) => (
-                  <SelectItem key={tag.id} value={tag.id}>{tag.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        );
       default:
         return null;
     }
@@ -183,29 +167,6 @@ export default function AutomationFormDialog({
               <SelectContent>
                 {COLUMN_OPTIONS.map((col) => (
                   <SelectItem key={col.value} value={col.value}>{col.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        );
-      case 'add_tag':
-      case 'remove_tag':
-        return (
-          <div className="space-y-2">
-            <Label>{actionType === 'add_tag' ? 'Adicionar tag' : 'Remover tag'}</Label>
-            <Select
-              value={(actionConfig.tag_id as string) || ''}
-              onValueChange={(v) => {
-                const tag = tags.find(t => t.id === v);
-                setActionConfig({ ...actionConfig, tag_id: v, tag_name: tag?.name });
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma tag" />
-              </SelectTrigger>
-              <SelectContent>
-                {tags.map((tag) => (
-                  <SelectItem key={tag.id} value={tag.id}>{tag.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -295,7 +256,7 @@ export default function AutomationFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(TRIGGER_TYPE_LABELS).map(([value, label]) => (
+                  {AVAILABLE_TRIGGERS.map(([value, label]) => (
                     <SelectItem key={value} value={value}>{label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -320,7 +281,7 @@ export default function AutomationFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(ACTION_TYPE_LABELS).map(([value, label]) => (
+                  {AVAILABLE_ACTIONS.map(([value, label]) => (
                     <SelectItem key={value} value={value}>{label}</SelectItem>
                   ))}
                 </SelectContent>

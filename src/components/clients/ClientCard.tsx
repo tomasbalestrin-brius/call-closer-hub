@@ -1,15 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Client, ClientTag } from '@/types';
+import { Client } from '@/types';
 import { useNavigate } from 'react-router-dom';
 import { Phone, DollarSign, Package, AlertTriangle, Flame, Calendar, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ClientCardMenu from './ClientCardMenu';
 import IndicationDialog from './IndicationDialog';
-import TagBadge from './tags/TagBadge';
-import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow, format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useState } from 'react';
 
 interface ClientCardProps {
   client: Client;
@@ -21,25 +20,6 @@ interface ClientCardProps {
 export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: ClientCardProps) {
   const navigate = useNavigate();
   const [indicationDialogOpen, setIndicationDialogOpen] = useState(false);
-  const [clientTags, setClientTags] = useState<ClientTag[]>([]);
-
-  useEffect(() => {
-    fetchClientTags();
-  }, [client.id]);
-
-  const fetchClientTags = async () => {
-    const { data } = await supabase
-      .from('client_tag_assignments')
-      .select('tag_id, client_tags(*)')
-      .eq('client_id', client.id);
-    
-    if (data) {
-      const tags = data
-        .map((a: any) => a.client_tags)
-        .filter(Boolean) as ClientTag[];
-      setClientTags(tags);
-    }
-  };
 
   const handleClick = () => {
     if (onClick) {
@@ -47,11 +27,6 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
     } else {
       navigate(`/clients/${client.id}`);
     }
-  };
-
-  const handleUpdate = () => {
-    fetchClientTags();
-    onUpdate?.();
   };
 
   const formatCurrency = (value: number | null | undefined) => {
@@ -128,26 +103,12 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
             </div>
             <ClientCardMenu 
               client={client} 
-              onUpdate={handleUpdate}
+              onUpdate={onUpdate || (() => {})}
               onIndicateClick={() => setIndicationDialogOpen(true)}
             />
           </div>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          {/* Tags */}
-          {clientTags.length > 0 && (
-            <div className="flex flex-wrap gap-1 pb-1">
-              {clientTags.slice(0, 3).map(tag => (
-                <TagBadge key={tag.id} tag={tag} size="sm" />
-              ))}
-              {clientTags.length > 3 && (
-                <span className="text-[10px] text-muted-foreground px-1">
-                  +{clientTags.length - 3}
-                </span>
-              )}
-            </div>
-          )}
-
           {/* Datas */}
           <div className="flex items-center gap-3 text-xs border-b border-border/50 pb-2">
             <div className="flex items-center gap-1" title="Data de entrada no CRM">
@@ -195,7 +156,7 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
         client={client}
         open={indicationDialogOpen}
         onOpenChange={setIndicationDialogOpen}
-        onSuccess={handleUpdate}
+        onSuccess={onUpdate}
       />
     </>
   );
