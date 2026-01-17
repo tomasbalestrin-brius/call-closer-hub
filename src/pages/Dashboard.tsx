@@ -136,10 +136,18 @@ export default function Dashboard() {
         allClientsQuery = allClientsQuery.eq('funnel_source', selectedFunnel);
       }
 
-      const [callsResult, clientsResult, allClientsResult] = await Promise.all([
+      // Also fetch clients in "repitch" status to exclude from average
+      const repitchClientsQuery = supabase
+        .from('clients')
+        .select('id')
+        .eq('closer_id', user.id)
+        .eq('status', 'repitch');
+
+      const [callsResult, clientsResult, allClientsResult, repitchClientsResult] = await Promise.all([
         callsQuery,
         clientsQuery,
-        allClientsQuery
+        allClientsQuery,
+        repitchClientsQuery
       ]);
 
       if (callsResult.error) throw callsResult.error;
@@ -149,12 +157,18 @@ export default function Dashboard() {
       const calls = callsResult.data || [];
       const soldClients = clientsResult.data || [];
       const allClientsWithProduct = allClientsResult.data || [];
+      const repitchClientIds = new Set(repitchClientsResult.data?.map(c => c.id) || []);
 
       // Calculate call-based stats
       const totalCalls = calls.length;
-      const callsWithScore = calls.filter(c => c.score !== null);
-      const averageScore = callsWithScore.length 
-        ? callsWithScore.reduce((acc, c) => acc + (c.score || 0), 0) / callsWithScore.length 
+      
+      // Filter out calls from clients in "repitch" status for average calculation
+      const callsForAverage = calls.filter(c => 
+        c.score !== null && 
+        (!c.client_id || !repitchClientIds.has(c.client_id))
+      );
+      const averageScore = callsForAverage.length 
+        ? callsForAverage.reduce((acc, c) => acc + (c.score || 0), 0) / callsForAverage.length 
         : 0;
 
       // Calculate sales from clients (manual sales)

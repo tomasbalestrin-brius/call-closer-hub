@@ -185,13 +185,30 @@ export default function SquadView() {
         .eq('year', currentYear)
         .maybeSingle();
 
+      // Fetch clients in "repitch" status for this closer
+      const { data: repitchClients } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('closer_id', closerId)
+        .eq('status', 'repitch');
+      
+      const repitchClientIds = new Set(repitchClients?.map(c => c.id) || []);
+
       // Calculate stats
       const totalCalls = calls?.length || 0;
       const sales = calls?.filter(c => c.status === 'vendido') || [];
       const totalSales = sales.length;
       const conversionRate = totalCalls > 0 ? (totalSales / totalCalls) * 100 : 0;
-      const scores = calls?.filter(c => c.score).map(c => c.score!) || [];
-      const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+      
+      // Filter out calls from clients in "repitch" status for average
+      const callsForAverage = calls?.filter(c => 
+        c.score && 
+        (!c.client_id || !repitchClientIds.has(c.client_id))
+      ) || [];
+      const avgScore = callsForAverage.length > 0 
+        ? callsForAverage.reduce((a, c) => a + (c.score || 0), 0) / callsForAverage.length 
+        : 0;
+      
       const totalSaleValue = sales.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
       const totalEntryValue = sales.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
 
