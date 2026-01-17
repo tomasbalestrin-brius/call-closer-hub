@@ -398,6 +398,7 @@ export type Database = {
           notes: string | null
           phone: string | null
           product_offered: string | null
+          repitch_overdue_notification_sent: boolean | null
           revenue: number | null
           sale_notes: string | null
           sale_value: number | null
@@ -433,6 +434,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           product_offered?: string | null
+          repitch_overdue_notification_sent?: boolean | null
           revenue?: number | null
           sale_notes?: string | null
           sale_value?: number | null
@@ -468,6 +470,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           product_offered?: string | null
+          repitch_overdue_notification_sent?: boolean | null
           revenue?: number | null
           sale_notes?: string | null
           sale_value?: number | null

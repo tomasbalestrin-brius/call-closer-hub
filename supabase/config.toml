@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.merge-and-reanalyze]
 verify_jwt = false
+
+[functions.check-repitch-overdue]
+verify_jwt = false
