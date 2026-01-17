@@ -14,7 +14,8 @@ export type CloserLevel =
   | 'elite' 
   | 'especialista' 
   | 'especialista_pro' 
-  | 'especialista_elite';
+  | 'especialista_elite'
+  | 'lider';
 
 export const LEVEL_CONFIG: Record<CloserLevel, { label: string; color: string }> = {
   assessor: { label: 'Assessor', color: 'bg-gray-500' },
@@ -24,6 +25,7 @@ export const LEVEL_CONFIG: Record<CloserLevel, { label: string; color: string }>
   especialista: { label: 'Especialista', color: 'bg-blue-500' },
   especialista_pro: { label: 'Especialista Pro', color: 'bg-purple-500' },
   especialista_elite: { label: 'Especialista Elite', color: 'bg-emerald-500' },
+  lider: { label: 'Líder', color: 'bg-pink-600' },
 };
 
 interface CloserLevelSelectProps {
