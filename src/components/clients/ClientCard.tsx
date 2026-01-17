@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Client, ClientTag } from '@/types';
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +8,7 @@ import ClientCardMenu from './ClientCardMenu';
 import IndicationDialog from './IndicationDialog';
 import TagBadge from './tags/TagBadge';
 import { supabase } from '@/integrations/supabase/client';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow, format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface ClientCardProps {
@@ -72,21 +72,41 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
   const hoursOld = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60);
   const showAlert = isIncomplete && hoursOld >= 24;
 
+  // Verificar se cliente está em repitch há mais de 7 dias
+  const isOverdueRepitch = useMemo(() => {
+    if (client.status !== 'repitch' || !client.status_changed_at) return false;
+    const statusChangedAt = new Date(client.status_changed_at);
+    const daysSinceChange = differenceInDays(new Date(), statusChangedAt);
+    return daysSinceChange >= 7;
+  }, [client.status, client.status_changed_at]);
+
   return (
     <>
       <Card 
         className={cn(
           "cursor-pointer transition-all animate-slide-up relative",
-          showAlert 
-            ? "border-destructive bg-destructive/10 hover:border-destructive hover:shadow-destructive/20 hover:shadow-md" 
-            : client.is_super_hot
-              ? "border-orange-500/50 bg-orange-500/5 hover:border-orange-500 hover:shadow-orange-500/20 hover:shadow-md"
-              : "hover:shadow-md hover:border-accent/50"
+          isOverdueRepitch
+            ? "border-destructive bg-destructive/10 hover:border-destructive hover:shadow-destructive/20 hover:shadow-md ring-2 ring-destructive/50"
+            : showAlert 
+              ? "border-destructive bg-destructive/10 hover:border-destructive hover:shadow-destructive/20 hover:shadow-md" 
+              : client.is_super_hot
+                ? "border-orange-500/50 bg-orange-500/5 hover:border-orange-500 hover:shadow-orange-500/20 hover:shadow-md"
+                : "hover:shadow-md hover:border-accent/50"
         )}
         onClick={handleClick}
       >
+        {/* Repitch Overdue Badge */}
+        {isOverdueRepitch && (
+          <div className="absolute -top-2 -left-2 z-10">
+            <div className="bg-destructive text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg animate-pulse">
+              <AlertTriangle className="w-3 h-3" />
+              <span>+7 DIAS</span>
+            </div>
+          </div>
+        )}
+
         {/* Super Hot Badge */}
-        {client.is_super_hot && (
+        {client.is_super_hot && !isOverdueRepitch && (
           <div className="absolute -top-2 -right-2 z-10">
             <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg animate-pulse">
               <Flame className="w-3 h-3" />
@@ -98,12 +118,12 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              {showAlert && (
+              {(showAlert || isOverdueRepitch) && (
                 <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
               )}
               <h3 className={cn(
                 "font-display font-semibold text-base truncate",
-                showAlert && "text-destructive"
+                (showAlert || isOverdueRepitch) && "text-destructive"
               )}>{client.name}</h3>
             </div>
             <ClientCardMenu 
