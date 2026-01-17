@@ -1329,6 +1329,7 @@ export type Database = {
         | "especialista"
         | "especialista_pro"
         | "especialista_elite"
+        | "lider"
       import_frequency: "manual" | "hourly" | "daily" | "realtime"
       import_status: "pending" | "processing" | "completed" | "error"
       lead_classification: "pos_venda" | "follow"
@@ -1486,6 +1487,7 @@ export const Constants = {
         "especialista",
         "especialista_pro",
         "especialista_elite",
+        "lider",
       ],
       import_frequency: ["manual", "hourly", "daily", "realtime"],
       import_status: ["pending", "processing", "completed", "error"],
