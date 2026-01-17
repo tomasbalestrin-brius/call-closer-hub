@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Client, ClientTag } from '@/types';
 import { useNavigate } from 'react-router-dom';
-import { Phone, DollarSign, Package, AlertTriangle, Flame } from 'lucide-react';
+import { Phone, DollarSign, Package, AlertTriangle, Flame, Calendar, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ClientCardMenu from './ClientCardMenu';
 import IndicationDialog from './IndicationDialog';
 import TagBadge from './tags/TagBadge';
 import { supabase } from '@/integrations/supabase/client';
+import { formatDistanceToNow, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface ClientCardProps {
   client: Client;
@@ -125,6 +127,25 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
               )}
             </div>
           )}
+
+          {/* Datas */}
+          <div className="flex items-center gap-3 text-xs border-b border-border/50 pb-2">
+            <div className="flex items-center gap-1" title="Data de entrada no CRM">
+              <Calendar className="w-3 h-3 text-primary" />
+              <span>{format(new Date(client.created_at), 'dd/MM/yy', { locale: ptBR })}</span>
+            </div>
+            {client.status_changed_at && (
+              <div className="flex items-center gap-1" title="Tempo nesta coluna">
+                <Clock className="w-3 h-3 text-amber-500" />
+                <span>
+                  {formatDistanceToNow(new Date(client.status_changed_at), { 
+                    locale: ptBR, 
+                    addSuffix: false 
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
           
           <div className={cn(
             "flex items-center gap-2",
