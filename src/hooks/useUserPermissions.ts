@@ -4,7 +4,7 @@ export function useUserPermissions() {
   const { role, isAdmin, isLeader, loading } = useUserRole();
   
   const canDeleteCalls = isAdmin || isLeader;
-  const canMergeCalls = isAdmin || isLeader;
+  const canMergeCalls = true; // Todos podem juntar suas próprias calls (RLS protege)
   const canManageSquads = isAdmin;
   const canViewAllData = isAdmin;
   const canViewSquadData = isAdmin || isLeader;

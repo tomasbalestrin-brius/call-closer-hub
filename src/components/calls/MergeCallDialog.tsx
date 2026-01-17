@@ -70,20 +70,27 @@ export function MergeCallDialog({ currentCall, onMergeComplete }: MergeCallDialo
 
     setMerging(true);
     try {
-      // Mark the selected call as merged with the current call
-      const { error } = await supabase
-        .from('calls')
-        .update({ merged_with_call_id: currentCall.id })
-        .eq('id', selectedCallId);
+      // Call the merge-and-reanalyze edge function
+      const { data, error } = await supabase.functions.invoke('merge-and-reanalyze', {
+        body: {
+          primaryCallId: currentCall.id,
+          secondaryCallId: selectedCallId
+        }
+      });
 
       if (error) throw error;
 
-      toast.success('Calls unidas com sucesso!');
+      if (data.newScore !== undefined) {
+        toast.success(`Calls unidas com sucesso! Nova nota: ${data.newScore}/10`);
+      } else {
+        toast.success('Calls unidas com sucesso!');
+      }
+      
       setOpen(false);
       onMergeComplete();
     } catch (error) {
       console.error('Error merging calls:', error);
-      toast.error('Erro ao juntar calls');
+      toast.error('Erro ao juntar e analisar calls');
     } finally {
       setMerging(false);
     }
@@ -172,7 +179,7 @@ export function MergeCallDialog({ currentCall, onMergeComplete }: MergeCallDialo
             disabled={merging || !selectedCallId}
           >
             {merging && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Juntar Calls
+            {merging ? 'Analisando...' : 'Juntar e Analisar'}
           </Button>
         </DialogFooter>
       </DialogContent>

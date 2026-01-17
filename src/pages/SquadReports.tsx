@@ -197,6 +197,21 @@ export default function SquadReports() {
       
       const { data: soldClients } = await clientsQuery;
       
+      // Fetch clients in "repitch" status to exclude from average
+      const { data: repitchClients } = await supabase
+        .from('clients')
+        .select('id, closer_id')
+        .in('closer_id', userIds)
+        .eq('status', 'repitch');
+      
+      const repitchClientIdsByCloser = new Map<string, Set<string>>();
+      repitchClients?.forEach(c => {
+        if (!repitchClientIdsByCloser.has(c.closer_id)) {
+          repitchClientIdsByCloser.set(c.closer_id, new Set());
+        }
+        repitchClientIdsByCloser.get(c.closer_id)!.add(c.id);
+      });
+      
       // Calculate stats per member
       const statsMap: Record<string, MemberStats> = {};
       
@@ -206,7 +221,13 @@ export default function SquadReports() {
         const memberCalls = calls?.filter(c => c.closer_id === userId) || [];
         const soldCallsFromCalls = memberCalls.filter(c => c.status === 'vendido');
         const memberSoldClients = soldClients?.filter(c => c.closer_id === userId) || [];
-        const callsWithScore = memberCalls.filter(c => c.score !== null);
+        const memberRepitchIds = repitchClientIdsByCloser.get(userId) || new Set();
+        
+        // Filter out calls from clients in "repitch" status for average
+        const callsForAverage = memberCalls.filter(c => 
+          c.score !== null && 
+          (!c.client_id || !memberRepitchIds.has(c.client_id))
+        );
         
         // Combine sales from calls and clients (avoid duplicates by using client sales as primary)
         const totalSalesFromClients = memberSoldClients.length;
@@ -226,8 +247,8 @@ export default function SquadReports() {
           totalSales,
           totalSaleValue,
           totalEntryValue,
-          averageScore: callsWithScore.length 
-            ? Math.round((callsWithScore.reduce((acc, c) => acc + (c.score || 0), 0) / callsWithScore.length) * 10) / 10
+          averageScore: callsForAverage.length 
+            ? Math.round((callsForAverage.reduce((acc, c) => acc + (c.score || 0), 0) / callsForAverage.length) * 10) / 10
             : 0,
           conversionRate: memberCalls.length > 0 
             ? Math.round((totalSales / memberCalls.length) * 100) 
@@ -241,13 +262,19 @@ export default function SquadReports() {
       // Calculate aggregated squad stats
       const allCalls = calls || [];
       const allSoldClients = soldClients || [];
-      const allCallsWithScore = allCalls.filter(c => c.score !== null);
+      const allRepitchIds = new Set(repitchClients?.map(c => c.id) || []);
+      
+      // Filter out calls from clients in "repitch" status for average
+      const allCallsForAverage = allCalls.filter(c => 
+        c.score !== null && 
+        (!c.client_id || !allRepitchIds.has(c.client_id))
+      );
       
       // Use client sales for totals
       const totalSales = allSoldClients.length > 0 ? allSoldClients.length : allCalls.filter(c => c.status === 'vendido').length;
       const totalSaleValue = allSoldClients.length > 0 
         ? allSoldClients.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0)
-        : allCalls.filter(c => c.status === 'vendido').reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
+        : allCalls.filter(c => c.status === 'vendido').reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
       const totalEntryValue = allSoldClients.length > 0
         ? allSoldClients.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0)
         : allCalls.filter(c => c.status === 'vendido').reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
@@ -258,8 +285,8 @@ export default function SquadReports() {
         totalSales,
         totalSaleValue,
         totalEntryValue,
-        averageScore: allCallsWithScore.length 
-          ? Math.round((allCallsWithScore.reduce((acc, c) => acc + (c.score || 0), 0) / allCallsWithScore.length) * 10) / 10
+        averageScore: allCallsForAverage.length 
+          ? Math.round((allCallsForAverage.reduce((acc, c) => acc + (c.score || 0), 0) / allCallsForAverage.length) * 10) / 10
           : 0,
         conversionRate: allCalls.length > 0 
           ? Math.round((totalSales / allCalls.length) * 100) 

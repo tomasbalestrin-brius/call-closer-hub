@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Call } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronDown, ChevronUp, BarChart3, CheckCircle2, AlertTriangle, Phone, Star, Info } from 'lucide-react';
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
 import { DateRange } from 'react-day-picker';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface PeriodSummaryProps {
   calls: Call[];
@@ -19,7 +21,26 @@ interface AggregatedItem {
 }
 
 export default function PeriodSummary({ calls, dateRange, onDateRangeChange }: PeriodSummaryProps) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(true);
+  const [repitchClientIds, setRepitchClientIds] = useState<Set<string>>(new Set());
+
+  // Fetch clients in "repitch" status
+  useEffect(() => {
+    const fetchRepitchClients = async () => {
+      if (!user) return;
+      
+      const { data } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('closer_id', user.id)
+        .eq('status', 'repitch');
+      
+      setRepitchClientIds(new Set(data?.map(c => c.id) || []));
+    };
+    
+    fetchRepitchClients();
+  }, [user]);
 
   const summary = useMemo(() => {
     // Filter calls with AI analysis
@@ -35,12 +56,13 @@ export default function PeriodSummary({ calls, dateRange, onDateRangeChange }: P
       };
     }
 
-    // Calculate average score
-    const scoresArray = callsWithAnalysis
-      .filter(c => c.score !== null)
-      .map(c => c.score as number);
-    const averageScore = scoresArray.length > 0
-      ? scoresArray.reduce((a, b) => a + b, 0) / scoresArray.length
+    // Calculate average score, excluding calls from clients in "repitch" status
+    const callsForAverage = callsWithAnalysis.filter(c => 
+      c.score !== null && 
+      (!c.client_id || !repitchClientIds.has(c.client_id))
+    );
+    const averageScore = callsForAverage.length > 0
+      ? callsForAverage.reduce((a, c) => a + (c.score as number), 0) / callsForAverage.length
       : 0;
 
     // Aggregate wins
@@ -83,7 +105,7 @@ export default function PeriodSummary({ calls, dateRange, onDateRangeChange }: P
       topWins,
       topErrors,
     };
-  }, [calls]);
+  }, [calls, repitchClientIds]);
 
   // Don't render if no calls
   if (calls.length === 0) {
