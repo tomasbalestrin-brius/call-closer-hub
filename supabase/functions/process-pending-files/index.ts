@@ -25,6 +25,95 @@ async function safeReadJson(response: Response): Promise<{ data: unknown; error:
   }
 }
 
+// Process a single file with retry logic for rate limits
+async function processWithRetry(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  userId: string,
+  fileId: string,
+  fileName: string,
+  maxRetries = 5
+): Promise<{ success: boolean; result?: unknown; error?: string; alreadyImported?: boolean }> {
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Attempt ${attempt}/${maxRetries} for file: ${fileName}`);
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/import-and-analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceRoleKey}`,
+        },
+        body: JSON.stringify({
+          userId,
+          fileId,
+          fileName,
+        }),
+      });
+
+      const { data: result, error: parseError } = await safeReadJson(response);
+
+      // Check for rate limit errors
+      const resultObj = result as { error?: string; alreadyImported?: boolean } | null;
+      const isRateLimit = 
+        response.status === 429 || 
+        parseError?.includes("Rate limit") ||
+        resultObj?.error?.includes("Rate limit") ||
+        resultObj?.error?.includes("rate limit");
+
+      if (isRateLimit) {
+        // Exponential backoff: 10s, 20s, 40s, 80s, 160s
+        const waitTime = Math.min(10000 * Math.pow(2, attempt - 1), 180000); 
+        console.log(`Rate limit hit on attempt ${attempt}. Waiting ${waitTime/1000}s before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+
+      // Check for empty response (might be timeout)
+      if (parseError === "Empty response from function") {
+        const waitTime = attempt * 5000; // 5s, 10s, 15s, 20s, 25s
+        console.log(`Empty response on attempt ${attempt}. Waiting ${waitTime/1000}s before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+
+      // If we got an error that's not rate limit, return it
+      if (parseError || !response.ok) {
+        return { 
+          success: false, 
+          error: parseError || resultObj?.error || `HTTP ${response.status}` 
+        };
+      }
+
+      // Check if already imported
+      if (resultObj?.alreadyImported) {
+        return { success: true, alreadyImported: true, result };
+      }
+
+      // Success!
+      return { success: true, result };
+
+    } catch (err) {
+      console.error(`Exception on attempt ${attempt}:`, err);
+      
+      if (attempt === maxRetries) {
+        return { 
+          success: false, 
+          error: err instanceof Error ? err.message : "Unknown error" 
+        };
+      }
+      
+      // Wait before retrying on exception
+      const waitTime = attempt * 5000;
+      console.log(`Exception on attempt ${attempt}. Waiting ${waitTime/1000}s before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+
+  return { success: false, error: "Max retries exceeded" };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -75,7 +164,7 @@ serve(async (req) => {
 
     console.log(`Found ${users.length} users with Google connected`);
 
-    // Reset error files to pending if requested (except chat transcriptions)
+    // Reset error files to pending if requested (except chat transcriptions and empty docs)
     if (resetErrors) {
       const { data: errorFiles, error: resetError } = await supabase
         .from("imported_files")
@@ -83,6 +172,7 @@ serve(async (req) => {
         .eq("status", "error")
         .not("error_message", "ilike", "%chat%")
         .not("error_message", "ilike", "%transcrição do chat%")
+        .not("error_message", "ilike", "%vazio%")
         .select("id");
 
       if (resetError) {
@@ -190,83 +280,51 @@ serve(async (req) => {
           })
           .eq("session_id", sessionId);
 
-        try {
-          const response = await fetch(`${SUPABASE_URL}/functions/v1/import-and-analyze`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            },
-            body: JSON.stringify({
-              userId: user.user_id,
-              fileId: file.drive_file_id,
-              fileName: file.file_name,
-            }),
-          });
+        // Process with retry logic
+        const processResult = await processWithRetry(
+          SUPABASE_URL,
+          SUPABASE_SERVICE_ROLE_KEY,
+          user.user_id,
+          file.drive_file_id,
+          file.file_name
+        );
 
-          const { data: result, error: parseError } = await safeReadJson(response);
+        userResult.processed++;
 
-          userResult.processed++;
-
-          if (parseError || !response.ok) {
-            const errorMsg = parseError || (result as { error?: string })?.error || "Unknown error";
-            console.error(`Error processing ${file.file_name}:`, errorMsg);
-            userResult.errors++;
-            globalErrors++;
-            userResult.details.push({
-              fileName: file.file_name,
-              success: false,
-              error: String(errorMsg).substring(0, 200),
-            });
-          } else if ((result as { alreadyImported?: boolean })?.alreadyImported) {
+        if (processResult.success) {
+          if (processResult.alreadyImported) {
             console.log(`File already imported: ${file.file_name}`);
-            userResult.success++;
-            globalSuccess++;
-            userResult.details.push({
-              fileName: file.file_name,
-              success: true,
-            });
           } else {
             console.log(`Successfully processed: ${file.file_name}`);
-            userResult.success++;
-            globalSuccess++;
-            userResult.details.push({
-              fileName: file.file_name,
-              success: true,
-            });
           }
-
-          // Update progress AFTER processing
-          await supabase
-            .from("import_progress")
-            .update({
-              success_count: globalSuccess,
-              error_count: globalErrors,
-            })
-            .eq("session_id", sessionId);
-
-        } catch (err) {
-          console.error(`Exception processing ${file.file_name}:`, err);
-          userResult.processed++;
+          userResult.success++;
+          globalSuccess++;
+          userResult.details.push({
+            fileName: file.file_name,
+            success: true,
+          });
+        } else {
+          console.error(`Error processing ${file.file_name}:`, processResult.error);
           userResult.errors++;
           globalErrors++;
           userResult.details.push({
             fileName: file.file_name,
             success: false,
-            error: err instanceof Error ? err.message : "Unknown error",
+            error: processResult.error?.substring(0, 200),
           });
-
-          // Update progress on error
-          await supabase
-            .from("import_progress")
-            .update({
-              error_count: globalErrors,
-            })
-            .eq("session_id", sessionId);
         }
 
-        // Small delay between files to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Update progress AFTER processing
+        await supabase
+          .from("import_progress")
+          .update({
+            success_count: globalSuccess,
+            error_count: globalErrors,
+          })
+          .eq("session_id", sessionId);
+
+        // Increased delay between files to avoid rate limiting (10 seconds)
+        await new Promise(resolve => setTimeout(resolve, 10000));
       }
 
       results.push(userResult);
