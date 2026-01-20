@@ -29,7 +29,7 @@ export default function QuotaProgressBar() {
 
       const { data, error } = await supabase
         .from('clients')
-        .select('sale_value')
+        .select('entry_value')
         .eq('closer_id', user.id)
         .eq('is_sold', true)
         .gte('sold_at', monthStart)
@@ -37,7 +37,7 @@ export default function QuotaProgressBar() {
 
       if (error) throw error;
 
-      const total = (data || []).reduce((acc, client) => acc + (Number(client.sale_value) || 0), 0);
+      const total = (data || []).reduce((acc, client) => acc + (Number(client.entry_value) || 0), 0);
       setCurrentValue(total);
     } catch (error) {
       console.error('Error fetching quota progress:', error);
