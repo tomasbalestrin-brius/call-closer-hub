@@ -209,16 +209,17 @@ export function ImportStatusPanel() {
     return `${minutes} minutos`;
   }, []);
 
-  const processAllPending = async () => {
+  const processBatch = async (batchSize: number, resetErrors: boolean = false) => {
     setProcessing(true);
     setLastProcessResult(null);
     setLiveProgress(null);
 
     try {
-      toast.info('Iniciando processamento de arquivos pendentes...');
+      const estimatedTime = Math.ceil(batchSize * 10 / 60); // 10s per file
+      toast.info(`Processando lote de ${batchSize} arquivos (~${estimatedTime} min)...`);
 
       const { data, error } = await supabase.functions.invoke('process-pending-files', {
-        body: { maxFilesPerUser: 10, resetErrors: true }
+        body: { maxFilesPerUser: batchSize, resetErrors }
       });
 
       if (error) throw error;
@@ -252,6 +253,8 @@ export function ImportStatusPanel() {
     }
   };
 
+  const processAllPending = () => processBatch(summary.totalPending + summary.totalErrors, true);
+
   const progressPercent = summary.total > 0 
     ? Math.round((summary.totalCompleted / summary.total) * 100) 
     : 0;
@@ -283,7 +286,7 @@ export function ImportStatusPanel() {
               Visão geral de arquivos importados, pendentes e com erro
             </CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button 
               variant="outline" 
               size="sm"
@@ -292,6 +295,32 @@ export function ImportStatusPanel() {
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => processBatch(5)}
+              disabled={processing || summary.totalPending === 0}
+              className="border-primary text-primary hover:bg-primary/10"
+            >
+              {processing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
+              5 Arquivos (~1 min)
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => processBatch(10)}
+              disabled={processing || summary.totalPending === 0}
+              className="border-amber-500 text-amber-600 hover:bg-amber-500/10"
+            >
+              {processing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
+              10 Arquivos (~2 min)
             </Button>
             <Button 
               onClick={processAllPending}
@@ -306,7 +335,7 @@ export function ImportStatusPanel() {
               ) : (
                 <>
                   <Play className="w-4 h-4 mr-2" />
-                  Processar {summary.totalPending + summary.totalErrors} Pendentes
+                  Todos ({summary.totalPending + summary.totalErrors})
                 </>
               )}
             </Button>
