@@ -56,7 +56,8 @@ export const SDR_NAMES = [
   'Dienifer',
   'Nathali',
   'Thalita',
-  'Maria'
+  'Maria',
+  'Carlos'
 ] as const;
 
 export const PRODUCTS_OFFERED = [
