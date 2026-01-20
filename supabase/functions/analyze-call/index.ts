@@ -6,6 +6,241 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============= CHUNKING CONFIGURATION =============
+const CHUNK_SIZE = 25000; // ~25KB per chunk
+const CHUNK_OVERLAP = 2000; // 2KB overlap for context
+const MAX_SIZE_FOR_DIRECT = 50000; // Files under 50KB go direct
+
+// ============= CHUNK ANALYSIS PROMPT (Simplified) =============
+const CHUNK_ANALYSIS_PROMPT = `Você é um analista de calls de vendas high ticket.
+
+Este é o TRECHO {{chunkIndex}} de {{totalChunks}} de uma call longa. Analise APENAS este trecho e extraia:
+
+## 1. IDENTIFICAÇÃO (se aparecer neste trecho)
+- nome_lead
+- nome_closer  
+- produto_ofertado (Elite Premium, Implementação de IA NextTrack, Mentoria Julia Ottoni, Programa de Implementação Comercial)
+- houve_venda (sim/nao/nao_identificado_neste_trecho)
+
+## 2. DADOS EXTRAÍDOS (o que aparecer neste trecho)
+- nicho_profissao
+- faturamento
+- dor_principal (frase literal do lead)
+- dor_profunda (se houve impacto pessoal/emocional/familiar)
+- objecoes (lista de objeções levantadas)
+
+## 3. ETAPAS IDENTIFICADAS NESTE TRECHO
+Para cada etapa que acontecer neste trecho, forneça:
+- nome_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao)
+- aconteceu: sim/parcial
+- nota: 0-10
+- pontos_fortes: lista de pontos fortes com evidências
+- pontos_fracos: lista de pontos fracos com evidências
+- evidencias: trechos literais importantes
+
+## 4. OBSERVAÇÕES DO TRECHO
+- pontos_fortes_gerais: até 3 destaques positivos deste trecho
+- pontos_fracos_gerais: até 3 problemas identificados neste trecho
+- prova_social_usada: histórias/cases citados
+- objecoes_encontradas: objeções do lead neste trecho
+
+RESPONDA EM JSON VÁLIDO:
+{
+  "chunk_info": {
+    "chunk_index": {{chunkIndex}},
+    "total_chunks": {{totalChunks}}
+  },
+  "identificacao": {
+    "nome_lead": "string|null",
+    "nome_closer": "string|null",
+    "produto_ofertado": "string|null",
+    "houve_venda": "sim|nao|null"
+  },
+  "dados_extraidos": {
+    "nicho_profissao": "string|null",
+    "faturamento": "string|null",
+    "dor_principal": "string|null",
+    "dor_profunda": "string|null",
+    "objecoes": ["..."]
+  },
+  "etapas_identificadas": [
+    {
+      "nome_etapa": "...",
+      "aconteceu": "sim|parcial",
+      "nota": 0,
+      "pontos_fortes": ["..."],
+      "pontos_fracos": ["..."],
+      "evidencias": ["..."]
+    }
+  ],
+  "observacoes": {
+    "pontos_fortes_gerais": ["..."],
+    "pontos_fracos_gerais": ["..."],
+    "prova_social_usada": ["..."],
+    "objecoes_encontradas": ["..."]
+  }
+}`;
+
+// ============= MERGE PROMPT =============
+const MERGE_PROMPT = `Você é um DIRETOR COMERCIAL + ANALISTA SÊNIOR auditando uma call de vendas high ticket.
+
+Você recebeu análises PARCIAIS de uma call longa dividida em chunks. Sua tarefa é CONSOLIDAR em UMA análise final completa.
+
+ANÁLISES PARCIAIS:
+{{partialAnalyses}}
+
+## REGRAS DE MERGE:
+
+1. IDENTIFICAÇÃO: Use a primeira ocorrência válida de cada campo
+2. FRAMEWORK: Determine baseado nas evidências combinadas:
+   - "Elite Premium" = mentoria premium com Cleiton, alto ticket
+   - "Implementação de IA (NextTrack)" = IA, WhatsApp automatizado, chatbot
+   - "Mentoria Julia Ottoni" = branding, posicionamento, Instagram, identidade visual
+   - "Programa de Implementação Comercial" = processo comercial, CRM, follow-up
+
+3. DADOS EXTRAÍDOS: Combine todos, sem duplicatas, priorize dados mais completos
+
+4. ETAPAS: Se uma etapa aparece em múltiplos chunks:
+   - Use a maior nota encontrada
+   - Combine pontos fortes e fracos
+   - Se apareceu em qualquer chunk, marque como "sim"
+
+5. NOTA GERAL: Calcule média das notas das etapas (0-10)
+   - Aderência ao processo (40%)
+   - Profundidade da dor (25%)
+   - Autoridade e condução (15%)
+   - Emoção/urgência/visualização (10%)
+   - Fechamento/objeções (10%)
+
+6. MAIORES ACERTOS/ERROS: Consolide os 3 mais relevantes de todos os chunks
+
+7. PONTO DE PERDA: Identifique onde a venda começou a se perder (se não vendeu)
+
+8. PLANO DE AÇÃO: Crie baseado nos principais problemas identificados
+
+## FORMATO DE SAÍDA (JSON COMPLETO):
+
+{
+  "framework_selecionado": "Elite Premium|Implementação de IA (NextTrack)|Mentoria Julia Ottoni|Programa de Implementação Comercial",
+  "confianca_framework": 0.0,
+  "motivo_escolha_framework": ["..."],
+  "identificacao": {
+    "nome_lead": "...",
+    "nome_closer": "...",
+    "produto_ofertado": "...",
+    "houve_venda": "sim|nao|nao_informado"
+  },
+  "dados_extraidos": {
+    "nicho_profissao": "...",
+    "modelo_de_venda": "...",
+    "ticket_medio": "...",
+    "faturamento_mensal_bruto": "...",
+    "faturamento_mensal_liquido": "...",
+    "equipe": "...",
+    "canais_aquisicao": ["..."],
+    "estrutura_comercial": "...",
+    "dor_principal_declarada": {"texto":"...", "evidencia":"..."},
+    "dor_profunda": {"texto":"...", "evidencia":"..."},
+    "objetivo_12_meses": "...",
+    "urgencia_declarada": "...",
+    "importancia_declarada": "...",
+    "objecoes_levantadas": [{"objecao":"...", "evidencia":"..."}],
+    "motivo_compra_ou_nao_compra": [{"motivo":"...", "evidencia":"..."}]
+  },
+  "nota_geral": 0,
+  "justificativa_nota_geral": ["..."],
+  "maiores_acertos": [
+    {
+      "acerto": "...",
+      "evidencia": "...",
+      "porque_importa": "...",
+      "como_repetir": "..."
+    }
+  ],
+  "maiores_erros": [
+    {
+      "erro": "...",
+      "evidencia": "...",
+      "impacto": "...",
+      "como_corrigir": ["..."],
+      "frase_pronta": {"antes": "...", "depois": "..."}
+    }
+  ],
+  "ponto_de_perda_da_venda": "etapa|null",
+  "sinais_da_perda": ["..."],
+  "se_vendeu": {
+    "porque_comprou": [{"motivo":"...", "evidencia":"..."}],
+    "gatilhos_que_mais_pesaram": ["..."]
+  },
+  "tomador_decisao": {
+    "presente": true,
+    "evidencia": "...",
+    "reagendamento_realizado": false,
+    "evidencia_reagendamento": null,
+    "etapa_do_reagendamento": null
+  },
+  "checklist_erros_recorrentes": {
+    "abertura_ancoragem_script": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "profundidade_nao_fugir_assunto": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "emocao_e_tensao": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "prova_social_seeds_durante_perguntas": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "objecao_real_vs_declarada": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."},
+    "negociacao_maximizar_receita": {"status":"ok|parcial|falhou", "evidencias":["..."], "correcao":"..."}
+  },
+  "analise_por_etapa": {
+    "conexao": {
+      "aconteceu": "sim|parcial|nao",
+      "nota": 0,
+      "funcao_cumprida": "...",
+      "evidencias": ["..."],
+      "ponto_forte": ["..."],
+      "ponto_fraco": ["..."],
+      "erro_de_execucao": "...",
+      "impacto_no_lead": "...",
+      "como_corrigir": ["..."],
+      "frase_melhor": {"antes":"...", "depois":"..."},
+      "perguntas_de_aprofundamento": ["..."],
+      "seeds_prova_social": {"usadas":["..."], "faltaram":["..."]},
+      "risco_principal_da_etapa": "...",
+      "motivo_ausencia": null,
+      "contexto_ausencia": null,
+      "excluir_da_media": false
+    },
+    "abertura": { /* mesma estrutura */ },
+    "mapeamento_empresa": { /* mesma estrutura */ },
+    "mapeamento_problema": { /* mesma estrutura */ },
+    "consultoria": { /* mesma estrutura */ },
+    "problematizacao": { /* mesma estrutura */ },
+    "solucao_imaginada": { /* mesma estrutura */ },
+    "transicao": { /* mesma estrutura */ },
+    "pitch": { /* mesma estrutura */ },
+    "perguntas_compromisso": { /* mesma estrutura */ },
+    "fechamento": { /* mesma estrutura */ },
+    "objecoes_negociacao": { /* mesma estrutura */ }
+  },
+  "plano_de_acao_direto": {
+    "ajuste_numero_1": {
+      "diagnostico": "...",
+      "o_que_fazer_na_proxima_call": ["..."],
+      "script_30_segundos": "..."
+    },
+    "treino_recomendado": [
+      {"habilidade":"...", "como_treinar":"...", "meta_objetiva":"..."}
+    ],
+    "proxima_acao_com_lead": {
+      "status": "fechado|follow_up|desqualificado|nao_informado",
+      "passo": "...",
+      "mensagem_sugerida_whats": "..."
+    }
+  }
+}
+
+IMPORTANTE: 
+- Preencha TODAS as 12 etapas em analise_por_etapa
+- Se uma etapa não aconteceu, marque aconteceu="nao", nota=0, e explique em motivo_ausencia
+- Use evidências literais sempre que possível
+- Seja específico e acionável nas correções`;
+
 const MASTER_PROMPT = `Você é um DIRETOR COMERCIAL + ANALISTA SÊNIOR DE CALLS HIGH TICKET.
 
 Seu trabalho é auditar a call com rigor, como se você fosse o líder do time avaliando performance, aderência ao processo e capacidade de conversão.
@@ -713,6 +948,258 @@ Antes de finalizar, valide CADA item:
 
 Se faltar qualquer item, corrija antes de responder.`;
 
+// ============= CHUNKING FUNCTIONS =============
+
+function splitTranscription(text: string): string[] {
+  if (text.length <= MAX_SIZE_FOR_DIRECT) {
+    return [text];
+  }
+  
+  const chunks: string[] = [];
+  let position = 0;
+  
+  while (position < text.length) {
+    let end = Math.min(position + CHUNK_SIZE, text.length);
+    
+    // Find natural break point (end of speaker line)
+    if (end < text.length) {
+      // Look for newline after speaker pattern like "Nome:" or timestamps
+      const searchRange = text.substring(end - 500, end + 500);
+      const newlinePositions: number[] = [];
+      
+      for (let i = 0; i < searchRange.length; i++) {
+        if (searchRange[i] === '\n') {
+          newlinePositions.push(i);
+        }
+      }
+      
+      // Find the best break point closest to our target
+      if (newlinePositions.length > 0) {
+        const targetPos = 500; // Middle of search range
+        let bestBreak = newlinePositions[0];
+        let minDistance = Math.abs(newlinePositions[0] - targetPos);
+        
+        for (const pos of newlinePositions) {
+          const distance = Math.abs(pos - targetPos);
+          if (distance < minDistance) {
+            minDistance = distance;
+            bestBreak = pos;
+          }
+        }
+        
+        end = (end - 500) + bestBreak;
+      }
+    }
+    
+    chunks.push(text.substring(position, end));
+    
+    // Move position with overlap
+    position = Math.max(position + 1, end - CHUNK_OVERLAP);
+  }
+  
+  console.log(`Split transcription into ${chunks.length} chunks`);
+  chunks.forEach((chunk, i) => {
+    console.log(`  Chunk ${i + 1}: ${chunk.length} chars`);
+  });
+  
+  return chunks;
+}
+
+interface ChunkAnalysis {
+  chunk_info: {
+    chunk_index: number;
+    total_chunks: number;
+  };
+  identificacao: {
+    nome_lead?: string | null;
+    nome_closer?: string | null;
+    produto_ofertado?: string | null;
+    houve_venda?: string | null;
+  };
+  dados_extraidos: {
+    nicho_profissao?: string | null;
+    faturamento?: string | null;
+    dor_principal?: string | null;
+    dor_profunda?: string | null;
+    objecoes?: string[];
+  };
+  etapas_identificadas: Array<{
+    nome_etapa: string;
+    aconteceu: string;
+    nota: number;
+    pontos_fortes: string[];
+    pontos_fracos: string[];
+    evidencias: string[];
+  }>;
+  observacoes: {
+    pontos_fortes_gerais: string[];
+    pontos_fracos_gerais: string[];
+    prova_social_usada: string[];
+    objecoes_encontradas: string[];
+  };
+}
+
+async function analyzeChunk(
+  chunk: string, 
+  chunkIndex: number, 
+  totalChunks: number
+): Promise<ChunkAnalysis> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  const prompt = CHUNK_ANALYSIS_PROMPT
+    .replace(/\{\{chunkIndex\}\}/g, String(chunkIndex))
+    .replace(/\{\{totalChunks\}\}/g, String(totalChunks));
+
+  console.log(`Analyzing chunk ${chunkIndex}/${totalChunks} (${chunk.length} chars)...`);
+
+  const maxRetries = 2;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash", // Faster model for chunks
+          messages: [
+            { role: "system", content: prompt },
+            { role: "user", content: `Analise este trecho da transcrição:\n\n${chunk}` },
+          ],
+          temperature: 0.1,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Chunk analysis API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      
+      if (!content) {
+        throw new Error("Empty response from chunk analysis");
+      }
+
+      const parsed = await parseJSONFromResponse(content) as ChunkAnalysis;
+      console.log(`Chunk ${chunkIndex} analyzed successfully`);
+      return parsed;
+    } catch (error) {
+      console.log(`Chunk ${chunkIndex} attempt ${attempt + 1} failed:`, error);
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+      }
+    }
+  }
+
+  // Return a minimal valid structure if all retries fail
+  console.error(`All retries failed for chunk ${chunkIndex}, returning minimal structure`);
+  return {
+    chunk_info: { chunk_index: chunkIndex, total_chunks: totalChunks },
+    identificacao: {},
+    dados_extraidos: {},
+    etapas_identificadas: [],
+    observacoes: {
+      pontos_fortes_gerais: [],
+      pontos_fracos_gerais: [`Erro ao analisar chunk: ${lastError?.message}`],
+      prova_social_usada: [],
+      objecoes_encontradas: []
+    }
+  };
+}
+
+async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<AnalysisData> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  console.log(`Merging ${partialAnalyses.length} chunk analyses...`);
+
+  const mergePrompt = MERGE_PROMPT.replace(
+    '{{partialAnalyses}}', 
+    JSON.stringify(partialAnalyses, null, 2)
+  );
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-pro", // Use pro model for final merge (higher accuracy)
+      messages: [
+        { role: "system", content: mergePrompt },
+        { role: "user", content: "Consolide as análises parciais em uma análise final completa seguindo o schema exato especificado." },
+      ],
+      temperature: 0.1,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Merge analysis API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  
+  if (!content) {
+    throw new Error("Empty response from merge analysis");
+  }
+
+  const merged = await parseJSONFromResponse(content) as AnalysisData;
+  console.log("Merge completed successfully");
+  
+  return merged;
+}
+
+async function analyzeWithChunking(transcription: string, fileName: string): Promise<AnalysisData> {
+  console.log(`Starting chunked analysis for file: ${fileName}`);
+  console.log(`Transcription length: ${transcription.length} chars`);
+  
+  // Step 1: Split transcription into chunks
+  const chunks = splitTranscription(transcription);
+  
+  // Step 2: Analyze chunks in parallel (max 2 at a time to avoid rate limits)
+  const partialAnalyses: ChunkAnalysis[] = [];
+  const batchSize = 2;
+  
+  for (let i = 0; i < chunks.length; i += batchSize) {
+    const batch = chunks.slice(i, i + batchSize);
+    const batchPromises = batch.map((chunk, batchIdx) => 
+      analyzeChunk(chunk, i + batchIdx + 1, chunks.length)
+    );
+    
+    const batchResults = await Promise.all(batchPromises);
+    partialAnalyses.push(...batchResults);
+    
+    // Small delay between batches to avoid rate limits
+    if (i + batchSize < chunks.length) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  // Step 3: Merge all partial analyses
+  const mergedAnalysis = await mergeChunkAnalyses(partialAnalyses);
+  
+  return mergedAnalysis;
+}
+
+// ============= ORIGINAL AI FUNCTIONS =============
+
 async function callLovableAI(systemPrompt: string, transcription: string): Promise<string> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   
@@ -732,27 +1219,35 @@ async function callLovableAI(systemPrompt: string, transcription: string): Promi
       model: "google/gemini-2.5-pro",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nFORMATO DE RESPOSTA OBRIGATÓRIO:\n- Retorne APENAS o JSON, sem texto adicional antes ou depois\n- NÃO use markdown code blocks (\`\`\`json ou \`\`\`)\n- Comece sua resposta diretamente com { e termine com }\n- Certifique-se de que todas as strings estão corretamente escapadas (aspas internas como \\", quebras de linha como \\n)\n- Use aspas duplas para strings, nunca aspas simples\n\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.\n\nQUALIDADE DOS PONTOS FORTES E FRACOS (OBRIGATÓRIO):\n- Cada ponto_forte deve ser ESPECÍFICO: cite o que o closer fez, quando fez, e porque foi bom. Exemplo: "Na abertura, ancorou autoridade mencionando '500 empresas atendidas e R$50M em vendas', o que criou credibilidade imediata"\n- Cada ponto_fraco deve ter DIAGNÓSTICO + IMPACTO: o que faltou, quando faltou, e qual foi a consequência. Exemplo: "Não explorou a dor pessoal quando o lead mencionou 'estou sobrecarregado' - perdeu oportunidade de criar urgência emocional"\n- EVITE frases genéricas como "explicou o objetivo" ou "identificou a estrutura" - seja ESPECÍFICO sobre COMO e QUANDO\n- Cada campo pode ter 2-3 frases se necessário para ser específico\n\nLIMITES DE TAMANHO:\n- Máximo 2 evidências por etapa\n- Máximo 2 itens em como_corrigir\n- Máximo 2 perguntas em perguntas_de_aprofundamento` },
+        { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}` },
       ],
-      temperature: 0,
-      max_tokens: 16000,
+      temperature: 0.1,
     }),
   });
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Lovable AI API error:", response.status, errorText);
+    
     if (response.status === 429) {
       throw new Error("Rate limit exceeded. Please try again later.");
     }
     if (response.status === 402) {
-      throw new Error("Payment required. Please add credits to your Lovable workspace.");
+      throw new Error("Payment required. Please add funds to your Lovable AI workspace.");
     }
-    const errorText = await response.text();
-    console.error("Lovable AI API error:", response.status, errorText);
+    
     throw new Error(`Lovable AI API error: ${response.status}`);
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
+  const content = data.choices?.[0]?.message?.content;
+  
+  if (!content) {
+    throw new Error("Empty response from Lovable AI");
+  }
+
+  console.log("Lovable AI response received, length:", content.length);
+  return content;
 }
 
 // Fallback: Try to repair invalid JSON using a short model call
@@ -1003,14 +1498,20 @@ serve(async (req) => {
 
     console.log(`Analyzing call from file: ${fileName}, transcription length: ${transcription.length}`);
 
-    // Run single comprehensive analysis
-    const masterResponse = await callLovableAI(MASTER_PROMPT, transcription);
+    let data: AnalysisData;
 
-    console.log("AI analysis completed");
-    console.log("Raw response length:", masterResponse.length);
-
-    // Parse the response
-    const data = await parseJSONFromResponse(masterResponse) as AnalysisData;
+    // Check if chunking is needed
+    if (transcription.length > MAX_SIZE_FOR_DIRECT) {
+      console.log(`Large file detected (${transcription.length} chars > ${MAX_SIZE_FOR_DIRECT}), using CHUNKED analysis`);
+      data = await analyzeWithChunking(transcription, fileName);
+    } else {
+      console.log(`Standard file size, using DIRECT analysis`);
+      // Run single comprehensive analysis
+      const masterResponse = await callLovableAI(MASTER_PROMPT, transcription);
+      console.log("AI analysis completed");
+      console.log("Raw response length:", masterResponse.length);
+      data = await parseJSONFromResponse(masterResponse) as AnalysisData;
+    }
     
     // Ensure all 12 stages exist with complete structure (fallback)
     const requiredStages = [
