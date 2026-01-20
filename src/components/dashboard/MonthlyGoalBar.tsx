@@ -39,7 +39,7 @@ export default function MonthlyGoalBar() {
           .maybeSingle(),
         supabase
           .from('clients')
-          .select('entry_value')
+          .select('sale_value')
           .eq('closer_id', user.id)
           .eq('is_sold', true)
           .gte('sold_at', monthStart)
@@ -54,7 +54,7 @@ export default function MonthlyGoalBar() {
       }
 
       const total = (salesResult.data || []).reduce(
-        (acc, client) => acc + (Number(client.entry_value) || 0), 
+        (acc, client) => acc + (Number(client.sale_value) || 0), 
         0
       );
       setCurrentValue(total);
