@@ -957,14 +957,15 @@ function splitTranscription(text: string): string[] {
   
   const chunks: string[] = [];
   let position = 0;
+  const MAX_CHUNKS = 20; // Protection against infinite loops
   
-  while (position < text.length) {
+  while (position < text.length && chunks.length < MAX_CHUNKS) {
     let end = Math.min(position + CHUNK_SIZE, text.length);
     
     // Find natural break point (end of speaker line)
     if (end < text.length) {
       // Look for newline after speaker pattern like "Nome:" or timestamps
-      const searchRange = text.substring(end - 500, end + 500);
+      const searchRange = text.substring(end - 500, Math.min(end + 500, text.length));
       const newlinePositions: number[] = [];
       
       for (let i = 0; i < searchRange.length; i++) {
@@ -991,13 +992,30 @@ function splitTranscription(text: string): string[] {
       }
     }
     
+    // Ensure end is always greater than position
+    if (end <= position) {
+      end = Math.min(position + CHUNK_SIZE, text.length);
+    }
+    
     chunks.push(text.substring(position, end));
     
-    // Move position with overlap
-    position = Math.max(position + 1, end - CHUNK_OVERLAP);
+    // FIX: Guarantee minimum advance of 80% of CHUNK_SIZE to avoid infinite loops
+    const minAdvance = Math.floor(CHUNK_SIZE * 0.8); // ~20KB minimum advance
+    const overlapPosition = end - CHUNK_OVERLAP;
+    position = Math.max(position + minAdvance, overlapPosition);
   }
   
-  console.log(`Split transcription into ${chunks.length} chunks`);
+  // Handle remaining text if we hit MAX_CHUNKS
+  if (chunks.length >= MAX_CHUNKS && position < text.length) {
+    console.warn(`Transcription truncated: ${text.length - position} chars remaining after ${MAX_CHUNKS} chunks`);
+    // Append remaining text summary to the last chunk
+    const remaining = text.substring(position);
+    if (remaining.length > 0) {
+      chunks[chunks.length - 1] += '\n\n[...continuação do áudio...]\n\n' + remaining.substring(0, 10000);
+    }
+  }
+  
+  console.log(`Split transcription into ${chunks.length} chunks (total: ${text.length} chars)`);
   chunks.forEach((chunk, i) => {
     console.log(`  Chunk ${i + 1}: ${chunk.length} chars`);
   });
