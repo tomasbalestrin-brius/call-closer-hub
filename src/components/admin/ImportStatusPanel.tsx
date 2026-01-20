@@ -50,6 +50,7 @@ export function ImportStatusPanel() {
   const [summary, setSummary] = useState<ImportSummary>({ totalCompleted: 0, totalPending: 0, totalErrors: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [processingUserId, setProcessingUserId] = useState<string | null>(null);
   const [liveProgress, setLiveProgress] = useState<LiveProgress | null>(null);
   const [lastProcessResult, setLastProcessResult] = useState<{
     processed: number;
@@ -254,6 +255,55 @@ export function ImportStatusPanel() {
   };
 
   const processAllPending = () => processBatch(summary.totalPending + summary.totalErrors, true);
+
+  const processUserFiles = async (userId: string, userName: string, pendingCount: number) => {
+    setProcessing(true);
+    setProcessingUserId(userId);
+    setLastProcessResult(null);
+    setLiveProgress(null);
+
+    try {
+      const estimatedTime = Math.ceil(pendingCount * 10 / 60);
+      toast.info(`Processando ${pendingCount} arquivos de ${userName} (~${estimatedTime} min)...`);
+
+      const { data, error } = await supabase.functions.invoke('process-pending-files', {
+        body: { 
+          userId: userId,
+          maxFilesPerUser: 100, // Process all for this user
+          resetErrors: true 
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.summary) {
+        setLastProcessResult({
+          processed: data.summary.totalProcessed,
+          success: data.summary.totalSuccess,
+          errors: data.summary.totalErrors,
+          remaining: data.summary.remainingPending,
+        });
+
+        if (data.summary.totalProcessed > 0) {
+          toast.success(
+            `${userName}: ${data.summary.totalSuccess} de ${data.summary.totalProcessed} processados. ` +
+            `${data.summary.remainingPending} restantes.`
+          );
+        } else {
+          toast.info(`${userName}: Nenhum arquivo pendente.`);
+        }
+      }
+
+      await fetchImportStatuses();
+    } catch (error) {
+      console.error(`Error processing files for ${userName}:`, error);
+      toast.error(`Erro ao processar arquivos de ${userName}`);
+    } finally {
+      setProcessing(false);
+      setProcessingUserId(null);
+      setLiveProgress(null);
+    }
+  };
 
   const progressPercent = summary.total > 0 
     ? Math.round((summary.totalCompleted / summary.total) * 100) 
@@ -490,14 +540,22 @@ export function ImportStatusPanel() {
           </div>
         )}
 
-        {/* Per Closer Breakdown */}
+        {/* Per Closer Breakdown with Process Buttons */}
         {closerStatuses.length > 0 && (
           <div className="space-y-3">
-            <h4 className="font-medium text-sm text-muted-foreground">Por Closer</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-sm text-muted-foreground">Processar por Closer</h4>
+              <p className="text-xs text-muted-foreground">Clique no botão para processar os pendentes de cada closer</p>
+            </div>
             <div className="space-y-2">
-              {closerStatuses.map(closer => {
+              {closerStatuses
+                .sort((a, b) => (a.pendingImports + a.errorImports) - (b.pendingImports + b.errorImports))
+                .map(closer => {
                 const total = closer.completedImports + closer.pendingImports + closer.errorImports;
                 const percent = total > 0 ? Math.round((closer.completedImports / total) * 100) : 0;
+                const pendingTotal = closer.pendingImports + closer.errorImports;
+                const estimatedMin = Math.ceil(pendingTotal * 10 / 60);
+                const isProcessingThis = processingUserId === closer.userId;
                 
                 return (
                   <div key={closer.userId} className="flex items-center justify-between p-3 rounded-lg border bg-card">
@@ -527,9 +585,35 @@ export function ImportStatusPanel() {
                           {closer.errorImports}
                         </Badge>
                       )}
-                      <div className="w-16 text-right text-sm text-muted-foreground">
+                      <div className="w-12 text-right text-sm text-muted-foreground">
                         {percent}%
                       </div>
+                      {pendingTotal > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => processUserFiles(closer.userId, closer.fullName, pendingTotal)}
+                          disabled={processing}
+                          className="ml-2 min-w-[120px] border-primary text-primary hover:bg-primary/10"
+                        >
+                          {isProcessingThis ? (
+                            <>
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                              Processando...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3 h-3 mr-1" />
+                              {pendingTotal} (~{estimatedMin}min)
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <Badge variant="outline" className="ml-2 min-w-[120px] justify-center bg-success/10 text-success border-success/30">
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          Completo
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 );
