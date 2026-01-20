@@ -1,10 +1,40 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Type definitions
+interface PendingFile {
+  id: string;
+  drive_file_id: string;
+  file_name: string;
+}
+
+interface User {
+  user_id: string;
+  full_name: string;
+  google_connected: boolean;
+  google_access_token: string | null;
+}
+
+interface UserResult {
+  userId: string;
+  userName: string;
+  pendingBefore: number;
+  processed: number;
+  success: number;
+  errors: number;
+  details: Array<{ fileName: string; success: boolean; error?: string }>;
+}
+
+interface ProgressTracker {
+  processed: number;
+  success: number;
+  errors: number;
+}
 
 // Safe JSON parser that handles empty/truncated responses
 async function safeReadJson(response: Response): Promise<{ data: unknown; error: string | null }> {
@@ -114,6 +144,124 @@ async function processWithRetry(
   return { success: false, error: "Max retries exceeded" };
 }
 
+// Process all files for a single user (runs sequentially within user)
+async function processUserFiles(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  // deno-lint-ignore no-explicit-any
+  supabase: SupabaseClient<any>,
+  user: User,
+  maxFilesPerUser: number,
+  sessionId: string,
+  progressTracker: ProgressTracker,
+  fileDelayMs: number
+): Promise<UserResult | null> {
+  // Get pending files for this user
+  const { data: pendingFiles, error: pendingError } = await supabase
+    .from("imported_files")
+    .select("id, drive_file_id, file_name")
+    .eq("user_id", user.user_id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+    .limit(maxFilesPerUser);
+
+  if (pendingError) {
+    console.error(`Error fetching pending files for ${user.full_name}:`, pendingError);
+    return {
+      userId: user.user_id,
+      userName: user.full_name,
+      pendingBefore: 0,
+      processed: 0,
+      success: 0,
+      errors: 1,
+      details: [{ fileName: "N/A", success: false, error: pendingError.message }],
+    };
+  }
+
+  const files = pendingFiles as PendingFile[] | null;
+
+  if (!files || files.length === 0) {
+    console.log(`No pending files for ${user.full_name}`);
+    return null;
+  }
+
+  console.log(`[${user.full_name}] Processing ${files.length} files`);
+
+  const userResult: UserResult = {
+    userId: user.user_id,
+    userName: user.full_name,
+    pendingBefore: files.length,
+    processed: 0,
+    success: 0,
+    errors: 0,
+    details: [],
+  };
+
+  for (const file of files) {
+    console.log(`[${user.full_name}] Processing: ${file.file_name}`);
+
+    // Increment global counter atomically (JS single-threaded, so this is safe)
+    progressTracker.processed++;
+
+    // Update progress
+    await supabase
+      .from("import_progress")
+      .update({
+        processed_files: progressTracker.processed,
+        success_count: progressTracker.success,
+        error_count: progressTracker.errors,
+        current_file_name: file.file_name,
+        current_closer_name: user.full_name,
+      })
+      .eq("session_id", sessionId);
+
+    // Process with retry logic
+    const processResult = await processWithRetry(
+      supabaseUrl,
+      serviceRoleKey,
+      user.user_id,
+      file.drive_file_id,
+      file.file_name
+    );
+
+    userResult.processed++;
+
+    if (processResult.success) {
+      if (processResult.alreadyImported) {
+        console.log(`[${user.full_name}] Already imported: ${file.file_name}`);
+      } else {
+        console.log(`[${user.full_name}] Success: ${file.file_name}`);
+      }
+      userResult.success++;
+      progressTracker.success++;
+      userResult.details.push({ fileName: file.file_name, success: true });
+    } else {
+      console.error(`[${user.full_name}] Error: ${file.file_name}:`, processResult.error);
+      userResult.errors++;
+      progressTracker.errors++;
+      userResult.details.push({
+        fileName: file.file_name,
+        success: false,
+        error: processResult.error?.substring(0, 200),
+      });
+    }
+
+    // Update progress after processing
+    await supabase
+      .from("import_progress")
+      .update({
+        success_count: progressTracker.success,
+        error_count: progressTracker.errors,
+      })
+      .eq("session_id", sessionId);
+
+    // Delay between files (reduced since we have parallelism across closers)
+    await new Promise(resolve => setTimeout(resolve, fileDelayMs));
+  }
+
+  return userResult;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -136,8 +284,10 @@ serve(async (req) => {
     const maxFilesPerUser = body.maxFilesPerUser || 10;
     const targetUserId = body.userId; // Optional: process only specific user
     const resetErrors = body.resetErrors !== false; // Default true: reset error files to pending first
+    const parallelClosers = body.parallelClosers || 3; // Number of closers to process in parallel
+    const fileDelayMs = body.fileDelayMs || 5000; // Delay between files (reduced from 10s to 5s)
 
-    console.log(`Starting batch processing. Max files per user: ${maxFilesPerUser}, Target user: ${targetUserId || 'all'}`);
+    console.log(`Starting batch processing. Max files/user: ${maxFilesPerUser}, Target: ${targetUserId || 'all'}, Parallel closers: ${parallelClosers}, File delay: ${fileDelayMs}ms`);
 
     // Get all users with Google connected
     let usersQuery = supabase
@@ -149,11 +299,13 @@ serve(async (req) => {
       usersQuery = usersQuery.eq("user_id", targetUserId);
     }
 
-    const { data: users, error: usersError } = await usersQuery;
+    const { data: usersData, error: usersError } = await usersQuery;
 
     if (usersError) {
       throw new Error(`Failed to fetch users: ${usersError.message}`);
     }
+
+    const users = usersData as User[] | null;
 
     if (!users || users.length === 0) {
       return new Response(
@@ -209,131 +361,53 @@ serve(async (req) => {
       console.error("Failed to create progress record:", progressInsertError);
     }
 
-    const results: Array<{
-      userId: string;
-      userName: string;
-      pendingBefore: number;
-      processed: number;
-      success: number;
-      errors: number;
-      details: Array<{ fileName: string; success: boolean; error?: string }>;
-    }> = [];
+    const results: UserResult[] = [];
 
-    let globalProcessed = 0;
-    let globalSuccess = 0;
-    let globalErrors = 0;
+    // Shared progress tracker (safe in JS single-threaded environment)
+    const progressTracker: ProgressTracker = { processed: 0, success: 0, errors: 0 };
 
-    for (const user of users) {
-      // Get pending files for this user
-      const { data: pendingFiles, error: pendingError } = await supabase
-        .from("imported_files")
-        .select("id, drive_file_id, file_name")
-        .eq("user_id", user.user_id)
-        .eq("status", "pending")
-        .order("created_at", { ascending: true })
-        .limit(maxFilesPerUser);
-
-      if (pendingError) {
-        console.error(`Error fetching pending files for ${user.full_name}:`, pendingError);
-        results.push({
-          userId: user.user_id,
-          userName: user.full_name,
-          pendingBefore: 0,
-          processed: 0,
-          success: 0,
-          errors: 1,
-          details: [{ fileName: "N/A", success: false, error: pendingError.message }],
-        });
-        continue;
-      }
-
-      if (!pendingFiles || pendingFiles.length === 0) {
-        console.log(`No pending files for ${user.full_name}`);
-        continue;
-      }
-
-      console.log(`Processing ${pendingFiles.length} files for ${user.full_name}`);
-
-      const userResult = {
-        userId: user.user_id,
-        userName: user.full_name,
-        pendingBefore: pendingFiles.length,
-        processed: 0,
-        success: 0,
-        errors: 0,
-        details: [] as Array<{ fileName: string; success: boolean; error?: string }>,
-      };
-
-      for (const file of pendingFiles) {
-        console.log(`Processing: ${file.file_name}`);
-
-        // Update progress BEFORE processing
-        globalProcessed++;
-        await supabase
-          .from("import_progress")
-          .update({
-            processed_files: globalProcessed,
-            success_count: globalSuccess,
-            error_count: globalErrors,
-            current_file_name: file.file_name,
-            current_closer_name: user.full_name,
-          })
-          .eq("session_id", sessionId);
-
-        // Process with retry logic
-        const processResult = await processWithRetry(
-          SUPABASE_URL,
-          SUPABASE_SERVICE_ROLE_KEY,
-          user.user_id,
-          file.drive_file_id,
-          file.file_name
-        );
-
-        userResult.processed++;
-
-        if (processResult.success) {
-          if (processResult.alreadyImported) {
-            console.log(`File already imported: ${file.file_name}`);
-          } else {
-            console.log(`Successfully processed: ${file.file_name}`);
-          }
-          userResult.success++;
-          globalSuccess++;
-          userResult.details.push({
-            fileName: file.file_name,
-            success: true,
-          });
-        } else {
-          console.error(`Error processing ${file.file_name}:`, processResult.error);
-          userResult.errors++;
-          globalErrors++;
-          userResult.details.push({
-            fileName: file.file_name,
-            success: false,
-            error: processResult.error?.substring(0, 200),
-          });
-        }
-
-        // Update progress AFTER processing
-        await supabase
-          .from("import_progress")
-          .update({
-            success_count: globalSuccess,
-            error_count: globalErrors,
-          })
-          .eq("session_id", sessionId);
-
-        // Increased delay between files to avoid rate limiting (10 seconds)
-        await new Promise(resolve => setTimeout(resolve, 10000));
-      }
-
-      results.push(userResult);
+    // Divide users into batches for parallel processing
+    const userBatches: User[][] = [];
+    for (let i = 0; i < users.length; i += parallelClosers) {
+      userBatches.push(users.slice(i, i + parallelClosers));
     }
 
-    // Calculate totals
-    const totalProcessed = results.reduce((sum, r) => sum + r.processed, 0);
-    const totalSuccess = results.reduce((sum, r) => sum + r.success, 0);
-    const totalErrors = results.reduce((sum, r) => sum + r.errors, 0);
+    console.log(`Processing ${users.length} users in ${userBatches.length} batch(es) of up to ${parallelClosers} parallel`);
+
+    for (let batchIndex = 0; batchIndex < userBatches.length; batchIndex++) {
+      const batch = userBatches[batchIndex];
+      console.log(`Starting batch ${batchIndex + 1}/${userBatches.length} with ${batch.length} users: ${batch.map(u => u.full_name).join(", ")}`);
+
+      // Process all users in this batch in parallel
+      const batchResults = await Promise.all(
+        batch.map(user =>
+          processUserFiles(
+            SUPABASE_URL,
+            SUPABASE_SERVICE_ROLE_KEY,
+            supabase,
+            user,
+            maxFilesPerUser,
+            sessionId,
+            progressTracker,
+            fileDelayMs
+          )
+        )
+      );
+
+      // Collect non-null results
+      for (const result of batchResults) {
+        if (result) {
+          results.push(result);
+        }
+      }
+
+      console.log(`Batch ${batchIndex + 1} complete. Progress: ${progressTracker.processed} processed, ${progressTracker.success} success, ${progressTracker.errors} errors`);
+    }
+
+    // Calculate totals from progressTracker
+    const totalProcessed = progressTracker.processed;
+    const totalSuccess = progressTracker.success;
+    const totalErrors = progressTracker.errors;
 
     // Get remaining pending count
     const { count: remainingPending } = await supabase
@@ -349,9 +423,9 @@ serve(async (req) => {
         completed_at: new Date().toISOString(),
         current_file_name: null,
         current_closer_name: null,
-        processed_files: globalProcessed,
-        success_count: globalSuccess,
-        error_count: globalErrors,
+        processed_files: totalProcessed,
+        success_count: totalSuccess,
+        error_count: totalErrors,
       })
       .eq("session_id", sessionId);
 
