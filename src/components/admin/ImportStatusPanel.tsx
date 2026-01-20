@@ -12,7 +12,10 @@ import {
   Loader2,
   FileText,
   Play,
-  Zap
+  Zap,
+  Rocket,
+  RotateCcw,
+  Users
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -24,12 +27,14 @@ interface CloserImportStatus {
   completedImports: number;
   pendingImports: number;
   errorImports: number;
+  processingImports: number;
 }
 
 interface ImportSummary {
   totalCompleted: number;
   totalPending: number;
   totalErrors: number;
+  totalProcessing: number;
   total: number;
 }
 
@@ -47,11 +52,18 @@ interface LiveProgress {
 
 export function ImportStatusPanel() {
   const [closerStatuses, setCloserStatuses] = useState<CloserImportStatus[]>([]);
-  const [summary, setSummary] = useState<ImportSummary>({ totalCompleted: 0, totalPending: 0, totalErrors: 0, total: 0 });
+  const [summary, setSummary] = useState<ImportSummary>({ 
+    totalCompleted: 0, 
+    totalPending: 0, 
+    totalErrors: 0, 
+    totalProcessing: 0,
+    total: 0 
+  });
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [processingUserId, setProcessingUserId] = useState<string | null>(null);
   const [liveProgress, setLiveProgress] = useState<LiveProgress | null>(null);
+  const [parallelMode, setParallelMode] = useState<number>(1);
   const [lastProcessResult, setLastProcessResult] = useState<{
     processed: number;
     success: number;
@@ -120,7 +132,10 @@ export function ImportStatusPanel() {
   }, [processing]);
 
   const fetchImportStatuses = async () => {
+    setLoading(true);
     try {
+      console.log('Fetching import statuses...');
+      
       // Get profiles with Google connected
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
@@ -128,6 +143,7 @@ export function ImportStatusPanel() {
         .order('full_name');
 
       if (profilesError) throw profilesError;
+      console.log('Profiles fetched:', profiles?.length);
 
       // Get import file counts grouped by user and status
       const { data: importCounts, error: countsError } = await supabase
@@ -135,6 +151,7 @@ export function ImportStatusPanel() {
         .select('user_id, status');
 
       if (countsError) throw countsError;
+      console.log('Import counts fetched:', importCounts?.length);
 
       // Get call counts per user
       const { data: callCounts, error: callsError } = await supabase
@@ -144,13 +161,13 @@ export function ImportStatusPanel() {
       if (callsError) throw callsError;
 
       // Process data
-      const statusMap = new Map<string, { completed: number; pending: number; error: number }>();
+      const statusMap = new Map<string, { completed: number; pending: number; error: number; processing: number }>();
       (importCounts || []).forEach(item => {
-        const current = statusMap.get(item.user_id) || { completed: 0, pending: 0, error: 0 };
+        const current = statusMap.get(item.user_id) || { completed: 0, pending: 0, error: 0, processing: 0 };
         if (item.status === 'completed') current.completed++;
         else if (item.status === 'pending') current.pending++;
         else if (item.status === 'error') current.error++;
-        else if (item.status === 'processing') current.pending++; // Count processing as pending
+        else if (item.status === 'processing') current.processing++;
         statusMap.set(item.user_id, current);
       });
 
@@ -162,7 +179,7 @@ export function ImportStatusPanel() {
       const statuses: CloserImportStatus[] = (profiles || [])
         .filter(p => p.google_connected)
         .map(profile => {
-          const imports = statusMap.get(profile.user_id) || { completed: 0, pending: 0, error: 0 };
+          const imports = statusMap.get(profile.user_id) || { completed: 0, pending: 0, error: 0, processing: 0 };
           return {
             userId: profile.user_id,
             fullName: profile.full_name,
@@ -171,22 +188,29 @@ export function ImportStatusPanel() {
             completedImports: imports.completed,
             pendingImports: imports.pending,
             errorImports: imports.error,
+            processingImports: imports.processing,
           };
         })
-        .filter(s => s.completedImports > 0 || s.pendingImports > 0 || s.errorImports > 0);
+        .filter(s => s.completedImports > 0 || s.pendingImports > 0 || s.errorImports > 0 || s.processingImports > 0);
 
+      console.log('Closer statuses:', statuses);
       setCloserStatuses(statuses);
 
       // Calculate totals
       const totalCompleted = statuses.reduce((sum, s) => sum + s.completedImports, 0);
       const totalPending = statuses.reduce((sum, s) => sum + s.pendingImports, 0);
       const totalErrors = statuses.reduce((sum, s) => sum + s.errorImports, 0);
-      setSummary({
+      const totalProcessing = statuses.reduce((sum, s) => sum + s.processingImports, 0);
+      
+      const newSummary = {
         totalCompleted,
         totalPending,
         totalErrors,
-        total: totalCompleted + totalPending + totalErrors,
-      });
+        totalProcessing,
+        total: totalCompleted + totalPending + totalErrors + totalProcessing,
+      };
+      console.log('Summary:', newSummary);
+      setSummary(newSummary);
 
     } catch (error) {
       console.error('Error fetching import statuses:', error);
@@ -210,17 +234,71 @@ export function ImportStatusPanel() {
     return `${minutes} minutos`;
   }, []);
 
-  const processBatch = async (batchSize: number, resetErrors: boolean = false) => {
+  const estimateParallelTime = (pendingCount: number, parallelClosers: number) => {
+    // With parallel processing: ~5s per file, divided by parallel closers
+    const effectiveTimePerFile = 5 / parallelClosers;
+    const totalSeconds = pendingCount * effectiveTimePerFile;
+    const minutes = Math.ceil(totalSeconds / 60);
+    return minutes < 1 ? '< 1' : minutes.toString();
+  };
+
+  const resetErrorFiles = async () => {
+    try {
+      const { error } = await supabase
+        .from('imported_files')
+        .update({ status: 'pending', error_message: null })
+        .eq('status', 'error');
+
+      if (error) throw error;
+      
+      toast.success('Arquivos com erro resetados para pendente');
+      await fetchImportStatuses();
+    } catch (error) {
+      console.error('Error resetting error files:', error);
+      toast.error('Erro ao resetar arquivos');
+    }
+  };
+
+  const resetProcessingFiles = async () => {
+    try {
+      const { error } = await supabase
+        .from('imported_files')
+        .update({ status: 'pending' })
+        .eq('status', 'processing');
+
+      if (error) throw error;
+      
+      toast.success('Arquivos em processamento resetados');
+      await fetchImportStatuses();
+    } catch (error) {
+      console.error('Error resetting processing files:', error);
+      toast.error('Erro ao resetar arquivos');
+    }
+  };
+
+  const processBatchParallel = async (maxFilesPerUser: number, parallelClosers: number, resetErrors: boolean = false) => {
     setProcessing(true);
+    setParallelMode(parallelClosers);
     setLastProcessResult(null);
     setLiveProgress(null);
 
     try {
-      const estimatedTime = Math.ceil(batchSize * 10 / 60); // 10s per file
-      toast.info(`Processando lote de ${batchSize} arquivos (~${estimatedTime} min)...`);
+      const pendingTotal = summary.totalPending + (resetErrors ? summary.totalErrors : 0);
+      const estimatedTime = estimateParallelTime(pendingTotal, parallelClosers);
+      
+      toast.info(
+        `🚀 Processamento paralelo iniciado!\n` +
+        `${parallelClosers} closers simultâneos • ~${estimatedTime} min estimado`,
+        { duration: 5000 }
+      );
 
       const { data, error } = await supabase.functions.invoke('process-pending-files', {
-        body: { maxFilesPerUser: batchSize, resetErrors }
+        body: { 
+          maxFilesPerUser, 
+          parallelClosers,
+          resetErrors,
+          fileDelayMs: 3000 // 3s delay between files
+        }
       });
 
       if (error) throw error;
@@ -235,26 +313,25 @@ export function ImportStatusPanel() {
 
         if (data.summary.totalProcessed > 0) {
           toast.success(
-            `Processados ${data.summary.totalSuccess} de ${data.summary.totalProcessed} arquivos. ` +
-            `${data.summary.remainingPending} pendentes restantes.`
+            `✅ ${data.summary.totalSuccess} de ${data.summary.totalProcessed} processados! ` +
+            `${data.summary.remainingPending} pendentes restantes.`,
+            { duration: 8000 }
           );
         } else {
           toast.info('Nenhum arquivo pendente para processar.');
         }
       }
 
-      // Refresh statuses
       await fetchImportStatuses();
     } catch (error) {
-      console.error('Error processing pending files:', error);
-      toast.error('Erro ao processar arquivos pendentes');
+      console.error('Error processing files:', error);
+      toast.error('Erro ao processar arquivos. Verifique os logs.');
     } finally {
       setProcessing(false);
       setLiveProgress(null);
+      setParallelMode(1);
     }
   };
-
-  const processAllPending = () => processBatch(summary.totalPending + summary.totalErrors, true);
 
   const processUserFiles = async (userId: string, userName: string, pendingCount: number) => {
     setProcessing(true);
@@ -263,14 +340,15 @@ export function ImportStatusPanel() {
     setLiveProgress(null);
 
     try {
-      const estimatedTime = Math.ceil(pendingCount * 10 / 60);
+      const estimatedTime = Math.ceil(pendingCount * 5 / 60); // 5s per file
       toast.info(`Processando ${pendingCount} arquivos de ${userName} (~${estimatedTime} min)...`);
 
       const { data, error } = await supabase.functions.invoke('process-pending-files', {
         body: { 
-          userId: userId,
-          maxFilesPerUser: 100, // Process all for this user
-          resetErrors: true 
+          targetUserId: userId,
+          maxFilesPerUser: 100,
+          resetErrors: true,
+          fileDelayMs: 3000
         }
       });
 
@@ -313,11 +391,15 @@ export function ImportStatusPanel() {
     ? Math.round((liveProgress.processedFiles / liveProgress.totalFiles) * 100)
     : 0;
 
+  const pendingTotal = summary.totalPending + summary.totalErrors;
+  const closersWithPending = closerStatuses.filter(c => c.pendingImports + c.errorImports > 0).length;
+
   if (loading) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <span className="ml-2 text-muted-foreground">Carregando status...</span>
         </CardContent>
       </Card>
     );
@@ -333,66 +415,193 @@ export function ImportStatusPanel() {
               Status de Importação do Drive
             </CardTitle>
             <CardDescription>
-              Visão geral de arquivos importados, pendentes e com erro
+              Controle total sobre importação e análise de transcrições
             </CardDescription>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={fetchImportStatuses}
-              disabled={loading || processing}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Atualizar
-            </Button>
-            <Button 
-              variant="outline"
-              onClick={() => processBatch(5)}
-              disabled={processing || summary.totalPending === 0}
-              className="border-primary text-primary hover:bg-primary/10"
-            >
-              {processing ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Play className="w-4 h-4 mr-2" />
-              )}
-              5 Arquivos (~1 min)
-            </Button>
-            <Button 
-              variant="outline"
-              onClick={() => processBatch(10)}
-              disabled={processing || summary.totalPending === 0}
-              className="border-amber-500 text-amber-600 hover:bg-amber-500/10"
-            >
-              {processing ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Play className="w-4 h-4 mr-2" />
-              )}
-              10 Arquivos (~2 min)
-            </Button>
-            <Button 
-              onClick={processAllPending}
-              disabled={processing || summary.totalPending + summary.totalErrors === 0}
-              className="gradient-primary"
-            >
-              {processing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processando...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2" />
-                  Todos ({summary.totalPending + summary.totalErrors})
-                </>
-              )}
-            </Button>
-          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={fetchImportStatuses}
+            disabled={loading || processing}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Summary Stats */}
+        <div className="grid gap-4 md:grid-cols-5">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+            <div className="p-2 rounded-full bg-success/10">
+              <CheckCircle2 className="w-5 h-5 text-success" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{summary.totalCompleted}</p>
+              <p className="text-xs text-muted-foreground">Concluídos</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+            <div className="p-2 rounded-full bg-amber-500/10">
+              <Clock className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{summary.totalPending}</p>
+              <p className="text-xs text-muted-foreground">Pendentes</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+            <div className="p-2 rounded-full bg-blue-500/10">
+              <Loader2 className="w-5 h-5 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{summary.totalProcessing}</p>
+              <p className="text-xs text-muted-foreground">Processando</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+            <div className="p-2 rounded-full bg-destructive/10">
+              <AlertCircle className="w-5 h-5 text-destructive" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{summary.totalErrors}</p>
+              <p className="text-xs text-muted-foreground">Erros</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+            <div className="p-2 rounded-full bg-primary/10">
+              <FileText className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{summary.total}</p>
+              <p className="text-xs text-muted-foreground">Total</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Overall Progress */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Progresso Geral</span>
+            <span className="font-medium">{progressPercent}%</span>
+          </div>
+          <Progress value={progressPercent} className="h-2" />
+        </div>
+
+        {/* Processing Controls */}
+        <div className="p-4 rounded-lg border bg-muted/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium flex items-center gap-2">
+              <Rocket className="w-4 h-4 text-primary" />
+              Controles de Processamento
+            </h4>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Users className="w-4 h-4" />
+              {closersWithPending} closers com pendentes
+            </div>
+          </div>
+
+          {/* Quick Reset Buttons */}
+          <div className="flex gap-2 flex-wrap">
+            {summary.totalErrors > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetErrorFiles}
+                disabled={processing}
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Resetar {summary.totalErrors} Erros
+              </Button>
+            )}
+            {summary.totalProcessing > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetProcessingFiles}
+                disabled={processing}
+                className="text-blue-600 border-blue-500/30 hover:bg-blue-500/10"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Resetar {summary.totalProcessing} Travados
+              </Button>
+            )}
+          </div>
+
+          {/* Parallel Processing Buttons */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Button 
+              variant="outline"
+              onClick={() => processBatchParallel(25, 1, true)}
+              disabled={processing || pendingTotal === 0}
+              className="h-auto py-3 flex flex-col items-center gap-1"
+            >
+              {processing && parallelMode === 1 ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Play className="w-5 h-5" />
+              )}
+              <span className="font-medium">Sequencial</span>
+              <span className="text-xs text-muted-foreground">
+                1 closer • ~{estimateParallelTime(pendingTotal, 1)} min
+              </span>
+            </Button>
+
+            <Button 
+              variant="outline"
+              onClick={() => processBatchParallel(25, 3, true)}
+              disabled={processing || pendingTotal === 0}
+              className="h-auto py-3 flex flex-col items-center gap-1 border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
+            >
+              {processing && parallelMode === 3 ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Zap className="w-5 h-5" />
+              )}
+              <span className="font-medium">Turbo</span>
+              <span className="text-xs">
+                3 paralelos • ~{estimateParallelTime(pendingTotal, 3)} min
+              </span>
+            </Button>
+
+            <Button 
+              onClick={() => processBatchParallel(25, 6, true)}
+              disabled={processing || pendingTotal === 0}
+              className="h-auto py-3 flex flex-col items-center gap-1 gradient-primary"
+            >
+              {processing && parallelMode === 6 ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Rocket className="w-5 h-5" />
+              )}
+              <span className="font-medium">Ultra</span>
+              <span className="text-xs">
+                6 paralelos • ~{estimateParallelTime(pendingTotal, 6)} min
+              </span>
+            </Button>
+
+            <Button 
+              variant="secondary"
+              onClick={() => processBatchParallel(100, closersWithPending || 1, true)}
+              disabled={processing || pendingTotal === 0}
+              className="h-auto py-3 flex flex-col items-center gap-1"
+            >
+              {processing && parallelMode > 6 ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <Users className="w-5 h-5" />
+                </>
+              )}
+              <span className="font-medium">Todos ({pendingTotal})</span>
+              <span className="text-xs text-muted-foreground">
+                {closersWithPending} closers simultâneos
+              </span>
+            </Button>
+          </div>
+        </div>
+
         {/* Live Progress Panel */}
         {processing && (
           <div className="p-4 rounded-lg border-2 border-primary/30 bg-primary/5 space-y-4 animate-in fade-in duration-300">
@@ -402,7 +611,9 @@ export function ImportStatusPanel() {
                   <Zap className="w-5 h-5 text-primary animate-pulse" />
                   <div className="absolute inset-0 bg-primary/30 blur-md rounded-full animate-pulse" />
                 </div>
-                <span className="font-semibold text-primary">Processando em Tempo Real</span>
+                <span className="font-semibold text-primary">
+                  Processando {parallelMode > 1 ? `(${parallelMode} paralelos)` : 'Sequencial'}
+                </span>
               </div>
               {liveProgress && (
                 <Badge variant="outline" className="bg-primary/10 border-primary/30">
@@ -466,55 +677,6 @@ export function ImportStatusPanel() {
           </div>
         )}
 
-        {/* Summary Stats */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            <div className="p-2 rounded-full bg-success/10">
-              <CheckCircle2 className="w-5 h-5 text-success" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{summary.totalCompleted}</p>
-              <p className="text-xs text-muted-foreground">Concluídos</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            <div className="p-2 rounded-full bg-amber-500/10">
-              <Clock className="w-5 h-5 text-amber-500" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{summary.totalPending}</p>
-              <p className="text-xs text-muted-foreground">Pendentes</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            <div className="p-2 rounded-full bg-destructive/10">
-              <AlertCircle className="w-5 h-5 text-destructive" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{summary.totalErrors}</p>
-              <p className="text-xs text-muted-foreground">Erros</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            <div className="p-2 rounded-full bg-primary/10">
-              <FileText className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{summary.total}</p>
-              <p className="text-xs text-muted-foreground">Total</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Overall Progress */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Progresso Geral</span>
-            <span className="font-medium">{progressPercent}%</span>
-          </div>
-          <Progress value={progressPercent} className="h-2" />
-        </div>
-
         {/* Last Process Result */}
         {lastProcessResult && !processing && (
           <div className="p-4 rounded-lg bg-muted/30 border border-border">
@@ -549,12 +711,12 @@ export function ImportStatusPanel() {
             </div>
             <div className="space-y-2">
               {closerStatuses
-                .sort((a, b) => (a.pendingImports + a.errorImports) - (b.pendingImports + b.errorImports))
+                .sort((a, b) => (b.pendingImports + b.errorImports) - (a.pendingImports + a.errorImports))
                 .map(closer => {
-                const total = closer.completedImports + closer.pendingImports + closer.errorImports;
+                const total = closer.completedImports + closer.pendingImports + closer.errorImports + closer.processingImports;
                 const percent = total > 0 ? Math.round((closer.completedImports / total) * 100) : 0;
                 const pendingTotal = closer.pendingImports + closer.errorImports;
-                const estimatedMin = Math.ceil(pendingTotal * 10 / 60);
+                const estimatedMin = Math.ceil(pendingTotal * 5 / 60); // 5s per file with parallel
                 const isProcessingThis = processingUserId === closer.userId;
                 
                 return (
@@ -573,6 +735,12 @@ export function ImportStatusPanel() {
                         <CheckCircle2 className="w-3 h-3 mr-1" />
                         {closer.completedImports}
                       </Badge>
+                      {closer.processingImports > 0 && (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800">
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          {closer.processingImports}
+                        </Badge>
+                      )}
                       {closer.pendingImports > 0 && (
                         <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
                           <Clock className="w-3 h-3 mr-1" />
@@ -624,7 +792,7 @@ export function ImportStatusPanel() {
 
         {closerStatuses.length === 0 && (
           <p className="text-center text-muted-foreground py-4">
-            Nenhum arquivo importado ainda
+            Nenhum arquivo importado ainda. Verifique se os closers têm Google Drive conectado.
           </p>
         )}
       </CardContent>
