@@ -1157,7 +1157,7 @@ async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<Ana
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-pro", // Use pro model for final merge (higher accuracy)
+      model: "google/gemini-2.5-flash", // Use flash for faster merge
       messages: [
         { role: "system", content: mergePrompt },
         { role: "user", content: "Consolide as análises parciais em uma análise final completa seguindo o schema exato especificado." },
