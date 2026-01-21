@@ -13,6 +13,16 @@ interface DriveFile {
   createdTime?: string;
 }
 
+// Padrões de título que devem ser EXCLUÍDOS (não são calls válidas)
+const EXCLUDED_TITLE_PATTERNS = [
+  /anotações do gemini/i,
+  /transcrição do chat/i,
+];
+
+function shouldExcludeFile(fileName: string): boolean {
+  return EXCLUDED_TITLE_PATTERNS.some(pattern => pattern.test(fileName));
+}
+
 // Safe JSON parser that handles empty/truncated responses
 async function safeReadJson(response: Response): Promise<{ data: unknown; error: string | null }> {
   try {
@@ -209,9 +219,18 @@ serve(async (req) => {
         .map(f => f.drive_file_id)
     );
     
-    const filesToImport = files.filter((f: DriveFile) => !completedIds.has(f.id));
+    // Filter out completed files
+    const filesNotCompleted = files.filter((f: DriveFile) => !completedIds.has(f.id));
+    
+    // Filter out excluded title patterns (not valid calls)
+    const filesToImport = filesNotCompleted.filter((f: DriveFile) => !shouldExcludeFile(f.name));
+    const excludedCount = filesNotCompleted.length - filesToImport.length;
+    
+    if (excludedCount > 0) {
+      console.log(`Excluded ${excludedCount} files with invalid title patterns (Anotações do Gemini, Transcrição do chat)`);
+    }
 
-    console.log(`${filesToImport.length} files to import (excluding ${completedIds.size} completed)`);
+    console.log(`${filesToImport.length} files to import (excluding ${completedIds.size} completed, ${excludedCount} invalid patterns)`);
 
     if (filesToImport.length === 0) {
       await supabase

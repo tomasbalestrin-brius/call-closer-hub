@@ -103,6 +103,16 @@ serve(async (req) => {
       id: string;
       name: string;
     }
+
+    // Padrões de título que devem ser EXCLUÍDOS (não são calls válidas)
+    const EXCLUDED_TITLE_PATTERNS = [
+      /anotações do gemini/i,
+      /transcrição do chat/i,
+    ];
+
+    function shouldExcludeFile(fileName: string): boolean {
+      return EXCLUDED_TITLE_PATTERNS.some(pattern => pattern.test(fileName));
+    }
     
     const files = ((listResult as { files?: DriveFile[] })?.files || []) as DriveFile[];
     console.log(`Found ${files.length} files since last sync`);
@@ -143,12 +153,18 @@ serve(async (req) => {
 
     console.log(`${newFiles.length} files to process (excluding ${completedIds.size} completed)`);
 
+    // Filter out excluded title patterns (not valid calls)
+    let filesToImport: DriveFile[] = newFiles.filter((f) => !shouldExcludeFile(f.name));
+    const excludedCount = newFiles.length - filesToImport.length;
+    if (excludedCount > 0) {
+      console.log(`Excluded ${excludedCount} files with invalid title patterns (Anotações do Gemini, Transcrição do chat)`);
+    }
+
     // Filter by name patterns if configured
-    let filesToImport: DriveFile[] = newFiles;
     const patterns = profile.drive_name_patterns as string[] | null;
     
     if (patterns && patterns.length > 0) {
-      filesToImport = newFiles.filter((file) => {
+      filesToImport = filesToImport.filter((file) => {
         return patterns.some(pattern => {
           const regex = new RegExp(pattern.replace(/\*/g, ".*"), "i");
           return regex.test(file.name);
