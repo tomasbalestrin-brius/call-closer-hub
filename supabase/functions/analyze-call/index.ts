@@ -1062,10 +1062,10 @@ async function analyzeChunk(
   chunkIndex: number, 
   totalChunks: number
 ): Promise<ChunkAnalysis> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY not configured");
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
   }
 
   const prompt = CHUNK_ANALYSIS_PROMPT
@@ -1079,14 +1079,14 @@ async function analyzeChunk(
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash", // Faster model for chunks
+          model: "gpt-4o-mini", // Faster model for chunks
           messages: [
             { role: "system", content: prompt },
             { role: "user", content: `Analise este trecho da transcrição:\n\n${chunk}` },
@@ -1137,10 +1137,10 @@ async function analyzeChunk(
 }
 
 async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<AnalysisData> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY not configured");
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
   }
 
   console.log(`Merging ${partialAnalyses.length} chunk analyses...`);
@@ -1150,14 +1150,14 @@ async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<Ana
     JSON.stringify(partialAnalyses, null, 2)
   );
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash", // Use flash for faster merge
+      model: "gpt-4o-mini", // Use mini for faster merge
       messages: [
         { role: "system", content: mergePrompt },
         { role: "user", content: "Consolide as análises parciais em uma análise final completa seguindo o schema exato especificado." },
@@ -1216,79 +1216,80 @@ async function analyzeWithChunking(transcription: string, fileName: string): Pro
   return mergedAnalysis;
 }
 
-// ============= ORIGINAL AI FUNCTIONS =============
+// ============= OPENAI API FUNCTIONS =============
 
-async function callLovableAI(systemPrompt: string, transcription: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+async function callOpenAI(systemPrompt: string, transcription: string): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY not configured");
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
   }
 
-  console.log("Calling Lovable AI with google/gemini-2.5-pro model...");
+  console.log("Calling OpenAI with gpt-4o model...");
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-pro",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}` },
       ],
       temperature: 0.1,
+      max_tokens: 16000,
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Lovable AI API error:", response.status, errorText);
+    console.error("OpenAI API error:", response.status, errorText);
     
     if (response.status === 429) {
       throw new Error("Rate limit exceeded. Please try again later.");
     }
-    if (response.status === 402) {
-      throw new Error("Payment required. Please add funds to your Lovable AI workspace.");
+    if (response.status === 402 || response.status === 401) {
+      throw new Error("Invalid API key or payment required.");
     }
     
-    throw new Error(`Lovable AI API error: ${response.status}`);
+    throw new Error(`OpenAI API error: ${response.status}`);
   }
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
   
   if (!content) {
-    throw new Error("Empty response from Lovable AI");
+    throw new Error("Empty response from OpenAI");
   }
 
-  console.log("Lovable AI response received, length:", content.length);
+  console.log("OpenAI response received, length:", content.length);
   return content;
 }
 
 // Fallback: Try to repair invalid JSON using a short model call
 async function repairJSONWithAI(brokenJSON: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY not configured");
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
   }
 
-  console.log("Attempting to repair JSON with Lovable AI...");
+  console.log("Attempting to repair JSON with OpenAI...");
   
   // Truncate to avoid token limits
   const truncated = brokenJSON.substring(0, 50000);
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: "You are a JSON repair assistant. You receive broken or truncated JSON and return a valid, complete JSON object. Do not add new data, just fix structural issues (missing braces, quotes, commas). If content is truncated, close all open objects/arrays properly." },
         { role: "user", content: `Fix this broken JSON and return ONLY valid JSON:\n\n${truncated}` },
@@ -1525,7 +1526,7 @@ serve(async (req) => {
     } else {
       console.log(`Standard file size, using DIRECT analysis`);
       // Run single comprehensive analysis
-      const masterResponse = await callLovableAI(MASTER_PROMPT, transcription);
+      const masterResponse = await callOpenAI(MASTER_PROMPT, transcription);
       console.log("AI analysis completed");
       console.log("Raw response length:", masterResponse.length);
       data = await parseJSONFromResponse(masterResponse) as AnalysisData;
