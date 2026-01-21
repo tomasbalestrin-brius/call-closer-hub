@@ -26,10 +26,23 @@ import { cn } from '@/lib/utils';
 interface MergeCallDialogProps {
   currentCall: Call;
   onMergeComplete: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  targetCloserId?: string; // For admin/leader to merge calls of other closers
 }
 
-export function MergeCallDialog({ currentCall, onMergeComplete }: MergeCallDialogProps) {
-  const [open, setOpen] = useState(false);
+export function MergeCallDialog({ 
+  currentCall, 
+  onMergeComplete, 
+  open: controlledOpen, 
+  onOpenChange: controlledOnOpenChange,
+  targetCloserId
+}: MergeCallDialogProps) {
+  // Support both controlled and uncontrolled modes
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = controlledOnOpenChange || setInternalOpen;
+  
   const [availableCalls, setAvailableCalls] = useState<Call[]>([]);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,11 +56,14 @@ export function MergeCallDialog({ currentCall, onMergeComplete }: MergeCallDialo
 
   const fetchAvailableCalls = async () => {
     try {
-      // Get calls from the same client that aren't already merged
+      // Use targetCloserId if provided (admin viewing other closer's calls)
+      const closerId = targetCloserId || currentCall.closer_id;
+      
+      // Get calls from the same closer that aren't already merged
       const { data, error } = await supabase
         .from('calls')
         .select('*')
-        .eq('closer_id', currentCall.closer_id)
+        .eq('closer_id', closerId)
         .is('merged_with_call_id', null)
         .neq('id', currentCall.id)
         .order('call_date', { ascending: false });
