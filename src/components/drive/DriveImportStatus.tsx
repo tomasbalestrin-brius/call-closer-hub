@@ -67,6 +67,7 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const [reimportingFile, setReimportingFile] = useState<string | null>(null);
   const [reprocessingAll, setReprocessingAll] = useState(false);
   const [fullImporting, setFullImporting] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -122,13 +123,13 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
     }
   };
 
-  // Importação completa: reseta a data para MIN_IMPORT_DATE e importa tudo
+  // Etapa 1: Buscar arquivos do Drive (rápido, só cria pending)
   const handleFullImport = async () => {
     if (!user || fullImporting) return;
 
     setFullImporting(true);
     try {
-      toast.info('Iniciando importação completa de janeiro/2026 em diante...');
+      toast.info('Buscando transcrições do Drive...');
       
       // 1. Resetar drive_last_sync para 01/01/2026
       const { error: updateError } = await supabase
@@ -141,8 +142,8 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
         throw new Error('Falha ao resetar data de sincronização');
       }
 
-      // 2. Chamar sync-drive-files para importar todos os arquivos
-      const response = await supabase.functions.invoke('sync-drive-files', {
+      // 2. Chamar initial-import (apenas busca e cria pending - rápido!)
+      const response = await supabase.functions.invoke('initial-import', {
         body: { userId: user.id },
       });
 
@@ -152,31 +153,75 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
 
       const data = response.data;
       
-      if (data.synced > 0) {
-        const remainingMsg = data.remaining > 0 
-          ? ` (${data.remaining} restantes - clique novamente para continuar)` 
-          : '';
-        toast.success(`${data.synced} arquivos importados!${remainingMsg}`);
-        onImportComplete?.();
+      if (data.queued > 0) {
+        toast.success(`${data.queued} arquivos encontrados! Clique em "Processar" para analisar com IA.`);
       } else {
-        toast.info('Nenhum arquivo novo para importar');
+        toast.info('Nenhum arquivo novo encontrado');
       }
 
       fetchImportStatus();
     } catch (error) {
       console.error('Error on full import:', error);
-      toast.error('Erro na importação completa');
+      toast.error('Erro ao buscar arquivos');
     } finally {
       setFullImporting(false);
     }
   };
 
+  // Etapa 2: Processar arquivos pendentes (análise com IA)
+  const handleProcessPending = async () => {
+    if (!user || processing) return;
+
+    const pendingFiles = imports.filter(i => i.status === 'pending' || i.status === 'processing');
+    if (pendingFiles.length === 0) {
+      toast.info('Nenhum arquivo pendente para processar');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      toast.info(`Processando ${pendingFiles.length} arquivos com IA...`);
+      
+      const response = await supabase.functions.invoke('process-pending-files', {
+        body: { 
+          targetUserId: user.id,
+          maxFilesPerUser: 50,
+          fileDelayMs: 3000
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to process');
+      }
+
+      const data = response.data;
+      
+      if (data.summary?.totalSuccess > 0) {
+        toast.success(`${data.summary.totalSuccess} arquivos processados com sucesso!`);
+        onImportComplete?.();
+      }
+      
+      if (data.summary?.totalErrors > 0) {
+        toast.warning(`${data.summary.totalErrors} arquivos falharam`);
+      }
+
+      fetchImportStatus();
+    } catch (error) {
+      console.error('Error processing files:', error);
+      toast.error('Erro ao processar arquivos');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Sincronizar: busca apenas novos arquivos desde última sync
   const handleSync = async () => {
     if (!user || syncing) return;
 
     setSyncing(true);
     try {
-      const response = await supabase.functions.invoke('sync-drive-files', {
+      // Usa initial-import que busca arquivos novos rapidamente
+      const response = await supabase.functions.invoke('initial-import', {
         body: { userId: user.id },
       });
 
@@ -186,12 +231,8 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
 
       const data = response.data;
       
-      if (data.synced > 0) {
-        const remainingMsg = data.remaining > 0 
-          ? ` (${data.remaining} restantes)` 
-          : '';
-        toast.success(`${data.synced} arquivos sincronizados e analisados!${remainingMsg}`);
-        onImportComplete?.();
+      if (data.queued > 0) {
+        toast.success(`${data.queued} novos arquivos encontrados! Clique em "Processar" para analisar.`);
       } else {
         toast.info('Nenhum arquivo novo para importar');
       }
@@ -361,46 +402,47 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button 
-                    variant="default" 
+                    variant="outline" 
                     size="sm" 
                     onClick={handleFullImport}
-                    disabled={syncing || reprocessingAll || fullImporting}
-                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                    disabled={syncing || reprocessingAll || fullImporting || processing}
                   >
                     {fullImporting ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
                       <Download className="w-4 h-4 mr-2" />
                     )}
-                    Importar Tudo
+                    Buscar
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-xs">
                   <p className="text-xs">
-                    Importa TODAS as transcrições de janeiro/2026 em diante.
-                    Use quando configurar o Drive pela primeira vez.
+                    Etapa 1: Busca transcrições do Drive (rápido).
+                    Arquivos ficam pendentes para processamento.
                   </p>
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button 
-                    variant="outline" 
+                    variant="default" 
                     size="sm" 
-                    onClick={handleSync}
-                    disabled={syncing || reprocessingAll || fullImporting}
+                    onClick={handleProcessPending}
+                    disabled={syncing || reprocessingAll || fullImporting || processing || pendingCount === 0}
+                    className="bg-gradient-to-r from-primary to-primary/80"
                   >
-                    {syncing ? (
+                    {processing ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
                       <RefreshCw className="w-4 h-4 mr-2" />
                     )}
-                    Sincronizar
+                    Processar ({pendingCount})
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-xs">
                   <p className="text-xs">
-                    Busca novos arquivos desde a última sincronização.
+                    Etapa 2: Analisa arquivos pendentes com IA.
+                    Pode demorar ~5s por arquivo.
                   </p>
                 </TooltipContent>
               </Tooltip>
