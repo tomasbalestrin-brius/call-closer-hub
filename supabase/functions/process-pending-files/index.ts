@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 
+// Declare EdgeRuntime type for Deno/Supabase Edge Functions
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -287,6 +292,129 @@ async function processUserFiles(
   return userResult;
 }
 
+// Main processing function (runs in background)
+async function runBatchProcessing(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  // deno-lint-ignore no-explicit-any
+  supabase: SupabaseClient<any>,
+  users: User[],
+  sessionId: string,
+  maxFilesPerUser: number,
+  parallelClosers: number,
+  fileDelayMs: number,
+  resetErrors: boolean
+): Promise<void> {
+  try {
+    // Reset error files to pending if requested (except chat transcriptions and empty docs)
+    if (resetErrors) {
+      const { data: errorFiles, error: resetError } = await supabase
+        .from("imported_files")
+        .update({ status: "pending", error_message: null })
+        .eq("status", "error")
+        .not("error_message", "ilike", "%chat%")
+        .not("error_message", "ilike", "%transcrição do chat%")
+        .not("error_message", "ilike", "%vazio%")
+        .select("id");
+
+      if (resetError) {
+        console.error("Failed to reset error files:", resetError);
+      } else {
+        console.log(`Reset ${errorFiles?.length || 0} error files to pending`);
+      }
+    }
+
+    const results: UserResult[] = [];
+    const progressTracker: ProgressTracker = { processed: 0, success: 0, errors: 0 };
+
+    // Divide users into batches for parallel processing
+    const userBatches: User[][] = [];
+    for (let i = 0; i < users.length; i += parallelClosers) {
+      userBatches.push(users.slice(i, i + parallelClosers));
+    }
+
+    console.log(`Processing ${users.length} users in ${userBatches.length} batch(es) of up to ${parallelClosers} parallel`);
+
+    for (let batchIndex = 0; batchIndex < userBatches.length; batchIndex++) {
+      // Check if session was cancelled
+      const { data: sessionCheck } = await supabase
+        .from("import_progress")
+        .select("status")
+        .eq("session_id", sessionId)
+        .single();
+
+      if (sessionCheck?.status === "cancelled") {
+        console.log("Session cancelled by user, stopping processing");
+        break;
+      }
+
+      const batch = userBatches[batchIndex];
+      console.log(`Starting batch ${batchIndex + 1}/${userBatches.length} with ${batch.length} users: ${batch.map(u => u.full_name).join(", ")}`);
+
+      // Process all users in this batch in parallel
+      const batchResults = await Promise.all(
+        batch.map(user =>
+          processUserFiles(
+            supabaseUrl,
+            serviceRoleKey,
+            supabase,
+            user,
+            maxFilesPerUser,
+            sessionId,
+            progressTracker,
+            fileDelayMs
+          )
+        )
+      );
+
+      // Collect non-null results
+      for (const result of batchResults) {
+        if (result) {
+          results.push(result);
+        }
+      }
+
+      console.log(`Batch ${batchIndex + 1} complete. Progress: ${progressTracker.processed} processed, ${progressTracker.success} success, ${progressTracker.errors} errors`);
+    }
+
+    // Get remaining pending count
+    const { count: remainingPending } = await supabase
+      .from("imported_files")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending");
+
+    // Mark progress as completed
+    await supabase
+      .from("import_progress")
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        current_file_name: null,
+        current_closer_name: null,
+        processed_files: progressTracker.processed,
+        success_count: progressTracker.success,
+        error_count: progressTracker.errors,
+      })
+      .eq("session_id", sessionId);
+
+    console.log(`Batch complete. Processed: ${progressTracker.processed}, Success: ${progressTracker.success}, Errors: ${progressTracker.errors}, Remaining: ${remainingPending}`);
+
+  } catch (error) {
+    console.error("Error in background processing:", error);
+    
+    // Mark session as error
+    await supabase
+      .from("import_progress")
+      .update({
+        status: "error",
+        completed_at: new Date().toISOString(),
+        current_file_name: null,
+        current_closer_name: error instanceof Error ? error.message : "Unknown error",
+      })
+      .eq("session_id", sessionId);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -307,10 +435,10 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const maxFilesPerUser = body.maxFilesPerUser || 10;
-    const targetUserId = body.userId; // Optional: process only specific user
-    const resetErrors = body.resetErrors !== false; // Default true: reset error files to pending first
-    const parallelClosers = body.parallelClosers || 3; // Number of closers to process in parallel
-    const fileDelayMs = body.fileDelayMs || 5000; // Delay between files (reduced from 10s to 5s)
+    const targetUserId = body.userId;
+    const resetErrors = body.resetErrors !== false;
+    const parallelClosers = body.parallelClosers || 3;
+    const fileDelayMs = body.fileDelayMs || 5000;
 
     console.log(`Starting batch processing. Max files/user: ${maxFilesPerUser}, Target: ${targetUserId || 'all'}, Parallel closers: ${parallelClosers}, File delay: ${fileDelayMs}ms`);
 
@@ -341,24 +469,6 @@ serve(async (req) => {
 
     console.log(`Found ${users.length} users with Google connected`);
 
-    // Reset error files to pending if requested (except chat transcriptions and empty docs)
-    if (resetErrors) {
-      const { data: errorFiles, error: resetError } = await supabase
-        .from("imported_files")
-        .update({ status: "pending", error_message: null })
-        .eq("status", "error")
-        .not("error_message", "ilike", "%chat%")
-        .not("error_message", "ilike", "%transcrição do chat%")
-        .not("error_message", "ilike", "%vazio%")
-        .select("id");
-
-      if (resetError) {
-        console.error("Failed to reset error files:", resetError);
-      } else {
-        console.log(`Reset ${errorFiles?.length || 0} error files to pending`);
-      }
-    }
-
     // Count total pending files for progress tracking
     const { count: totalPendingCount } = await supabase
       .from("imported_files")
@@ -386,91 +496,38 @@ serve(async (req) => {
       console.error("Failed to create progress record:", progressInsertError);
     }
 
-    const results: UserResult[] = [];
+    // FIRE-AND-FORGET: Start background processing and return immediately
+    EdgeRuntime.waitUntil(
+      runBatchProcessing(
+        SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY,
+        supabase,
+        users,
+        sessionId,
+        maxFilesPerUser,
+        parallelClosers,
+        fileDelayMs,
+        resetErrors
+      )
+    );
 
-    // Shared progress tracker (safe in JS single-threaded environment)
-    const progressTracker: ProgressTracker = { processed: 0, success: 0, errors: 0 };
-
-    // Divide users into batches for parallel processing
-    const userBatches: User[][] = [];
-    for (let i = 0; i < users.length; i += parallelClosers) {
-      userBatches.push(users.slice(i, i + parallelClosers));
-    }
-
-    console.log(`Processing ${users.length} users in ${userBatches.length} batch(es) of up to ${parallelClosers} parallel`);
-
-    for (let batchIndex = 0; batchIndex < userBatches.length; batchIndex++) {
-      const batch = userBatches[batchIndex];
-      console.log(`Starting batch ${batchIndex + 1}/${userBatches.length} with ${batch.length} users: ${batch.map(u => u.full_name).join(", ")}`);
-
-      // Process all users in this batch in parallel
-      const batchResults = await Promise.all(
-        batch.map(user =>
-          processUserFiles(
-            SUPABASE_URL,
-            SUPABASE_SERVICE_ROLE_KEY,
-            supabase,
-            user,
-            maxFilesPerUser,
-            sessionId,
-            progressTracker,
-            fileDelayMs
-          )
-        )
-      );
-
-      // Collect non-null results
-      for (const result of batchResults) {
-        if (result) {
-          results.push(result);
-        }
-      }
-
-      console.log(`Batch ${batchIndex + 1} complete. Progress: ${progressTracker.processed} processed, ${progressTracker.success} success, ${progressTracker.errors} errors`);
-    }
-
-    // Calculate totals from progressTracker
-    const totalProcessed = progressTracker.processed;
-    const totalSuccess = progressTracker.success;
-    const totalErrors = progressTracker.errors;
-
-    // Get remaining pending count
-    const { count: remainingPending } = await supabase
-      .from("imported_files")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending");
-
-    // Mark progress as completed
-    await supabase
-      .from("import_progress")
-      .update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        current_file_name: null,
-        current_closer_name: null,
-        processed_files: totalProcessed,
-        success_count: totalSuccess,
-        error_count: totalErrors,
-      })
-      .eq("session_id", sessionId);
-
-    console.log(`Batch complete. Processed: ${totalProcessed}, Success: ${totalSuccess}, Errors: ${totalErrors}, Remaining: ${remainingPending}`);
-
+    // Return immediately with session ID for tracking
     return new Response(
       JSON.stringify({
         success: true,
         sessionId,
+        message: `Processamento iniciado para ${totalPending} arquivos`,
         summary: {
-          usersProcessed: results.length,
-          totalProcessed,
-          totalSuccess,
-          totalErrors,
-          remainingPending: remainingPending || 0,
+          usersToProcess: users.length,
+          totalPending,
+          parallelClosers,
+          maxFilesPerUser,
         },
-        results,
+        trackVia: "realtime",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error) {
     console.error("Error in process-pending-files:", error);
     return new Response(
