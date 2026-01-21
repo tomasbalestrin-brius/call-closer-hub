@@ -1266,7 +1266,75 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      profiles_safe: {
+        Row: {
+          avatar_url: string | null
+          closer_level: Database["public"]["Enums"]["closer_level"] | null
+          created_at: string | null
+          drive_auto_import: boolean | null
+          drive_file_types: Json | null
+          drive_folder_id: string | null
+          drive_folder_name: string | null
+          drive_import_frequency:
+            | Database["public"]["Enums"]["import_frequency"]
+            | null
+          drive_last_sync: string | null
+          drive_name_patterns: Json | null
+          full_name: string | null
+          google_connected: boolean | null
+          google_email: string | null
+          id: string | null
+          phone: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          closer_level?: Database["public"]["Enums"]["closer_level"] | null
+          created_at?: string | null
+          drive_auto_import?: boolean | null
+          drive_file_types?: Json | null
+          drive_folder_id?: string | null
+          drive_folder_name?: string | null
+          drive_import_frequency?:
+            | Database["public"]["Enums"]["import_frequency"]
+            | null
+          drive_last_sync?: string | null
+          drive_name_patterns?: Json | null
+          full_name?: string | null
+          google_connected?: boolean | null
+          google_email?: string | null
+          id?: string | null
+          phone?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          closer_level?: Database["public"]["Enums"]["closer_level"] | null
+          created_at?: string | null
+          drive_auto_import?: boolean | null
+          drive_file_types?: Json | null
+          drive_folder_id?: string | null
+          drive_folder_name?: string | null
+          drive_import_frequency?:
+            | Database["public"]["Enums"]["import_frequency"]
+            | null
+          drive_last_sync?: string | null
+          drive_name_patterns?: Json | null
+          full_name?: string | null
+          google_connected?: boolean | null
+          google_email?: string | null
+          id?: string | null
+          phone?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       create_client_notification: {
@@ -1292,6 +1360,18 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      insert_audit_log: {
+        Args: {
+          p_action_type: string
+          p_entity_id?: string
+          p_entity_type: string
+          p_metadata?: Json
+          p_new_value?: Json
+          p_old_value?: Json
+          p_target_user_id?: string
+        }
+        Returns: string
       }
       is_squad_leader: {
         Args: { _squad_id: string; _user_id: string }
