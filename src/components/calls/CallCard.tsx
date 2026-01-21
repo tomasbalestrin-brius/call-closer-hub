@@ -7,10 +7,13 @@ import { Calendar, Clock, Star, DollarSign, Target, TrendingUp, User } from 'luc
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import CallDetailDialog from './CallDetailDialog';
+import { CallCardMenu } from './CallCardMenu';
 
 interface CallCardProps {
   call: Call;
   onClick?: () => void;
+  canDelete?: boolean;
+  onCallUpdated?: () => void;
 }
 
 const statusConfig: Record<CallStatus, { label: string; className: string }> = {
@@ -35,7 +38,7 @@ const closerClassificationConfig: Record<CloserClassification, { label: string; 
   elite: { label: 'Elite', className: 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white' },
 };
 
-export default function CallCard({ call, onClick }: CallCardProps) {
+export default function CallCard({ call, onClick, canDelete = false, onCallUpdated }: CallCardProps) {
   const [showDialog, setShowDialog] = useState(false);
   const statusInfo = statusConfig[call.status];
   const formattedDate = format(new Date(call.call_date), "dd 'de' MMM", { locale: ptBR });
@@ -79,15 +82,23 @@ export default function CallCard({ call, onClick }: CallCardProps) {
                 <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{call.niche}</p>
               )}
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <Badge className={cn('font-medium text-xs', statusInfo.className)}>
-                {statusInfo.label}
-              </Badge>
-              {leadInfo && (
-                <Badge variant="outline" className={cn('text-xs border', leadInfo.className)}>
-                  {leadInfo.label}
+            <div className="flex items-center gap-1">
+              <div className="flex flex-col items-end gap-1">
+                <Badge className={cn('font-medium text-xs', statusInfo.className)}>
+                  {statusInfo.label}
                 </Badge>
-              )}
+                {leadInfo && (
+                  <Badge variant="outline" className={cn('text-xs border', leadInfo.className)}>
+                    {leadInfo.label}
+                  </Badge>
+                )}
+              </div>
+              <CallCardMenu
+                call={call}
+                canDelete={canDelete}
+                onViewDetails={() => setShowDialog(true)}
+                onCallUpdated={onCallUpdated || (() => {})}
+              />
             </div>
           </div>
         </CardHeader>

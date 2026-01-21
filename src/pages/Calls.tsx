@@ -18,7 +18,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Phone, Trash2, User, Eye, X } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Search, Phone, Trash2, User, Eye, X, Merge, Loader2 } from 'lucide-react';
 import { Call, CallStatus } from '@/types';
 import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
@@ -38,6 +48,8 @@ export default function Calls() {
   const [statusFilter, setStatusFilter] = useState<CallStatus | 'all'>('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedCalls, setSelectedCalls] = useState<string[]>([]);
+  const [merging, setMerging] = useState(false);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   
   // Closer filter for admin/leader
   const [closers, setClosers] = useState<CloserProfile[]>([]);
@@ -134,8 +146,6 @@ export default function Calls() {
 
   const handleDeleteSelected = async () => {
     if (selectedCalls.length === 0) return;
-    
-    if (!confirm(`Tem certeza que deseja excluir ${selectedCalls.length} call(s)?`)) return;
 
     try {
       const { error } = await supabase
@@ -147,10 +157,44 @@ export default function Calls() {
 
       toast.success(`${selectedCalls.length} call(s) excluída(s)`);
       setSelectedCalls([]);
+      setShowBulkDeleteDialog(false);
       fetchCalls();
     } catch (error) {
       console.error('Error deleting calls:', error);
       toast.error('Erro ao excluir calls');
+    }
+  };
+
+  const handleMergeSelected = async () => {
+    if (selectedCalls.length !== 2) {
+      toast.error('Selecione exatamente 2 calls para juntar');
+      return;
+    }
+
+    setMerging(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('merge-and-reanalyze', {
+        body: {
+          primaryCallId: selectedCalls[0],
+          secondaryCallId: selectedCalls[1]
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.newScore !== undefined) {
+        toast.success(`Calls unidas com sucesso! Nova nota: ${data.newScore}/10`);
+      } else {
+        toast.success('Calls unidas com sucesso!');
+      }
+      
+      setSelectedCalls([]);
+      fetchCalls();
+    } catch (error) {
+      console.error('Error merging calls:', error);
+      toast.error('Erro ao juntar e analisar calls');
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -201,11 +245,26 @@ export default function Calls() {
             <p className="text-muted-foreground mt-1">Gerencie todas as suas calls</p>
           </div>
           <div className="flex items-center gap-2">
+            {selectedCalls.length === 2 && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleMergeSelected}
+                disabled={merging}
+              >
+                {merging ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Merge className="w-4 h-4 mr-2" />
+                )}
+                {merging ? 'Juntando...' : 'Juntar (2)'}
+              </Button>
+            )}
             {canDeleteCalls && selectedCalls.length > 0 && (
               <Button 
                 variant="destructive" 
                 size="sm"
-                onClick={handleDeleteSelected}
+                onClick={() => setShowBulkDeleteDialog(true)}
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Excluir ({selectedCalls.length})
@@ -285,15 +344,19 @@ export default function Calls() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredCalls.map((call) => (
               <div key={call.id} className="relative">
-                {canDeleteCalls && (
+                {(canDeleteCalls || isAdmin || isLeader) && (
                   <input
                     type="checkbox"
                     checked={selectedCalls.includes(call.id)}
                     onChange={() => toggleCallSelection(call.id)}
-                    className="absolute top-4 right-4 z-10 w-4 h-4 accent-primary"
+                    className="absolute top-4 right-12 z-10 w-4 h-4 accent-primary"
                   />
                 )}
-                <CallCard call={call} />
+                <CallCard 
+                  call={call} 
+                  canDelete={canDeleteCalls}
+                  onCallUpdated={fetchCalls}
+                />
               </div>
             ))}
           </div>
@@ -307,6 +370,28 @@ export default function Calls() {
             </p>
           </div>
         )}
+
+        {/* Bulk Delete Confirmation Dialog */}
+        <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir calls</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir {selectedCalls.length} call(s)? 
+                Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleDeleteSelected}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </MainLayout>
   );
