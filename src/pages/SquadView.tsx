@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import CallDetailDialog from '@/components/calls/CallDetailDialog';
+import { CallCardMenu } from '@/components/calls/CallCardMenu';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -546,6 +547,17 @@ export default function SquadView() {
                             </Badge>
                           )}
                           {getStatusBadge(call.status)}
+                          <CallCardMenu
+                            call={call}
+                            canDelete={true}
+                            targetCloserId={selectedCloserId}
+                            onViewDetails={() => setSelectedCall(call)}
+                            onCallUpdated={() => {
+                              if (selectedCloserId) {
+                                fetchCloserData(selectedCloserId);
+                              }
+                            }}
+                          />
                           <ChevronRight className="w-4 h-4 text-muted-foreground" />
                         </div>
                       </div>

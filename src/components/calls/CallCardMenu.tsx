@@ -28,9 +28,10 @@ interface CallCardMenuProps {
   canDelete: boolean;
   onViewDetails: () => void;
   onCallUpdated: () => void;
+  targetCloserId?: string;
 }
 
-export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated }: CallCardMenuProps) {
+export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, targetCloserId }: CallCardMenuProps) {
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -92,6 +93,7 @@ export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated }: 
       {showMergeDialog && (
         <MergeCallDialog
           currentCall={call}
+          targetCloserId={targetCloserId}
           onMergeComplete={() => {
             setShowMergeDialog(false);
             onCallUpdated();
