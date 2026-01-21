@@ -34,16 +34,15 @@ export function useAuditLog() {
     if (!user) return;
 
     try {
-      const { error } = await supabase.from('admin_audit_logs').insert([{
-        action_type: params.actionType,
-        performed_by: user.id,
-        target_user_id: params.targetUserId || null,
-        entity_type: params.entityType,
-        entity_id: params.entityId || null,
-        old_value: params.oldValue || null,
-        new_value: params.newValue || null,
-        metadata: params.metadata || null,
-      }]);
+      const { error } = await supabase.rpc('insert_audit_log', {
+        p_action_type: params.actionType,
+        p_entity_type: params.entityType,
+        p_entity_id: params.entityId || null,
+        p_target_user_id: params.targetUserId || null,
+        p_old_value: params.oldValue || null,
+        p_new_value: params.newValue || null,
+        p_metadata: params.metadata || null,
+      });
 
       if (error) {
         console.error('Error logging audit action:', error);

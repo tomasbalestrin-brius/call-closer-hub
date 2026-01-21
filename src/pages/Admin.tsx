@@ -138,7 +138,22 @@ export default function Admin() {
         // Admin vê todos os closers
         const { data, error } = await supabase
           .from('profiles')
-          .select('*')
+          .select(`
+            id,
+            user_id,
+            full_name,
+            avatar_url,
+            phone,
+            status,
+            google_connected,
+            google_email,
+            closer_level,
+            drive_folder_id,
+            drive_folder_name,
+            drive_last_sync,
+            created_at,
+            updated_at
+          `)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -162,7 +177,22 @@ export default function Admin() {
 
         const { data, error } = await supabase
           .from('profiles')
-          .select('*')
+          .select(`
+            id,
+            user_id,
+            full_name,
+            avatar_url,
+            phone,
+            status,
+            google_connected,
+            google_email,
+            closer_level,
+            drive_folder_id,
+            drive_folder_name,
+            drive_last_sync,
+            created_at,
+            updated_at
+          `)
           .in('user_id', memberIds)
           .order('created_at', { ascending: false });
 

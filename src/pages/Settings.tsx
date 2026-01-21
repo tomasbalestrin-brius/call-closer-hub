@@ -32,7 +32,26 @@ export default function Settings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          id,
+          user_id,
+          full_name,
+          avatar_url,
+          phone,
+          status,
+          google_connected,
+          google_email,
+          closer_level,
+          drive_folder_id,
+          drive_folder_name,
+          drive_last_sync,
+          drive_auto_import,
+          drive_import_frequency,
+          drive_file_types,
+          drive_name_patterns,
+          created_at,
+          updated_at
+        `)
         .eq('user_id', user.id)
         .single();
 
