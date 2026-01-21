@@ -55,74 +55,99 @@ async function safeReadJson(response: Response): Promise<{ data: unknown; error:
   }
 }
 
-// Process a single file with retry logic for rate limits
+// Process a single file with retry logic and timeout safety
+const ANALYSIS_TIMEOUT_MS = 90000; // 90 seconds max per file
+
 async function processWithRetry(
   supabaseUrl: string,
   serviceRoleKey: string,
   userId: string,
   fileId: string,
   fileName: string,
-  maxRetries = 5
+  maxRetries = 3
 ): Promise<{ success: boolean; result?: unknown; error?: string; alreadyImported?: boolean }> {
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Attempt ${attempt}/${maxRetries} for file: ${fileName}`);
       
-      const response = await fetch(`${supabaseUrl}/functions/v1/import-and-analyze`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${serviceRoleKey}`,
-        },
-        body: JSON.stringify({
-          userId,
-          fileId,
-          fileName,
-        }),
-      });
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ANALYSIS_TIMEOUT_MS);
 
-      const { data: result, error: parseError } = await safeReadJson(response);
+      try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/import-and-analyze`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceRoleKey}`,
+          },
+          body: JSON.stringify({
+            userId,
+            fileId,
+            fileName,
+          }),
+          signal: controller.signal,
+        });
 
-      // Check for rate limit errors
-      const resultObj = result as { error?: string; alreadyImported?: boolean } | null;
-      const isRateLimit = 
-        response.status === 429 || 
-        parseError?.includes("Rate limit") ||
-        resultObj?.error?.includes("Rate limit") ||
-        resultObj?.error?.includes("rate limit");
+        clearTimeout(timeoutId);
 
-      if (isRateLimit) {
-        // Exponential backoff: 10s, 20s, 40s, 80s, 160s
-        const waitTime = Math.min(10000 * Math.pow(2, attempt - 1), 180000); 
-        console.log(`Rate limit hit on attempt ${attempt}. Waiting ${waitTime/1000}s before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        continue;
+        const { data: result, error: parseError } = await safeReadJson(response);
+
+        // Check for rate limit errors
+        const resultObj = result as { error?: string; alreadyImported?: boolean } | null;
+        const isRateLimit = 
+          response.status === 429 || 
+          parseError?.includes("Rate limit") ||
+          resultObj?.error?.includes("Rate limit") ||
+          resultObj?.error?.includes("rate limit");
+
+        if (isRateLimit) {
+          // Exponential backoff: 15s, 30s, 60s
+          const waitTime = Math.min(15000 * Math.pow(2, attempt - 1), 60000); 
+          console.log(`Rate limit hit on attempt ${attempt}. Waiting ${waitTime/1000}s before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+
+        // Check for empty response (might be timeout)
+        if (parseError === "Empty response from function") {
+          const waitTime = attempt * 10000; // 10s, 20s, 30s
+          console.log(`Empty response on attempt ${attempt}. Waiting ${waitTime/1000}s before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+
+        // If we got an error that's not rate limit, return it
+        if (parseError || !response.ok) {
+          return { 
+            success: false, 
+            error: parseError || resultObj?.error || `HTTP ${response.status}` 
+          };
+        }
+
+        // Check if already imported
+        if (resultObj?.alreadyImported) {
+          return { success: true, alreadyImported: true, result };
+        }
+
+        // Success!
+        return { success: true, result };
+
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        
+        // Check if it was a timeout/abort
+        if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
+          console.log(`Timeout (${ANALYSIS_TIMEOUT_MS/1000}s) on attempt ${attempt} for: ${fileName}`);
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            continue;
+          }
+          return { success: false, error: `Timeout após ${ANALYSIS_TIMEOUT_MS/1000}s` };
+        }
+        throw fetchErr;
       }
-
-      // Check for empty response (might be timeout)
-      if (parseError === "Empty response from function") {
-        const waitTime = attempt * 5000; // 5s, 10s, 15s, 20s, 25s
-        console.log(`Empty response on attempt ${attempt}. Waiting ${waitTime/1000}s before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        continue;
-      }
-
-      // If we got an error that's not rate limit, return it
-      if (parseError || !response.ok) {
-        return { 
-          success: false, 
-          error: parseError || resultObj?.error || `HTTP ${response.status}` 
-        };
-      }
-
-      // Check if already imported
-      if (resultObj?.alreadyImported) {
-        return { success: true, alreadyImported: true, result };
-      }
-
-      // Success!
-      return { success: true, result };
 
     } catch (err) {
       console.error(`Exception on attempt ${attempt}:`, err);
