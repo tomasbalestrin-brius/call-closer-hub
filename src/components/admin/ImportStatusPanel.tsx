@@ -16,8 +16,7 @@ import {
   Rocket,
   RotateCcw,
   Users,
-  Download,
-  CloudDownload
+  Download
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -73,7 +72,6 @@ export function ImportStatusPanel() {
     remaining: number;
   } | null>(null);
   const [importingUserId, setImportingUserId] = useState<string | null>(null);
-  const [importingAll, setImportingAll] = useState(false);
   const [allProfiles, setAllProfiles] = useState<{ userId: string; fullName: string; googleConnected: boolean; folderId: string | null }[]>([]);
 
   useEffect(() => {
@@ -263,59 +261,6 @@ export function ImportStatusPanel() {
       toast.error(`Erro ao importar arquivos de ${userName}`);
     } finally {
       setImportingUserId(null);
-    }
-  };
-
-  // Import files from Drive for all connected closers
-  const triggerImportForAllClosers = async () => {
-    const connectedClosers = allProfiles.filter(p => p.googleConnected && p.folderId);
-    
-    if (connectedClosers.length === 0) {
-      toast.error('Nenhum closer com Google Drive configurado');
-      return;
-    }
-
-    setImportingAll(true);
-    let totalImported = 0;
-    let totalErrors = 0;
-
-    toast.info(`Importando do Drive de ${connectedClosers.length} closers...`);
-
-    try {
-      for (const closer of connectedClosers) {
-        try {
-          const { data, error } = await supabase.functions.invoke('initial-import', {
-            body: { userId: closer.userId }
-          });
-          
-          if (error) {
-            console.error(`Error importing for ${closer.fullName}:`, error);
-            totalErrors++;
-          } else if (data?.imported > 0) {
-            totalImported += data.imported;
-          }
-        } catch (err) {
-          console.error(`Error importing for ${closer.fullName}:`, err);
-          totalErrors++;
-        }
-      }
-
-      if (totalImported > 0) {
-        toast.success(`${totalImported} arquivos importados de ${connectedClosers.length} closers!`);
-      } else if (totalErrors === 0) {
-        toast.info('Nenhum arquivo novo encontrado');
-      }
-
-      if (totalErrors > 0) {
-        toast.warning(`${totalErrors} closer(s) com erro na importação`);
-      }
-
-      await fetchImportStatuses();
-    } catch (error) {
-      console.error('Error importing for all closers:', error);
-      toast.error('Erro ao importar arquivos');
-    } finally {
-      setImportingAll(false);
     }
   };
 
@@ -600,22 +545,8 @@ export function ImportStatusPanel() {
             </div>
           </div>
 
-          {/* Import from Drive + Quick Reset Buttons */}
+          {/* Quick Reset Buttons */}
           <div className="flex gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={triggerImportForAllClosers}
-              disabled={processing || importingAll || importingUserId !== null}
-              className="border-blue-500 text-blue-600 hover:bg-blue-50"
-            >
-              {importingAll ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <CloudDownload className="w-4 h-4 mr-2" />
-              )}
-              Importar Todos do Drive
-            </Button>
             {summary.totalErrors > 0 && (
               <Button
                 variant="outline"
@@ -874,7 +805,7 @@ export function ImportStatusPanel() {
                         size="sm"
                         variant="ghost"
                         onClick={() => triggerImportForUser(closer.userId, closer.fullName)}
-                        disabled={processing || importingUserId !== null || importingAll}
+                        disabled={processing || importingUserId !== null}
                         className="text-blue-600 hover:bg-blue-50"
                         title="Buscar novos arquivos do Drive"
                       >
