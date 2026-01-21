@@ -326,6 +326,23 @@ export function ImportStatusPanel() {
   };
 
   const processBatchParallel = async (maxFilesPerUser: number, parallelClosers: number, resetErrors: boolean = false) => {
+    // Check if there's already an active processing session
+    const { data: activeProgress } = await supabase
+      .from('import_progress')
+      .select('id, status, started_at')
+      .eq('status', 'running')
+      .maybeSingle();
+
+    if (activeProgress) {
+      const startedAt = new Date(activeProgress.started_at);
+      const minutesRunning = Math.floor((Date.now() - startedAt.getTime()) / 60000);
+      toast.warning(
+        `Já existe um processamento em andamento há ${minutesRunning} min. Aguarde ou resete os arquivos travados.`,
+        { duration: 5000 }
+      );
+      return;
+    }
+
     setProcessing(true);
     setParallelMode(parallelClosers);
     setLastProcessResult(null);
@@ -383,6 +400,18 @@ export function ImportStatusPanel() {
   };
 
   const processUserFiles = async (userId: string, userName: string, pendingCount: number) => {
+    // Check if there's already an active processing session
+    const { data: activeProgress } = await supabase
+      .from('import_progress')
+      .select('id, status')
+      .eq('status', 'running')
+      .maybeSingle();
+
+    if (activeProgress) {
+      toast.warning('Já existe um processamento em andamento. Aguarde finalizar.');
+      return;
+    }
+
     setProcessing(true);
     setProcessingUserId(userId);
     setLastProcessResult(null);
