@@ -9,9 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import CallDetailDialog from '@/components/calls/CallDetailDialog';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -560,127 +558,19 @@ export default function SquadView() {
         )}
 
         {/* Call Detail Dialog */}
-        <Dialog open={!!selectedCall} onOpenChange={() => setSelectedCall(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Phone className="w-5 h-5" />
-                Detalhes da Call: {selectedCall?.client_name}
-              </DialogTitle>
-            </DialogHeader>
-            
-            {selectedCall && (
-              <ScrollArea className="max-h-[70vh]">
-                <Tabs defaultValue="analysis" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="analysis">Análise</TabsTrigger>
-                    <TabsTrigger value="technical">Análise Técnica</TabsTrigger>
-                    <TabsTrigger value="transcription">Transcrição</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="analysis" className="space-y-4 mt-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Status</p>
-                        {getStatusBadge(selectedCall.status)}
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Nota</p>
-                        <p className="font-medium">{selectedCall.score || '-'}/10</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Data</p>
-                        <p className="font-medium">
-                          {format(new Date(selectedCall.call_date), "dd/MM/yyyy", { locale: ptBR })}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Produto</p>
-                        <p className="font-medium">{selectedCall.product || '-'}</p>
-                      </div>
-                    </div>
-                    
-                    {selectedCall.ai_summary && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Resumo da IA</p>
-                        <p className="text-sm bg-muted p-3 rounded-lg">{selectedCall.ai_summary}</p>
-                      </div>
-                    )}
-                    
-                    {selectedCall.call_conclusion && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Conclusão</p>
-                        <p className="text-sm bg-muted p-3 rounded-lg">{selectedCall.call_conclusion}</p>
-                      </div>
-                    )}
-                    
-                    {selectedCall.main_errors && selectedCall.main_errors.length > 0 && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Principais Erros</p>
-                        <ul className="list-disc list-inside text-sm space-y-1">
-                          {selectedCall.main_errors.map((error, i) => (
-                            <li key={i}>{error}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {selectedCall.main_wins && selectedCall.main_wins.length > 0 && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Principais Acertos</p>
-                        <ul className="list-disc list-inside text-sm space-y-1">
-                          {selectedCall.main_wins.map((win, i) => (
-                            <li key={i}>{win}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </TabsContent>
-                  
-                  <TabsContent value="technical" className="mt-4">
-                    {selectedCall.technical_analysis ? (
-                      <div className="space-y-4">
-                        {Object.entries(selectedCall.technical_analysis as TechnicalAnalysis).map(([key, value]) => {
-                          if (typeof value === 'object' && value !== null) {
-                            return (
-                              <div key={key} className="border rounded-lg p-4">
-                                <h4 className="font-medium mb-2 capitalize">
-                                  {key.replace(/_/g, ' ')}
-                                </h4>
-                                <pre className="text-xs bg-muted p-3 rounded overflow-x-auto">
-                                  {JSON.stringify(value, null, 2)}
-                                </pre>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-center py-8">
-                        Análise técnica não disponível.
-                      </p>
-                    )}
-                  </TabsContent>
-                  
-                  <TabsContent value="transcription" className="mt-4">
-                    {selectedCall.transcription ? (
-                      <div className="bg-muted p-4 rounded-lg max-h-96 overflow-y-auto">
-                        <pre className="text-sm whitespace-pre-wrap font-sans">
-                          {selectedCall.transcription}
-                        </pre>
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-center py-8">
-                        Transcrição não disponível.
-                      </p>
-                    )}
-                  </TabsContent>
-                </Tabs>
-              </ScrollArea>
-            )}
-          </DialogContent>
-        </Dialog>
+        <CallDetailDialog
+          call={selectedCall}
+          open={!!selectedCall}
+          onOpenChange={() => setSelectedCall(null)}
+          onCallUpdated={() => {
+            setSelectedCall(null);
+            if (selectedCloserId) {
+              fetchCloserData(selectedCloserId);
+            }
+          }}
+          canDelete={true}
+          targetCloserId={selectedCloserId}
+        />
 
         {/* Set Goal Dialog */}
         <SetMonthlyGoalDialog
