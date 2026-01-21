@@ -23,26 +23,6 @@ function shouldExcludeFile(fileName: string): boolean {
   return EXCLUDED_TITLE_PATTERNS.some(pattern => pattern.test(fileName));
 }
 
-// Safe JSON parser that handles empty/truncated responses
-async function safeReadJson(response: Response): Promise<{ data: unknown; error: string | null }> {
-  try {
-    const text = await response.text();
-    if (!text || text.trim() === '') {
-      console.error("Empty response received");
-      return { data: null, error: "Empty response from function" };
-    }
-    try {
-      const data = JSON.parse(text);
-      return { data, error: null };
-    } catch (parseError) {
-      console.error("JSON parse error:", parseError, "Raw text (first 500 chars):", text.substring(0, 500));
-      return { data: { __raw: text }, error: `JSON parse error: ${parseError}` };
-    }
-  } catch (readError) {
-    console.error("Failed to read response:", readError);
-    return { data: null, error: `Failed to read response: ${readError}` };
-  }
-}
 
 async function refreshTokenIfNeeded(
   supabaseUrl: string,
