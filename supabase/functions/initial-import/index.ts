@@ -249,9 +249,10 @@ serve(async (req) => {
       );
     }
 
-    // Create or update pending records for all files
+    // Create pending records for all files (fast, no processing)
+    let createdCount = 0;
     for (const file of filesToImport) {
-      await supabase
+      const { error: upsertError } = await supabase
         .from("imported_files")
         .upsert({
           user_id: userId,
@@ -260,57 +261,11 @@ serve(async (req) => {
           status: "pending",
           imported_at: new Date().toISOString(),
         }, { onConflict: "user_id,drive_file_id" });
-    }
-
-    // Process files SEQUENTIALLY (batchSize = 1) to avoid timeout/connection issues
-    const results: { fileId: string; fileName: string; success: boolean; error?: string }[] = [];
-    const maxFilesPerExecution = 5; // Limit files per execution to prevent timeout
-    const filesToProcess = filesToImport.slice(0, maxFilesPerExecution);
-
-    for (const file of filesToProcess) {
-      try {
-        console.log(`Processing file: ${file.name} (${file.id})`);
-        
-        const importResponse = await fetch(`${SUPABASE_URL}/functions/v1/import-and-analyze`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-          },
-          body: JSON.stringify({ 
-            userId, 
-            fileId: file.id,
-            fileName: file.name,
-          }),
-        });
-
-        const { data: result, error: parseError } = await safeReadJson(importResponse);
-        
-        if (parseError) {
-          console.error(`Failed to parse response for ${file.name}:`, parseError);
-          results.push({ fileId: file.id, fileName: file.name, success: false, error: parseError });
-          continue;
-        }
-        
-        if (!importResponse.ok) {
-          const errorMsg = (result as { error?: string })?.error || "Unknown error";
-          console.error(`Failed to import ${file.name}:`, errorMsg);
-          results.push({ fileId: file.id, fileName: file.name, success: false, error: errorMsg });
-        } else {
-          console.log(`Successfully imported: ${file.name}`);
-          results.push({ fileId: file.id, fileName: file.name, success: true });
-        }
-        
-        // Small delay between files to prevent overwhelming
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } catch (error) {
-        console.error(`Error importing ${file.name}:`, error);
-        results.push({ 
-          fileId: file.id, 
-          fileName: file.name, 
-          success: false, 
-          error: error instanceof Error ? error.message : "Unknown error" 
-        });
+      
+      if (!upsertError) {
+        createdCount++;
+      } else {
+        console.error(`Failed to create pending record for ${file.name}:`, upsertError);
       }
     }
 
@@ -320,30 +275,15 @@ serve(async (req) => {
       .update({ drive_last_sync: new Date().toISOString() })
       .eq("user_id", userId);
 
-    const successCount = results.filter(r => r.success).length;
-    const errorCount = results.filter(r => !r.success).length;
-    const remainingCount = filesToImport.length - filesToProcess.length;
+    console.log(`Initial import complete: ${createdCount} files queued for processing`);
 
-    console.log(`Initial import complete: ${successCount} success, ${errorCount} errors, ${remainingCount} remaining`);
-
-    // Create notification about import
-    await supabase
-      .from("notifications")
-      .insert({
-        user_id: userId,
-        title: "Importação inicial concluída",
-        message: `${successCount} calls importadas e analisadas.${errorCount > 0 ? ` ${errorCount} falharam.` : ""}${remainingCount > 0 ? ` ${remainingCount} aguardando.` : ""}`,
-        type: errorCount > 0 ? "warning" : "success",
-      });
-
+    // Return immediately - processing will be done by process-pending-files
     return new Response(
       JSON.stringify({ 
         success: true, 
-        imported: successCount,
-        errors: errorCount,
-        remaining: remainingCount,
+        queued: createdCount,
         total: filesToImport.length,
-        results,
+        message: `${createdCount} arquivos adicionados à fila para processamento`,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

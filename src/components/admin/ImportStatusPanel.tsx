@@ -235,7 +235,7 @@ export function ImportStatusPanel() {
     }
   };
 
-  // Import files from Drive for a specific user
+  // Import files from Drive for a specific user (fast - just queues files)
   const triggerImportForUser = async (userId: string, userName: string) => {
     setImportingUserId(userId);
     try {
@@ -245,20 +245,25 @@ export function ImportStatusPanel() {
         body: { userId }
       });
       
-      if (error) throw error;
-      
-      if (data?.imported > 0) {
-        toast.success(`${data.imported} arquivos importados de ${userName}!`);
-      } else if (data?.remaining > 0) {
-        toast.info(`${data.remaining} arquivos já estavam na fila para ${userName}`);
+      if (error) {
+        console.error('Error importing for user:', error);
+        toast.error(`Erro ao buscar arquivos de ${userName}`);
+        return;
+      }
+
+      if (data?.queued > 0) {
+        toast.success(
+          `${data.queued} arquivos de ${userName} adicionados à fila! Use "Processar" para analisar.`,
+          { duration: 5000 }
+        );
       } else {
         toast.info(`Nenhum arquivo novo encontrado para ${userName}`);
       }
-      
+
       await fetchImportStatuses();
     } catch (error) {
       console.error('Error importing for user:', error);
-      toast.error(`Erro ao importar arquivos de ${userName}`);
+      toast.error(`Erro ao buscar arquivos de ${userName}`);
     } finally {
       setImportingUserId(null);
     }
