@@ -15,7 +15,9 @@ import {
   Zap,
   Rocket,
   RotateCcw,
-  Users
+  Users,
+  Download,
+  CloudDownload
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -70,6 +72,9 @@ export function ImportStatusPanel() {
     errors: number;
     remaining: number;
   } | null>(null);
+  const [importingUserId, setImportingUserId] = useState<string | null>(null);
+  const [importingAll, setImportingAll] = useState(false);
+  const [allProfiles, setAllProfiles] = useState<{ userId: string; fullName: string; googleConnected: boolean; folderId: string | null }[]>([]);
 
   useEffect(() => {
     fetchImportStatuses();
@@ -136,14 +141,26 @@ export function ImportStatusPanel() {
     try {
       console.log('Fetching import statuses...');
       
-      // Get profiles with Google connected
+      // Get profiles with Google connected (including folder_id for import)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, full_name, google_connected')
+        .select('user_id, full_name, google_connected, drive_folder_id')
         .order('full_name');
 
       if (profilesError) throw profilesError;
       console.log('Profiles fetched:', profiles?.length);
+
+      // Store all profiles with Google connected for import functionality
+      setAllProfiles(
+        (profiles || [])
+          .filter(p => p.google_connected)
+          .map(p => ({
+            userId: p.user_id,
+            fullName: p.full_name,
+            googleConnected: p.google_connected || false,
+            folderId: p.drive_folder_id,
+          }))
+      );
 
       // Get import file counts grouped by user and status
       const { data: importCounts, error: countsError } = await supabase
@@ -217,6 +234,88 @@ export function ImportStatusPanel() {
       toast.error('Erro ao carregar status de importação');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Import files from Drive for a specific user
+  const triggerImportForUser = async (userId: string, userName: string) => {
+    setImportingUserId(userId);
+    try {
+      toast.info(`Buscando arquivos do Drive de ${userName}...`);
+      
+      const { data, error } = await supabase.functions.invoke('initial-import', {
+        body: { userId }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.imported > 0) {
+        toast.success(`${data.imported} arquivos importados de ${userName}!`);
+      } else if (data?.remaining > 0) {
+        toast.info(`${data.remaining} arquivos já estavam na fila para ${userName}`);
+      } else {
+        toast.info(`Nenhum arquivo novo encontrado para ${userName}`);
+      }
+      
+      await fetchImportStatuses();
+    } catch (error) {
+      console.error('Error importing for user:', error);
+      toast.error(`Erro ao importar arquivos de ${userName}`);
+    } finally {
+      setImportingUserId(null);
+    }
+  };
+
+  // Import files from Drive for all connected closers
+  const triggerImportForAllClosers = async () => {
+    const connectedClosers = allProfiles.filter(p => p.googleConnected && p.folderId);
+    
+    if (connectedClosers.length === 0) {
+      toast.error('Nenhum closer com Google Drive configurado');
+      return;
+    }
+
+    setImportingAll(true);
+    let totalImported = 0;
+    let totalErrors = 0;
+
+    toast.info(`Importando do Drive de ${connectedClosers.length} closers...`);
+
+    try {
+      for (const closer of connectedClosers) {
+        try {
+          const { data, error } = await supabase.functions.invoke('initial-import', {
+            body: { userId: closer.userId }
+          });
+          
+          if (error) {
+            console.error(`Error importing for ${closer.fullName}:`, error);
+            totalErrors++;
+          } else if (data?.imported > 0) {
+            totalImported += data.imported;
+          }
+        } catch (err) {
+          console.error(`Error importing for ${closer.fullName}:`, err);
+          totalErrors++;
+        }
+      }
+
+      if (totalImported > 0) {
+        toast.success(`${totalImported} arquivos importados de ${connectedClosers.length} closers!`);
+      } else if (totalErrors === 0) {
+        toast.info('Nenhum arquivo novo encontrado');
+      }
+
+      if (totalErrors > 0) {
+        toast.warning(`${totalErrors} closer(s) com erro na importação`);
+      }
+
+      await fetchImportStatuses();
+    } catch (error) {
+      console.error('Error importing for all closers:', error);
+      toast.error('Erro ao importar arquivos');
+    } finally {
+      setImportingAll(false);
     }
   };
 
@@ -501,8 +600,22 @@ export function ImportStatusPanel() {
             </div>
           </div>
 
-          {/* Quick Reset Buttons */}
+          {/* Import from Drive + Quick Reset Buttons */}
           <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={triggerImportForAllClosers}
+              disabled={processing || importingAll || importingUserId !== null}
+              className="border-blue-500 text-blue-600 hover:bg-blue-50"
+            >
+              {importingAll ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CloudDownload className="w-4 h-4 mr-2" />
+              )}
+              Importar Todos do Drive
+            </Button>
             {summary.totalErrors > 0 && (
               <Button
                 variant="outline"
@@ -756,13 +869,28 @@ export function ImportStatusPanel() {
                       <div className="w-12 text-right text-sm text-muted-foreground">
                         {percent}%
                       </div>
+                      {/* Import from Drive button */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => triggerImportForUser(closer.userId, closer.fullName)}
+                        disabled={processing || importingUserId !== null || importingAll}
+                        className="text-blue-600 hover:bg-blue-50"
+                        title="Buscar novos arquivos do Drive"
+                      >
+                        {importingUserId === closer.userId ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
+                      </Button>
                       {pendingTotal > 0 ? (
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => processUserFiles(closer.userId, closer.fullName, pendingTotal)}
                           disabled={processing}
-                          className="ml-2 min-w-[120px] border-primary text-primary hover:bg-primary/10"
+                          className="min-w-[120px] border-primary text-primary hover:bg-primary/10"
                         >
                           {isProcessingThis ? (
                             <>
@@ -777,7 +905,7 @@ export function ImportStatusPanel() {
                           )}
                         </Button>
                       ) : (
-                        <Badge variant="outline" className="ml-2 min-w-[120px] justify-center bg-success/10 text-success border-success/30">
+                        <Badge variant="outline" className="min-w-[120px] justify-center bg-success/10 text-success border-success/30">
                           <CheckCircle2 className="w-3 h-3 mr-1" />
                           Completo
                         </Badge>
