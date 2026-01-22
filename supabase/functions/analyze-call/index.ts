@@ -1277,7 +1277,22 @@ async function analyzeWithChunking(
   const totalTime = Date.now() - startTime;
   console.log(`✅ Chunked analysis completed in ${Math.round(totalTime/1000)}s (${partialAnalyses.length}/${chunks.length} chunks)`);
   
-  return mergedAnalysis;
+  // Add metadata for partial analysis tracking
+  const metadata = {
+    is_partial_analysis: isPartial,
+    chunks_analyzed: partialAnalyses.length,
+    chunks_total: chunks.length,
+    confidence_level: isPartial ? 'low' as const : 'high' as const,
+    analysis_method: 'chunked' as const,
+    timeout_occurred: abortSignal?.aborted || false
+  };
+  
+  console.log(`📊 Analysis metadata:`, metadata);
+  
+  return {
+    ...mergedAnalysis,
+    __metadata: metadata
+  };
 }
 
 // ============= OPENAI API FUNCTIONS =============
@@ -1495,6 +1510,15 @@ async function parseJSONFromResponse(response: string): Promise<unknown> {
   }
 }
 
+interface AnalysisMetadata {
+  is_partial_analysis: boolean;
+  chunks_analyzed: number;
+  chunks_total: number;
+  confidence_level: 'low' | 'high';
+  analysis_method: 'chunked' | 'direct';
+  timeout_occurred: boolean;
+}
+
 interface AnalysisData {
   framework_selecionado?: string;
   confianca_framework?: number;
@@ -1562,6 +1586,8 @@ interface AnalysisData {
       mensagem_sugerida_whats?: string;
     };
   };
+  // NEW: Analysis metadata for partial analysis tracking
+  __metadata?: AnalysisMetadata;
 }
 
 serve(async (req) => {
@@ -1602,6 +1628,16 @@ serve(async (req) => {
       console.log("AI analysis completed");
       console.log("Raw response length:", masterResponse.length);
       data = await parseJSONFromResponse(masterResponse) as AnalysisData;
+      
+      // Add metadata for direct analysis
+      data.__metadata = {
+        is_partial_analysis: false,
+        chunks_analyzed: 1,
+        chunks_total: 1,
+        confidence_level: 'high',
+        analysis_method: 'direct',
+        timeout_occurred: false
+      };
     }
     
     // Clear timeout since we finished successfully
@@ -1729,6 +1765,16 @@ serve(async (req) => {
         : data.nota_geral && data.nota_geral >= 5 ? "intermediario"
         : "iniciante",
       closer_justification: data.justificativa_nota_geral?.join(" "),
+      
+      // NEW: Analysis metadata for partial analysis tracking
+      analysis_metadata: data.__metadata || {
+        is_partial_analysis: false,
+        chunks_analyzed: 1,
+        chunks_total: 1,
+        confidence_level: 'high',
+        analysis_method: 'direct',
+        timeout_occurred: false
+      },
     };
 
     console.log("Analysis complete, client:", analysis.client_name, "score:", analysis.call_score);
