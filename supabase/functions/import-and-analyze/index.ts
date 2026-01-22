@@ -126,9 +126,13 @@ serve(async (req) => {
     }
 
     // Check if currently being processed - allow retry if stuck for more than 5 minutes
+    // If called from process-user-files (via header), bypass the processing check
     if (existingImport?.status === "processing") {
       const startedAt = existingImport.started_processing_at;
-      if (startedAt) {
+      const calledFromProcessor = req.headers.get('x-processor-call') === 'true';
+      
+      // If called from the coordinated processor, always allow (it manages its own lock)
+      if (!calledFromProcessor && startedAt) {
         const minutesAgo = (Date.now() - new Date(startedAt).getTime()) / 60000;
         if (minutesAgo < 5) {
           return new Response(
@@ -141,6 +145,8 @@ serve(async (req) => {
         }
         // File stuck for >5min, allow retry
         console.log(`File ${fileName} stuck in processing for ${Math.round(minutesAgo)}min, allowing retry`);
+      } else if (calledFromProcessor) {
+        console.log(`File ${fileName} - processing check bypassed (coordinated call)`);
       }
     }
 

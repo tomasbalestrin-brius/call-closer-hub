@@ -61,6 +61,7 @@ async function processFile(
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${serviceRoleKey}`,
+            "x-processor-call": "true", // Identifies coordinated call to bypass processing check
           },
           body: JSON.stringify({ userId, fileId, fileName }),
           signal: controller.signal,
@@ -292,9 +293,10 @@ async function processUserFilesBackground(
           .eq("id", file.id);
       }
 
-      // Delay between files
+      // Delay between files - minimum 2 seconds to prevent race conditions
       if (i < files.length - 1) {
-        await new Promise(r => setTimeout(r, fileDelayMs));
+        const effectiveDelay = Math.max(fileDelayMs, 2000);
+        await new Promise(r => setTimeout(r, effectiveDelay));
       }
     }
 
