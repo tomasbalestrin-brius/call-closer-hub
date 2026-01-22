@@ -122,8 +122,8 @@ async function resetStaleFiles(
   supabase: any,
   userId: string
 ): Promise<number> {
-  // Reset files stuck in 'processing' for more than 3 minutes
-  const threeMinutesAgo = new Date(Date.now() - 180000).toISOString();
+  // Reset files stuck in 'processing' for more than 5 minutes
+  const fiveMinutesAgo = new Date(Date.now() - 300000).toISOString();
   
   const { data: staleFiles, error } = await supabase
     .from("imported_files")
@@ -134,7 +134,7 @@ async function resetStaleFiles(
     })
     .eq("user_id", userId)
     .eq("status", "processing")
-    .lt("started_processing_at", threeMinutesAgo)
+    .lt("started_processing_at", fiveMinutesAgo)
     .select("id");
 
   if (error) {
@@ -280,6 +280,16 @@ async function processUserFilesBackground(
       } else {
         errorCount++;
         console.log(`[${userName}] ✗ ${file.file_name}: ${result.error}`);
+        
+        // Mark file as error instead of leaving in processing
+        await supabase
+          .from("imported_files")
+          .update({ 
+            status: "error", 
+            error_message: result.error || "Falha no processamento",
+            started_processing_at: null 
+          })
+          .eq("id", file.id);
       }
 
       // Delay between files
@@ -288,7 +298,23 @@ async function processUserFilesBackground(
       }
     }
 
-    // 5. Mark session as completed
+    // 5. Cleanup: Reset any files still stuck in 'processing' to 'pending'
+    const { data: stuckFiles } = await supabase
+      .from("imported_files")
+      .update({ 
+        status: "pending", 
+        started_processing_at: null,
+        error_message: "Reset após sessão" 
+      })
+      .eq("user_id", userId)
+      .eq("status", "processing")
+      .select("id");
+
+    if (stuckFiles && stuckFiles.length > 0) {
+      console.log(`[${userName}] Reset ${stuckFiles.length} stuck files after session`);
+    }
+
+    // 6. Mark session as completed
     await supabase
       .from("user_import_sessions")
       .update({
@@ -306,6 +332,17 @@ async function processUserFilesBackground(
   } catch (error) {
     console.error(`[${userName}] Error in processing:`, error);
     
+    // Cleanup stuck files on error too
+    await supabase
+      .from("imported_files")
+      .update({ 
+        status: "pending", 
+        started_processing_at: null,
+        error_message: "Reset após erro de sessão" 
+      })
+      .eq("user_id", userId)
+      .eq("status", "processing");
+
     // Mark session as error
     await supabase
       .from("user_import_sessions")
