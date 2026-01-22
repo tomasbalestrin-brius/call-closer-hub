@@ -126,7 +126,7 @@ serve(async (req) => {
       );
     }
 
-    // Create or update import record as processing
+    // Create or update import record as processing with timestamp
     const { data: importRecord, error: importError } = await supabase
       .from("imported_files")
       .upsert({
@@ -134,6 +134,7 @@ serve(async (req) => {
         drive_file_id: fileId,
         file_name: fileName || "Unknown",
         status: "processing",
+        started_processing_at: new Date().toISOString(),
         imported_at: new Date().toISOString(),
         error_message: null,
       }, { onConflict: "user_id,drive_file_id" })
@@ -343,13 +344,14 @@ serve(async (req) => {
       throw new Error(errorMsg);
     }
 
-    // Update import record as completed
+    // Update import record as completed (clear processing timestamp)
     await supabase
       .from("imported_files")
       .update({ 
         status: "completed", 
         call_id: callRecord.id,
         error_message: null,
+        started_processing_at: null,
         imported_at: new Date().toISOString(),
       })
       .eq("id", importRecordId);
@@ -384,7 +386,7 @@ serve(async (req) => {
     console.error("Error in import-and-analyze:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     
-    // Ensure we always update the import record to error status
+    // Ensure we always update the import record to error status (clear processing timestamp)
     if (userId && fileId) {
       try {
         await supabase
@@ -392,6 +394,7 @@ serve(async (req) => {
           .update({ 
             status: "error", 
             error_message: message,
+            started_processing_at: null,
             imported_at: new Date().toISOString(),
           })
           .eq("user_id", userId)

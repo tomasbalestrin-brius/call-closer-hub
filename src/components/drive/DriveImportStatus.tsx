@@ -70,6 +70,15 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const [processing, setProcessing] = useState(false);
   // Real counts from DB (not limited to last 20)
   const [totalCounts, setTotalCounts] = useState({ completed: 0, pending: 0, errors: 0 });
+  // Live processing session
+  const [liveSession, setLiveSession] = useState<{
+    status: string;
+    processedFiles: number;
+    totalFiles: number;
+    successCount: number;
+    errorCount: number;
+    currentFileName: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -78,6 +87,60 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
       checkAutoSyncSettings();
     }
   }, [user]);
+
+  // Subscribe to realtime updates for user's import session
+  useEffect(() => {
+    if (!user || !processing) {
+      setLiveSession(null);
+      return;
+    }
+
+    console.log('Setting up realtime subscription for user import session...');
+    
+    const channel = supabase
+      .channel('my-import-session')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_import_sessions',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Session update:', payload);
+          const data = payload.new as Record<string, unknown>;
+          
+          if (data) {
+            setLiveSession({
+              status: data.status as string,
+              processedFiles: data.processed_files as number,
+              totalFiles: data.total_files as number,
+              successCount: data.success_count as number,
+              errorCount: data.error_count as number,
+              currentFileName: data.current_file_name as string | null,
+            });
+
+            if (data.status === 'completed' || data.status === 'error') {
+              setTimeout(() => {
+                setProcessing(false);
+                setLiveSession(null);
+                fetchImportStatus();
+                fetchTotalCounts();
+                if (data.status === 'completed') {
+                  onImportComplete?.();
+                }
+              }, 1000);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, processing, onImportComplete]);
 
   // Fetch real counts for all files (not limited to last 20)
   const fetchTotalCounts = async () => {
@@ -193,25 +256,26 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
     }
   };
 
-  // Etapa 2: Processar arquivos pendentes (análise com IA)
+  // Etapa 2: Processar arquivos pendentes (análise com IA) - Usa nova função individual
   const handleProcessPending = async () => {
     if (!user || processing) return;
 
-    const pendingFiles = imports.filter(i => i.status === 'pending' || i.status === 'processing');
-    if (pendingFiles.length === 0) {
+    if (totalCounts.pending === 0) {
       toast.info('Nenhum arquivo pendente para processar');
       return;
     }
 
     setProcessing(true);
     try {
-      toast.info(`Processando ${pendingFiles.length} arquivos com IA...`);
+      toast.info(`Processando ${totalCounts.pending} arquivos com IA...`);
       
-      const response = await supabase.functions.invoke('process-pending-files', {
+      // Use new individual user processing function
+      const response = await supabase.functions.invoke('process-user-files', {
         body: { 
-          targetUserId: user.id,
-          maxFilesPerUser: 50,
-          fileDelayMs: 3000
+          userId: user.id,
+          maxFiles: 100,
+          fileDelayMs: 3000,
+          resetErrors: true
         },
       });
 
@@ -221,20 +285,16 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
 
       const data = response.data;
       
-      if (data.summary?.totalSuccess > 0) {
-        toast.success(`${data.summary.totalSuccess} arquivos processados com sucesso!`);
-        onImportComplete?.();
+      if (data.sessionId) {
+        toast.success('Processamento iniciado! Acompanhe o progresso abaixo.');
+        // Processing state will be cleared by realtime subscription when complete
+      } else if (data.pendingFiles === 0) {
+        toast.info('Nenhum arquivo pendente para processar');
+        setProcessing(false);
       }
-      
-      if (data.summary?.totalErrors > 0) {
-        toast.warning(`${data.summary.totalErrors} arquivos falharam`);
-      }
-
-      fetchImportStatus();
     } catch (error) {
       console.error('Error processing files:', error);
       toast.error('Erro ao processar arquivos');
-    } finally {
       setProcessing(false);
     }
   };
@@ -349,7 +409,6 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const handleReprocessAll = async () => {
     if (!user || reprocessingAll) return;
 
-    // Use real counts from totalCounts, not the limited imports list
     const totalPending = totalCounts.pending + totalCounts.errors;
     if (totalPending === 0) {
       toast.info('Nenhum arquivo para reprocessar');
@@ -360,19 +419,13 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
     toast.info(`Iniciando reprocessamento de ${totalPending} arquivos...`);
 
     try {
-      // Reset all error files to pending first
-      await supabase
-        .from('imported_files')
-        .update({ status: 'pending' })
-        .eq('user_id', user.id)
-        .eq('status', 'error');
-
-      // Use optimized batch processing function instead of individual calls
-      const response = await supabase.functions.invoke('process-pending-files', {
+      // Use new individual user processing function with resetErrors
+      const response = await supabase.functions.invoke('process-user-files', {
         body: { 
-          targetUserId: user.id,
-          maxFilesPerUser: 100,
-          fileDelayMs: 3000
+          userId: user.id,
+          maxFiles: 100,
+          fileDelayMs: 3000,
+          resetErrors: true
         },
       });
 
@@ -383,7 +436,8 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
       const data = response.data;
       
       if (data.sessionId) {
-        toast.success('Processamento iniciado! Acompanhe o progresso no painel.');
+        toast.success('Reprocessamento iniciado! Acompanhe o progresso.');
+        setProcessing(true); // Enable realtime tracking
         onImportComplete?.();
       }
     } catch (error) {
