@@ -53,6 +53,39 @@ export type Database = {
         }
         Relationships: []
       }
+      api_rate_limits: {
+        Row: {
+          created_at: string | null
+          id: string
+          request_count: number | null
+          service: string
+          tokens_used: number | null
+          updated_at: string | null
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          request_count?: number | null
+          service: string
+          tokens_used?: number | null
+          updated_at?: string | null
+          user_id: string
+          window_start: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          request_count?: number | null
+          service?: string
+          tokens_used?: number | null
+          updated_at?: string | null
+          user_id?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       automation_logs: {
         Row: {
           automation_id: string
@@ -244,6 +277,144 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      calls_backup: {
+        Row: {
+          ai_summary: string | null
+          analysis_metadata: Json | null
+          analyzed_at: string | null
+          backed_up_by: string | null
+          backup_date: string | null
+          backup_id: string
+          backup_reason: string
+          call_conclusion: string | null
+          call_date: string | null
+          call_time: string | null
+          client_id: string | null
+          client_name: string | null
+          closer_classification: string | null
+          closer_id: string | null
+          company_name: string | null
+          consciousness_level: string | null
+          content_hash: string | null
+          created_at: string | null
+          decision_reason: string | null
+          duration_minutes: number | null
+          entry_value: number | null
+          google_doc_id: string | null
+          has_partner: boolean | null
+          id: string | null
+          lead_classification: string | null
+          loss_point: string | null
+          main_difficulty: string | null
+          main_errors: string[] | null
+          main_pain: string | null
+          main_wins: string[] | null
+          merged_with_call_id: string | null
+          next_contact_date: string | null
+          niche: string | null
+          notes: string | null
+          observation: string | null
+          product: string | null
+          sale_value: number | null
+          score: number | null
+          source_file_id: string | null
+          status: string | null
+          technical_analysis: Json | null
+          transcription: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ai_summary?: string | null
+          analysis_metadata?: Json | null
+          analyzed_at?: string | null
+          backed_up_by?: string | null
+          backup_date?: string | null
+          backup_id?: string
+          backup_reason: string
+          call_conclusion?: string | null
+          call_date?: string | null
+          call_time?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          closer_classification?: string | null
+          closer_id?: string | null
+          company_name?: string | null
+          consciousness_level?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          decision_reason?: string | null
+          duration_minutes?: number | null
+          entry_value?: number | null
+          google_doc_id?: string | null
+          has_partner?: boolean | null
+          id?: string | null
+          lead_classification?: string | null
+          loss_point?: string | null
+          main_difficulty?: string | null
+          main_errors?: string[] | null
+          main_pain?: string | null
+          main_wins?: string[] | null
+          merged_with_call_id?: string | null
+          next_contact_date?: string | null
+          niche?: string | null
+          notes?: string | null
+          observation?: string | null
+          product?: string | null
+          sale_value?: number | null
+          score?: number | null
+          source_file_id?: string | null
+          status?: string | null
+          technical_analysis?: Json | null
+          transcription?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ai_summary?: string | null
+          analysis_metadata?: Json | null
+          analyzed_at?: string | null
+          backed_up_by?: string | null
+          backup_date?: string | null
+          backup_id?: string
+          backup_reason?: string
+          call_conclusion?: string | null
+          call_date?: string | null
+          call_time?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          closer_classification?: string | null
+          closer_id?: string | null
+          company_name?: string | null
+          consciousness_level?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          decision_reason?: string | null
+          duration_minutes?: number | null
+          entry_value?: number | null
+          google_doc_id?: string | null
+          has_partner?: boolean | null
+          id?: string | null
+          lead_classification?: string | null
+          loss_point?: string | null
+          main_difficulty?: string | null
+          main_errors?: string[] | null
+          main_pain?: string | null
+          main_wins?: string[] | null
+          merged_with_call_id?: string | null
+          next_contact_date?: string | null
+          niche?: string | null
+          notes?: string | null
+          observation?: string | null
+          product?: string | null
+          sale_value?: number | null
+          score?: number | null
+          source_file_id?: string | null
+          status?: string | null
+          technical_analysis?: Json | null
+          transcription?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       client_activities: {
         Row: {
@@ -499,6 +670,132 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      clients_backup: {
+        Row: {
+          backed_up_by: string | null
+          backup_date: string | null
+          backup_id: string
+          backup_reason: string
+          closer_id: string | null
+          company: string | null
+          contract_validity: string | null
+          created_at: string | null
+          data_completed_at: string | null
+          email: string | null
+          entry_value: number | null
+          followup_date: string | null
+          funnel_source: string | null
+          has_partner: boolean | null
+          id: string | null
+          incomplete_notification_sent: boolean | null
+          indication_source_id: string | null
+          is_from_indication: boolean | null
+          is_sold: boolean | null
+          is_super_hot: boolean | null
+          main_difficulty: string | null
+          main_pain: string | null
+          name: string | null
+          name_normalized: string | null
+          negotiation_notes: string | null
+          niche: string | null
+          notes: string | null
+          phone: string | null
+          product_offered: string | null
+          repitch_overdue_notification_sent: boolean | null
+          revenue: number | null
+          sale_notes: string | null
+          sale_value: number | null
+          sdr_name: string | null
+          sold_at: string | null
+          source: string | null
+          status: string | null
+          status_changed_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          backed_up_by?: string | null
+          backup_date?: string | null
+          backup_id?: string
+          backup_reason: string
+          closer_id?: string | null
+          company?: string | null
+          contract_validity?: string | null
+          created_at?: string | null
+          data_completed_at?: string | null
+          email?: string | null
+          entry_value?: number | null
+          followup_date?: string | null
+          funnel_source?: string | null
+          has_partner?: boolean | null
+          id?: string | null
+          incomplete_notification_sent?: boolean | null
+          indication_source_id?: string | null
+          is_from_indication?: boolean | null
+          is_sold?: boolean | null
+          is_super_hot?: boolean | null
+          main_difficulty?: string | null
+          main_pain?: string | null
+          name?: string | null
+          name_normalized?: string | null
+          negotiation_notes?: string | null
+          niche?: string | null
+          notes?: string | null
+          phone?: string | null
+          product_offered?: string | null
+          repitch_overdue_notification_sent?: boolean | null
+          revenue?: number | null
+          sale_notes?: string | null
+          sale_value?: number | null
+          sdr_name?: string | null
+          sold_at?: string | null
+          source?: string | null
+          status?: string | null
+          status_changed_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          backed_up_by?: string | null
+          backup_date?: string | null
+          backup_id?: string
+          backup_reason?: string
+          closer_id?: string | null
+          company?: string | null
+          contract_validity?: string | null
+          created_at?: string | null
+          data_completed_at?: string | null
+          email?: string | null
+          entry_value?: number | null
+          followup_date?: string | null
+          funnel_source?: string | null
+          has_partner?: boolean | null
+          id?: string | null
+          incomplete_notification_sent?: boolean | null
+          indication_source_id?: string | null
+          is_from_indication?: boolean | null
+          is_sold?: boolean | null
+          is_super_hot?: boolean | null
+          main_difficulty?: string | null
+          main_pain?: string | null
+          name?: string | null
+          name_normalized?: string | null
+          negotiation_notes?: string | null
+          niche?: string | null
+          notes?: string | null
+          phone?: string | null
+          product_offered?: string | null
+          repitch_overdue_notification_sent?: boolean | null
+          revenue?: number | null
+          sale_notes?: string | null
+          sale_value?: number | null
+          sdr_name?: string | null
+          sold_at?: string | null
+          source?: string | null
+          status?: string | null
+          status_changed_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       crm_automations: {
         Row: {
@@ -1465,6 +1762,20 @@ export type Database = {
       }
     }
     Functions: {
+      check_rate_limit: {
+        Args: {
+          p_max_requests?: number
+          p_max_tokens?: number
+          p_service: string
+          p_user_id: string
+        }
+        Returns: {
+          allowed: boolean
+          current_requests: number
+          current_tokens: number
+          reset_at: string
+        }[]
+      }
       claim_pending_files: {
         Args: { p_max_files?: number; p_user_id: string }
         Returns: {
@@ -1473,7 +1784,15 @@ export type Database = {
           id: string
         }[]
       }
+      cleanup_old_backups: {
+        Args: never
+        Returns: {
+          deleted_calls: number
+          deleted_clients: number
+        }[]
+      }
       cleanup_old_logs: { Args: never; Returns: number }
+      cleanup_old_rate_limits: { Args: never; Returns: number }
       create_client_notification: {
         Args: {
           p_message: string
@@ -1499,6 +1818,10 @@ export type Database = {
         Returns: boolean
       }
       increment_file_retry: { Args: { p_file_id: string }; Returns: undefined }
+      increment_rate_limit: {
+        Args: { p_service: string; p_tokens?: number; p_user_id: string }
+        Returns: undefined
+      }
       insert_audit_log: {
         Args: {
           p_action_type: string
@@ -1536,6 +1859,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["ticket_type"]
       }
       normalize_client_name: { Args: { name: string }; Returns: string }
+      restore_call_from_backup: {
+        Args: { p_backup_id: string }
+        Returns: string
+      }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {

@@ -335,6 +335,45 @@ serve(async (req) => {
       );
     }
 
+    // ========== RATE LIMITING CHECK ==========
+    interface RateLimitResult {
+      allowed: boolean;
+      current_requests: number;
+      current_tokens: number;
+      reset_at: string;
+    }
+    
+    const { data: rateLimitData } = await supabase
+      .rpc('check_rate_limit', {
+        p_user_id: userId,
+        p_service: 'openai',
+        p_max_requests: 100,      // 100 análises/hora
+        p_max_tokens: 10000000    // 10M tokens/hora
+      });
+    
+    // RPC returns an array, get first result
+    const rateLimitCheck = (Array.isArray(rateLimitData) ? rateLimitData[0] : rateLimitData) as RateLimitResult | null;
+
+    if (rateLimitCheck && !rateLimitCheck.allowed) {
+      const errorMsg = `Rate limit exceeded. Reset at ${rateLimitCheck.reset_at}`;
+      console.error(errorMsg);
+      await supabase
+        .from("imported_files")
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+      
+      return new Response(
+        JSON.stringify({
+          error: errorMsg,
+          current_usage: {
+            requests: rateLimitCheck.current_requests,
+            tokens: rateLimitCheck.current_tokens
+          }
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // ========== ANALYZE WITH RETRY FOR TIMEOUTS ==========
     const MAX_RETRIES_ON_TIMEOUT = 2;
     let retryCount = 0;
@@ -543,6 +582,13 @@ serve(async (req) => {
       });
 
     console.log(`Import complete: ${fileName} -> Call ${callRecord.id}`);
+    
+    // Increment rate limit counter after successful analysis
+    await supabase.rpc('increment_rate_limit', {
+      p_user_id: userId,
+      p_service: 'openai',
+      p_tokens: 5000 // Estimated tokens per analysis
+    });
     
     // Log success
     if (logger) {
