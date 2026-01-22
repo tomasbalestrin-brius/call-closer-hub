@@ -161,7 +161,6 @@ export function ImportStatusPanel() {
           table: 'user_import_sessions'
         },
         (payload) => {
-          console.log('[Admin] Session update:', payload);
           
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const session = payload.new as UserSession;
@@ -315,9 +314,9 @@ export function ImportStatusPanel() {
           });
 
           if (error) {
-            // Handle 409 conflict gracefully
+            // Handle 409 conflict gracefully - just skip
             if (error.message?.includes('409') || error.message?.includes('already')) {
-              console.log(`${closer.fullName} já tem processamento ativo, pulando...`);
+              // User already has active processing, skip
             } else {
               console.error(`Error starting process for ${closer.fullName}:`, error);
             }

@@ -94,8 +94,6 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
       setLiveSession(null);
       return;
     }
-
-    console.log('Setting up realtime subscription for user import session...');
     
     const channel = supabase
       .channel('my-import-session')
@@ -108,7 +106,6 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          console.log('Session update:', payload);
           const data = payload.new as Record<string, unknown>;
           
           if (data) {

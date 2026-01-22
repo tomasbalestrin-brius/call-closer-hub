@@ -30,7 +30,6 @@ export function useUserRole() {
     if (!user) return;
 
     try {
-      console.log('Fetching role for user:', user.id);
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
@@ -39,7 +38,6 @@ export function useUserRole() {
 
       if (error) throw error;
       
-      console.log('Role data:', data);
       const userRole = (data?.role as UserRole) || 'closer';
       setRole(userRole);
       setIsAdmin(userRole === 'admin');
