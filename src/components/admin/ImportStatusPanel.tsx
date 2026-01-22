@@ -272,23 +272,17 @@ export function ImportStatusPanel() {
       return;
     }
 
-    // Check for any running sessions
-    const { data: runningSessions } = await supabase
+    // Force reset any stuck processing files before starting
+    await supabase
+      .from('imported_files')
+      .update({ status: 'pending', started_processing_at: null, error_message: null })
+      .eq('status', 'processing');
+
+    // Reset any running sessions to idle
+    await supabase
       .from('user_import_sessions')
-      .select('user_id')
+      .update({ status: 'idle', completed_at: new Date().toISOString() })
       .eq('status', 'running');
-
-    if (runningSessions && runningSessions.length > 0) {
-      toast.warning('Já existe um processamento em andamento. Aguarde a conclusão.');
-      return;
-    }
-
-    setProcessing(true);
-    setCloserSessions(new Map());
-    setLastProcessResult(null);
-
-    const modeLabel = maxParallel === 1 ? 'Individual' : maxParallel === 3 ? 'Turbo' : 'Ultra';
-    toast.info(`Iniciando modo ${modeLabel}: ${closersWithPending.length} closers, ${maxParallel} em paralelo`);
 
     // Reset error files if requested
     if (resetErrors) {
@@ -298,6 +292,13 @@ export function ImportStatusPanel() {
         .eq('status', 'error');
     }
 
+    setProcessing(true);
+    setCloserSessions(new Map());
+    setLastProcessResult(null);
+
+    const modeLabel = maxParallel === 1 ? 'Individual' : maxParallel === 3 ? 'Turbo' : 'Ultra';
+    toast.info(`Iniciando modo ${modeLabel}: ${closersWithPending.length} closers, ${maxParallel} em paralelo`);
+
     // Process in batches
     for (let i = 0; i < closersWithPending.length; i += maxParallel) {
       const batch = closersWithPending.slice(i, i + maxParallel);
@@ -305,13 +306,22 @@ export function ImportStatusPanel() {
       // Start all closers in this batch in parallel
       await Promise.all(batch.map(async (closer) => {
         try {
-          await supabase.functions.invoke('process-user-files', {
+          const { error } = await supabase.functions.invoke('process-user-files', {
             body: { 
               userId: closer.userId, 
               maxFiles: 50,
               fileDelayMs: 2500
             }
           });
+
+          if (error) {
+            // Handle 409 conflict gracefully
+            if (error.message?.includes('409') || error.message?.includes('already')) {
+              console.log(`${closer.fullName} já tem processamento ativo, pulando...`);
+            } else {
+              console.error(`Error starting process for ${closer.fullName}:`, error);
+            }
+          }
         } catch (error) {
           console.error(`Error starting process for ${closer.fullName}:`, error);
         }

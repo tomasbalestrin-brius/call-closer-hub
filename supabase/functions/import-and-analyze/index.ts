@@ -109,21 +109,39 @@ serve(async (req) => {
     // Check if file was already imported or is being processed (prevent race conditions)
     const { data: existingImport } = await supabase
       .from("imported_files")
-      .select("id, status")
+      .select("id, status, started_processing_at")
       .eq("user_id", userId)
       .eq("drive_file_id", fileId)
       .maybeSingle();
 
-    // Block if already completed OR currently being processed by another worker
-    if (existingImport?.status === "completed" || existingImport?.status === "processing") {
+    // Block if already completed
+    if (existingImport?.status === "completed") {
       return new Response(
         JSON.stringify({ 
-          error: existingImport.status === "completed" ? "File already imported" : "File is being processed", 
-          alreadyImported: existingImport.status === "completed",
-          alreadyProcessing: existingImport.status === "processing"
+          error: "File already imported", 
+          alreadyImported: true
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Check if currently being processed - allow retry if stuck for more than 5 minutes
+    if (existingImport?.status === "processing") {
+      const startedAt = existingImport.started_processing_at;
+      if (startedAt) {
+        const minutesAgo = (Date.now() - new Date(startedAt).getTime()) / 60000;
+        if (minutesAgo < 5) {
+          return new Response(
+            JSON.stringify({ 
+              error: "File is being processed", 
+              alreadyProcessing: true
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        // File stuck for >5min, allow retry
+        console.log(`File ${fileName} stuck in processing for ${Math.round(minutesAgo)}min, allowing retry`);
+      }
     }
 
     // Create or update import record as processing with timestamp
