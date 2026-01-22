@@ -230,6 +230,21 @@ async function processUserFiles(
   for (const file of files) {
     console.log(`[${user.full_name}] Processing: ${file.file_name}`);
 
+    // ATOMIC LOCK: Try to acquire lock by updating status from 'pending' to 'processing'
+    // This prevents race conditions when multiple workers try to process the same file
+    const { data: locked, error: lockError } = await supabase
+      .from("imported_files")
+      .update({ status: "processing" })
+      .eq("id", file.id)
+      .eq("status", "pending")  // Only update if still pending (atomic check)
+      .select()
+      .single();
+
+    if (lockError || !locked) {
+      console.log(`[${user.full_name}] File ${file.file_name} already being processed by another worker, skipping`);
+      continue; // Skip to next file - another worker got this one
+    }
+
     // Increment global counter atomically (JS single-threaded, so this is safe)
     progressTracker.processed++;
 

@@ -106,7 +106,7 @@ serve(async (req) => {
       );
     }
 
-    // Check if file was already imported successfully
+    // Check if file was already imported or is being processed (prevent race conditions)
     const { data: existingImport } = await supabase
       .from("imported_files")
       .select("id, status")
@@ -114,9 +114,14 @@ serve(async (req) => {
       .eq("drive_file_id", fileId)
       .maybeSingle();
 
-    if (existingImport?.status === "completed") {
+    // Block if already completed OR currently being processed by another worker
+    if (existingImport?.status === "completed" || existingImport?.status === "processing") {
       return new Response(
-        JSON.stringify({ error: "File already imported", alreadyImported: true }),
+        JSON.stringify({ 
+          error: existingImport.status === "completed" ? "File already imported" : "File is being processed", 
+          alreadyImported: existingImport.status === "completed",
+          alreadyProcessing: existingImport.status === "processing"
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -290,10 +295,10 @@ serve(async (req) => {
     const callDate = extractDateFromFileName(fileName || "");
     console.log(`Extracted call date: ${callDate} from file: ${fileName}`);
 
-    // Create call record
+    // Create or update call record using upsert to prevent duplicates (unique constraint on source_file_id)
     const { data: callRecord, error: callError } = await supabase
       .from("calls")
-      .insert({
+      .upsert({
         closer_id: userId,
         client_id: clientId,
         client_name: clientName,
@@ -321,12 +326,15 @@ serve(async (req) => {
         sale_value: toNumber(analysis.sale_value),
         source_file_id: fileId,
         analyzed_at: new Date().toISOString(),
+      }, { 
+        onConflict: "source_file_id",  // Prevents duplicates - updates if file already exists
+        ignoreDuplicates: false        // Update existing record with new data
       })
       .select()
       .single();
 
     if (callError) {
-      console.error("Failed to create call:", callError);
+      console.error("Failed to create/update call:", callError);
       const errorMsg = `Erro ao criar call: ${callError.message} (code: ${callError.code}, details: ${callError.details || 'none'})`;
       await supabase
         .from("imported_files")
