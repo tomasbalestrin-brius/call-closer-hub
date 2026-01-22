@@ -10,6 +10,7 @@ const corsHeaders = {
 const CHUNK_SIZE = 25000; // ~25KB per chunk
 const CHUNK_OVERLAP = 2000; // 2KB overlap for context
 const MAX_SIZE_FOR_DIRECT = 50000; // Files under 50KB go direct
+const FUNCTION_TIMEOUT = 90000; // 90 seconds safety timeout (Edge limit is ~150s)
 
 // ============= CHUNK ANALYSIS PROMPT (Simplified) =============
 const CHUNK_ANALYSIS_PROMPT = `Você é um analista de calls de vendas high ticket.
@@ -1184,33 +1185,58 @@ async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<Ana
   return merged;
 }
 
-async function analyzeWithChunking(transcription: string, fileName: string): Promise<AnalysisData> {
+async function analyzeWithChunking(
+  transcription: string, 
+  fileName: string,
+  abortSignal?: AbortSignal
+): Promise<AnalysisData> {
   console.log(`Starting chunked analysis for file: ${fileName}`);
   console.log(`Transcription length: ${transcription.length} chars`);
   
   // Step 1: Split transcription into chunks
   const chunks = splitTranscription(transcription);
+  console.log(`Split into ${chunks.length} chunks for parallel processing`);
   
-  // Step 2: Analyze chunks in parallel (max 2 at a time to avoid rate limits)
+  // Step 2: Analyze chunks in parallel (batch of 4 for faster processing)
   const partialAnalyses: ChunkAnalysis[] = [];
-  const batchSize = 2;
+  const batchSize = 4; // Increased from 2 to 4 for faster processing
   
   for (let i = 0; i < chunks.length; i += batchSize) {
+    // Check if timeout was reached before processing next batch
+    if (abortSignal?.aborted) {
+      console.log(`Timeout reached at batch ${Math.floor(i/batchSize) + 1}, proceeding with ${partialAnalyses.length} chunks already processed`);
+      break;
+    }
+    
     const batch = chunks.slice(i, i + batchSize);
     const batchPromises = batch.map((chunk, batchIdx) => 
       analyzeChunk(chunk, i + batchIdx + 1, chunks.length)
     );
     
-    const batchResults = await Promise.all(batchPromises);
-    partialAnalyses.push(...batchResults);
-    
-    // Small delay between batches to avoid rate limits
-    if (i + batchSize < chunks.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      const batchResults = await Promise.all(batchPromises);
+      partialAnalyses.push(...batchResults);
+      console.log(`Batch ${Math.floor(i/batchSize) + 1} completed: ${partialAnalyses.length}/${chunks.length} chunks processed`);
+    } catch (error) {
+      // Check if the error was due to abort
+      if (abortSignal?.aborted) {
+        console.log(`Batch aborted due to timeout, using ${partialAnalyses.length} chunks already processed`);
+        break;
+      }
+      throw error;
     }
+    
+    // No delay between batches - removed for faster processing
   }
   
-  // Step 3: Merge all partial analyses
+  // Step 3: Merge whatever we have (even if partial due to timeout)
+  if (partialAnalyses.length === 0) {
+    throw new Error("No chunks analyzed before timeout - transcription may be too long");
+  }
+  
+  const isPartial = partialAnalyses.length < chunks.length;
+  console.log(`Merging ${partialAnalyses.length}/${chunks.length} chunks (${isPartial ? 'PARTIAL due to timeout' : 'COMPLETE'})`);
+  
   const mergedAnalysis = await mergeChunkAnalyses(partialAnalyses);
   
   return mergedAnalysis;
@@ -1505,10 +1531,18 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Setup abort controller for function timeout (90s safety margin)
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.log("⚠️ Function timeout reached (90s), triggering abort for graceful shutdown...");
+    abortController.abort();
+  }, FUNCTION_TIMEOUT);
+
   try {
     const { transcription, fileName } = await req.json();
     
     if (!transcription) {
+      clearTimeout(timeoutId);
       return new Response(
         JSON.stringify({ error: "transcription is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1521,8 +1555,8 @@ serve(async (req) => {
 
     // Check if chunking is needed
     if (transcription.length > MAX_SIZE_FOR_DIRECT) {
-      console.log(`Large file detected (${transcription.length} chars > ${MAX_SIZE_FOR_DIRECT}), using CHUNKED analysis`);
-      data = await analyzeWithChunking(transcription, fileName);
+      console.log(`Large file detected (${transcription.length} chars > ${MAX_SIZE_FOR_DIRECT}), using CHUNKED analysis with timeout protection`);
+      data = await analyzeWithChunking(transcription, fileName, abortController.signal);
     } else {
       console.log(`Standard file size, using DIRECT analysis`);
       // Run single comprehensive analysis
@@ -1531,6 +1565,9 @@ serve(async (req) => {
       console.log("Raw response length:", masterResponse.length);
       data = await parseJSONFromResponse(masterResponse) as AnalysisData;
     }
+    
+    // Clear timeout since we finished successfully
+    clearTimeout(timeoutId);
     
     // Ensure all 12 stages exist with complete structure (fallback)
     const requiredStages = [
@@ -1663,7 +1700,18 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
+    clearTimeout(timeoutId);
     console.error("Error in analyze-call:", error);
+    
+    // Check if it was a timeout abort
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log("Returning 408 timeout response");
+      return new Response(
+        JSON.stringify({ error: "Analysis timeout - transcription too long, partial analysis not possible" }),
+        { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(
       JSON.stringify({ error: message }),
