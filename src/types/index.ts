@@ -395,6 +395,15 @@ export interface Call {
   call_conclusion: string | null;
   observation: string | null;
   merged_with_call_id: string | null;
+  content_hash: string | null;
+  analysis_metadata: {
+    is_partial_analysis?: boolean;
+    chunks_analyzed?: number;
+    chunks_total?: number;
+    confidence_level?: 'low' | 'high';
+    analysis_method?: 'chunked' | 'direct';
+    timeout_occurred?: boolean;
+  } | null;
   created_at: string;
   updated_at: string;
 }

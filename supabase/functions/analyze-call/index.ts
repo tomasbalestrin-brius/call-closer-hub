@@ -1236,10 +1236,26 @@ async function analyzeWithChunking(
   
   const isPartial = partialAnalyses.length < chunks.length;
   console.log(`Merging ${partialAnalyses.length}/${chunks.length} chunks (${isPartial ? 'PARTIAL due to timeout' : 'COMPLETE'})`);
-  
+
   const mergedAnalysis = await mergeChunkAnalyses(partialAnalyses);
-  
-  return mergedAnalysis;
+
+  // Adicionar metadados de análise parcial
+  const timeoutOccurred = abortSignal?.aborted || false;
+  const metadata = {
+    is_partial_analysis: isPartial,
+    chunks_analyzed: partialAnalyses.length,
+    chunks_total: chunks.length,
+    confidence_level: isPartial ? 'low' as const : 'high' as const,
+    analysis_method: 'chunked' as const,
+    timeout_occurred: timeoutOccurred
+  };
+
+  console.log(`Analysis metadata:`, JSON.stringify(metadata, null, 2));
+
+  return {
+    ...mergedAnalysis,
+    analysis_metadata: metadata
+  };
 }
 
 // ============= OPENAI API FUNCTIONS =============
@@ -1524,6 +1540,14 @@ interface AnalysisData {
       mensagem_sugerida_whats?: string;
     };
   };
+  analysis_metadata?: {
+    is_partial_analysis: boolean;
+    chunks_analyzed: number;
+    chunks_total: number;
+    confidence_level: 'low' | 'high';
+    analysis_method: 'chunked' | 'direct';
+    timeout_occurred: boolean;
+  };
 }
 
 serve(async (req) => {
@@ -1564,6 +1588,16 @@ serve(async (req) => {
       console.log("AI analysis completed");
       console.log("Raw response length:", masterResponse.length);
       data = await parseJSONFromResponse(masterResponse) as AnalysisData;
+
+      // Adicionar metadados para análise direta
+      data.analysis_metadata = {
+        is_partial_analysis: false,
+        chunks_analyzed: 1,
+        chunks_total: 1,
+        confidence_level: 'high',
+        analysis_method: 'direct',
+        timeout_occurred: false
+      };
     }
     
     // Clear timeout since we finished successfully

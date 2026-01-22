@@ -71,6 +71,16 @@ async function safeReadJson(response: Response): Promise<{ data: unknown; error:
   }
 }
 
+// Helper function to generate SHA-256 hash from content
+async function generateContentHash(content: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const contentHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return contentHash;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -216,6 +226,48 @@ serve(async (req) => {
     
     console.log(`Document fetched, content length: ${content.length}`);
 
+    // Verificar duplicata por hash de conteúdo
+    console.log("Generating content hash for deduplication...");
+    const contentHash = await generateContentHash(content);
+    console.log(`Content hash: ${contentHash.substring(0, 16)}...`);
+
+    // Verificar se já existe call com mesmo hash para este closer
+    const { data: existingCallByHash } = await supabase
+      .from("calls")
+      .select("id, client_id, client_name, call_date")
+      .eq("closer_id", userId)
+      .eq("content_hash", contentHash)
+      .maybeSingle();
+
+    if (existingCallByHash) {
+      console.log(`⚠️ Call já existe com mesmo conteúdo (hash: ${contentHash.substring(0, 16)}...)`);
+      console.log(`Existing call ID: ${existingCallByHash.id}, cliente: ${existingCallByHash.client_name}`);
+
+      // Marcar arquivo como completo, apontando para call existente
+      await supabase
+        .from("imported_files")
+        .update({
+          status: "completed",
+          call_id: existingCallByHash.id,
+          imported_at: new Date().toISOString(),
+          started_processing_at: null,
+        })
+        .eq("id", importRecordId);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          callId: existingCallByHash.id,
+          clientId: existingCallByHash.client_id,
+          deduplicated: true,
+          message: `Call duplicada detectada por hash de conteúdo. Vinculada à call existente: ${existingCallByHash.client_name} (${existingCallByHash.call_date})`
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("No duplicate found by content hash, proceeding with analysis...");
+
     // Analyze the call with safe JSON parsing
     const analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
       method: "POST",
@@ -331,6 +383,7 @@ serve(async (req) => {
         status: callStatus,
         product: analysis.product && analysis.product !== 'nao_informado' ? analysis.product : null,
         transcription: content,
+        content_hash: contentHash,
         score: toInt(analysis.call_score),
         duration_minutes: toInt(analysis.duration_minutes),
         niche: analysis.niche && analysis.niche !== 'nao_informado' ? analysis.niche : null,
@@ -343,6 +396,7 @@ serve(async (req) => {
         lead_classification: analysis.lead_classification,
         closer_classification: analysis.closer_classification,
         technical_analysis: analysis.technical_analysis,
+        analysis_metadata: (analysis as { analysis_metadata?: unknown }).analysis_metadata || {},
         main_errors: analysis.main_errors,
         main_wins: analysis.main_wins,
         loss_point: analysis.loss_point && analysis.loss_point !== 'nao_informado' ? analysis.loss_point : null,

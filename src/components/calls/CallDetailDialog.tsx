@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +18,7 @@ import {
 
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Phone, ExternalLink, UserPlus, Merge, Trash2 } from 'lucide-react';
+import { Phone, ExternalLink, UserPlus, Merge, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Call, CallStatus, TechnicalAnalysis } from '@/types';
@@ -165,7 +166,19 @@ export default function CallDetailDialog({
               </div>
             </div>
           </DialogHeader>
-          
+
+          {call.analysis_metadata?.is_partial_analysis && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Análise Parcial (Timeout)</AlertTitle>
+              <AlertDescription>
+                Esta call foi muito longa e a análise foi interrompida por timeout.
+                Apenas {call.analysis_metadata.chunks_analyzed} de {call.analysis_metadata.chunks_total} chunks
+                foram analisados. Os dados podem estar incompletos.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <ScrollArea className="max-h-[70vh]">
             <div className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">

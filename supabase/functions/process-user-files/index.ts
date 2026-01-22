@@ -167,14 +167,12 @@ async function processUserFilesBackground(
       console.log(`[${userName}] Reset ${resetCount} stale files`);
     }
 
-    // 2. Get pending files for this user
+    // 2. Get pending files for this user usando lock atômico
     const { data: pendingFiles, error: fetchError } = await supabase
-      .from("imported_files")
-      .select("id, drive_file_id, file_name")
-      .eq("user_id", userId)
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(maxFiles);
+      .rpc('claim_pending_files', {
+        p_user_id: userId,
+        p_max_files: maxFiles
+      });
 
     if (fetchError) {
       throw new Error(`Failed to fetch pending files: ${fetchError.message}`);
@@ -238,22 +236,7 @@ async function processUserFilesBackground(
         break;
       }
 
-      // Atomic lock: pending -> processing with timestamp
-      const { data: locked, error: lockError } = await supabase
-        .from("imported_files")
-        .update({ 
-          status: "processing",
-          started_processing_at: new Date().toISOString()
-        })
-        .eq("id", file.id)
-        .eq("status", "pending")
-        .select()
-        .single();
-
-      if (lockError || !locked) {
-        console.log(`[${userName}] File ${file.file_name} already being processed, skipping`);
-        continue;
-      }
+      // Lock já foi feito no claim_pending_files(), não precisa fazer aqui
 
       // Update session progress
       await supabase
@@ -281,14 +264,19 @@ async function processUserFilesBackground(
       } else {
         errorCount++;
         console.log(`[${userName}] ✗ ${file.file_name}: ${result.error}`);
-        
+
+        // Incrementar contador de retry
+        await supabase.rpc('increment_file_retry', {
+          p_file_id: file.id
+        });
+
         // Mark file as error instead of leaving in processing
         await supabase
           .from("imported_files")
-          .update({ 
-            status: "error", 
+          .update({
+            status: "error",
             error_message: result.error || "Falha no processamento",
-            started_processing_at: null 
+            started_processing_at: null
           })
           .eq("id", file.id);
       }
