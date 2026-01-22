@@ -68,13 +68,38 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const [reprocessingAll, setReprocessingAll] = useState(false);
   const [fullImporting, setFullImporting] = useState(false);
   const [processing, setProcessing] = useState(false);
+  // Real counts from DB (not limited to last 20)
+  const [totalCounts, setTotalCounts] = useState({ completed: 0, pending: 0, errors: 0 });
 
   useEffect(() => {
     if (user) {
       fetchImportStatus();
+      fetchTotalCounts();
       checkAutoSyncSettings();
     }
   }, [user]);
+
+  // Fetch real counts for all files (not limited to last 20)
+  const fetchTotalCounts = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: allFiles } = await supabase
+        .from('imported_files')
+        .select('status')
+        .eq('user_id', user.id);
+      
+      if (allFiles) {
+        const completed = allFiles.filter(f => f.status === 'completed').length;
+        const pending = allFiles.filter(f => f.status === 'pending' || f.status === 'processing').length;
+        const errors = allFiles.filter(f => f.status === 'error').length;
+        
+        setTotalCounts({ completed, pending, errors });
+      }
+    } catch (error) {
+      console.error('Error fetching total counts:', error);
+    }
+  };
 
   const checkAutoSyncSettings = async () => {
     if (!user) return;
@@ -324,60 +349,57 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
   const handleReprocessAll = async () => {
     if (!user || reprocessingAll) return;
 
-    const failedFiles = imports.filter(i => i.status === 'error' || i.status === 'processing');
-    if (failedFiles.length === 0) {
+    // Use real counts from totalCounts, not the limited imports list
+    const totalPending = totalCounts.pending + totalCounts.errors;
+    if (totalPending === 0) {
       toast.info('Nenhum arquivo para reprocessar');
       return;
     }
 
     setReprocessingAll(true);
-    toast.info(`Reprocessando ${failedFiles.length} arquivos...`);
+    toast.info(`Iniciando reprocessamento de ${totalPending} arquivos...`);
 
-    let successCount = 0;
-    let errorCount = 0;
+    try {
+      // Reset all error files to pending first
+      await supabase
+        .from('imported_files')
+        .update({ status: 'pending' })
+        .eq('user_id', user.id)
+        .eq('status', 'error');
 
-    for (const file of failedFiles) {
-      try {
-        // Delete the existing record
-        await supabase
-          .from('imported_files')
-          .delete()
-          .eq('id', file.id);
+      // Use optimized batch processing function instead of individual calls
+      const response = await supabase.functions.invoke('process-pending-files', {
+        body: { 
+          targetUserId: user.id,
+          maxFilesPerUser: 100,
+          fileDelayMs: 3000
+        },
+      });
 
-        // Re-import the file
-        const response = await supabase.functions.invoke('import-and-analyze', {
-          body: { 
-            userId: user.id, 
-            fileId: file.drive_file_id,
-            fileName: file.file_name
-          },
-        });
-
-        if (response.error) {
-          errorCount++;
-        } else {
-          successCount++;
-        }
-      } catch {
-        errorCount++;
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to process');
       }
-    }
 
-    if (successCount > 0) {
-      toast.success(`${successCount} arquivos reprocessados com sucesso!`);
-      onImportComplete?.();
+      const data = response.data;
+      
+      if (data.sessionId) {
+        toast.success('Processamento iniciado! Acompanhe o progresso no painel.');
+        onImportComplete?.();
+      }
+    } catch (error) {
+      console.error('Error reprocessing files:', error);
+      toast.error('Erro ao iniciar reprocessamento');
+    } finally {
+      setReprocessingAll(false);
+      fetchImportStatus();
+      fetchTotalCounts();
     }
-    if (errorCount > 0) {
-      toast.warning(`${errorCount} arquivos ainda com erro`);
-    }
-
-    fetchImportStatus();
-    setReprocessingAll(false);
   };
 
-  const completedCount = imports.filter(i => i.status === 'completed').length;
-  const errorCount = imports.filter(i => i.status === 'error').length;
-  const pendingCount = imports.filter(i => i.status === 'pending' || i.status === 'processing').length;
+  // Use real counts from totalCounts (accurate), not limited imports list
+  const completedCount = totalCounts.completed;
+  const errorCount = totalCounts.errors;
+  const pendingCount = totalCounts.pending;
 
   if (loading) {
     return (
