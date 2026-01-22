@@ -53,3 +53,9 @@ verify_jwt = false
 
 [functions.check-repitch-overdue]
 verify_jwt = false
+
+[functions.process-user-files]
+verify_jwt = false
+
+[functions.stale-file-cleanup]
+verify_jwt = false

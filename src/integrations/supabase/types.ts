@@ -653,6 +653,7 @@ export type Database = {
           file_name: string
           id: string
           imported_at: string
+          started_processing_at: string | null
           status: Database["public"]["Enums"]["import_status"]
           user_id: string
         }
@@ -664,6 +665,7 @@ export type Database = {
           file_name: string
           id?: string
           imported_at?: string
+          started_processing_at?: string | null
           status?: Database["public"]["Enums"]["import_status"]
           user_id: string
         }
@@ -675,6 +677,7 @@ export type Database = {
           file_name?: string
           id?: string
           imported_at?: string
+          started_processing_at?: string | null
           status?: Database["public"]["Enums"]["import_status"]
           user_id?: string
         }
@@ -1242,6 +1245,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_import_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          current_file_name: string | null
+          error_count: number | null
+          id: string
+          processed_files: number | null
+          session_id: string
+          started_at: string | null
+          status: string
+          success_count: number | null
+          total_files: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_file_name?: string | null
+          error_count?: number | null
+          id?: string
+          processed_files?: number | null
+          session_id: string
+          started_at?: string | null
+          status?: string
+          success_count?: number | null
+          total_files?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_file_name?: string | null
+          error_count?: number | null
+          id?: string
+          processed_files?: number | null
+          session_id?: string
+          started_at?: string | null
+          status?: string
+          success_count?: number | null
+          total_files?: number | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {

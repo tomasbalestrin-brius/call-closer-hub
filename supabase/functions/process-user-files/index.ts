@@ -1,0 +1,494 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+
+// Declare EdgeRuntime type for Deno/Supabase Edge Functions
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+interface PendingFile {
+  id: string;
+  drive_file_id: string;
+  file_name: string;
+}
+
+// Safe JSON parser
+async function safeReadJson(response: Response): Promise<{ data: unknown; error: string | null }> {
+  try {
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      return { data: null, error: "Empty response from function" };
+    }
+    try {
+      const data = JSON.parse(text);
+      return { data, error: null };
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      return { data: null, error: `JSON parse error: ${parseError}` };
+    }
+  } catch (readError) {
+    return { data: null, error: `Failed to read response: ${readError}` };
+  }
+}
+
+// Process a single file with timeout and retry
+const ANALYSIS_TIMEOUT_MS = 90000; // 90 seconds
+
+async function processFile(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  userId: string,
+  fileId: string,
+  fileName: string,
+  maxRetries = 2
+): Promise<{ success: boolean; error?: string }> {
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[Attempt ${attempt}/${maxRetries}] Processing: ${fileName}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ANALYSIS_TIMEOUT_MS);
+
+      try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/import-and-analyze`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceRoleKey}`,
+          },
+          body: JSON.stringify({ userId, fileId, fileName }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        const { data: result, error: parseError } = await safeReadJson(response);
+        const resultObj = result as { error?: string; alreadyImported?: boolean } | null;
+
+        // Rate limit handling
+        if (response.status === 429 || resultObj?.error?.toLowerCase().includes("rate limit")) {
+          const waitTime = Math.min(15000 * Math.pow(2, attempt - 1), 60000);
+          console.log(`Rate limit hit, waiting ${waitTime/1000}s...`);
+          await new Promise(r => setTimeout(r, waitTime));
+          continue;
+        }
+
+        // Empty response - retry
+        if (parseError === "Empty response from function") {
+          await new Promise(r => setTimeout(r, 10000));
+          continue;
+        }
+
+        if (parseError || !response.ok) {
+          return { success: false, error: parseError || resultObj?.error || `HTTP ${response.status}` };
+        }
+
+        return { success: true };
+
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        
+        if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
+          console.log(`Timeout for: ${fileName}`);
+          if (attempt < maxRetries) {
+            await new Promise(r => setTimeout(r, 5000));
+            continue;
+          }
+          return { success: false, error: "Timeout" };
+        }
+        throw fetchErr;
+      }
+
+    } catch (err) {
+      console.error(`Exception on attempt ${attempt}:`, err);
+      if (attempt === maxRetries) {
+        return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+      }
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+
+  return { success: false, error: "Max retries exceeded" };
+}
+
+// Reset stale files before processing
+async function resetStaleFiles(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string
+): Promise<number> {
+  // Reset files stuck in 'processing' for more than 3 minutes
+  const threeMinutesAgo = new Date(Date.now() - 180000).toISOString();
+  
+  const { data: staleFiles, error } = await supabase
+    .from("imported_files")
+    .update({ 
+      status: "pending", 
+      started_processing_at: null,
+      error_message: null 
+    })
+    .eq("user_id", userId)
+    .eq("status", "processing")
+    .lt("started_processing_at", threeMinutesAgo)
+    .select("id");
+
+  if (error) {
+    console.error("Error resetting stale files:", error);
+    return 0;
+  }
+
+  return staleFiles?.length || 0;
+}
+
+// Main processing function for a single user
+async function processUserFilesBackground(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  userName: string,
+  sessionId: string,
+  maxFiles: number,
+  fileDelayMs: number
+): Promise<void> {
+  try {
+    console.log(`[${userName}] Starting individual processing session: ${sessionId}`);
+
+    // 1. Reset any stale files first
+    const resetCount = await resetStaleFiles(supabase, userId);
+    if (resetCount > 0) {
+      console.log(`[${userName}] Reset ${resetCount} stale files`);
+    }
+
+    // 2. Get pending files for this user
+    const { data: pendingFiles, error: fetchError } = await supabase
+      .from("imported_files")
+      .select("id, drive_file_id, file_name")
+      .eq("user_id", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(maxFiles);
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch pending files: ${fetchError.message}`);
+    }
+
+    const files = pendingFiles as PendingFile[] | null;
+    
+    if (!files || files.length === 0) {
+      console.log(`[${userName}] No pending files to process`);
+      
+      // Mark session as completed
+      await supabase
+        .from("user_import_sessions")
+        .upsert({
+          user_id: userId,
+          session_id: sessionId,
+          status: "completed",
+          total_files: 0,
+          processed_files: 0,
+          success_count: 0,
+          error_count: 0,
+          completed_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+      
+      return;
+    }
+
+    console.log(`[${userName}] Processing ${files.length} files`);
+
+    // 3. Update session with total
+    await supabase
+      .from("user_import_sessions")
+      .upsert({
+        user_id: userId,
+        session_id: sessionId,
+        status: "running",
+        total_files: files.length,
+        processed_files: 0,
+        success_count: 0,
+        error_count: 0,
+        started_at: new Date().toISOString(),
+        current_file_name: null,
+      }, { onConflict: "user_id" });
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    // 4. Process each file sequentially
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      // Check if session was cancelled
+      const { data: session } = await supabase
+        .from("user_import_sessions")
+        .select("status")
+        .eq("user_id", userId)
+        .single();
+
+      if (session?.status === "cancelled") {
+        console.log(`[${userName}] Session cancelled by user`);
+        break;
+      }
+
+      // Atomic lock: pending -> processing with timestamp
+      const { data: locked, error: lockError } = await supabase
+        .from("imported_files")
+        .update({ 
+          status: "processing",
+          started_processing_at: new Date().toISOString()
+        })
+        .eq("id", file.id)
+        .eq("status", "pending")
+        .select()
+        .single();
+
+      if (lockError || !locked) {
+        console.log(`[${userName}] File ${file.file_name} already being processed, skipping`);
+        continue;
+      }
+
+      // Update session progress
+      await supabase
+        .from("user_import_sessions")
+        .update({
+          current_file_name: file.file_name,
+          processed_files: i,
+          success_count: successCount,
+          error_count: errorCount,
+        })
+        .eq("user_id", userId);
+
+      // Process the file
+      const result = await processFile(
+        supabaseUrl,
+        serviceRoleKey,
+        userId,
+        file.drive_file_id,
+        file.file_name
+      );
+
+      if (result.success) {
+        successCount++;
+        console.log(`[${userName}] ✓ ${file.file_name}`);
+      } else {
+        errorCount++;
+        console.log(`[${userName}] ✗ ${file.file_name}: ${result.error}`);
+      }
+
+      // Delay between files
+      if (i < files.length - 1) {
+        await new Promise(r => setTimeout(r, fileDelayMs));
+      }
+    }
+
+    // 5. Mark session as completed
+    await supabase
+      .from("user_import_sessions")
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        processed_files: files.length,
+        success_count: successCount,
+        error_count: errorCount,
+        current_file_name: null,
+      })
+      .eq("user_id", userId);
+
+    console.log(`[${userName}] Completed: ${successCount} success, ${errorCount} errors`);
+
+  } catch (error) {
+    console.error(`[${userName}] Error in processing:`, error);
+    
+    // Mark session as error
+    await supabase
+      .from("user_import_sessions")
+      .update({
+        status: "error",
+        completed_at: new Date().toISOString(),
+        current_file_name: error instanceof Error ? error.message : "Unknown error",
+      })
+      .eq("user_id", userId);
+  }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return new Response(
+      JSON.stringify({ error: "Server configuration error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  try {
+    const body = await req.json();
+    const userId = body.userId;
+    const maxFiles = body.maxFiles || 50;
+    const fileDelayMs = body.fileDelayMs || 3000;
+    const resetErrors = body.resetErrors !== false;
+
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "userId is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Get user info
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("full_name, google_connected")
+      .eq("user_id", userId)
+      .single();
+
+    if (profileError || !profile) {
+      return new Response(
+        JSON.stringify({ error: "User not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // deno-lint-ignore no-explicit-any
+    const profileData = profile as any;
+    if (!profileData.google_connected) {
+      return new Response(
+        JSON.stringify({ error: "Google not connected for this user" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userName = profileData.full_name;
+
+    // Check if user already has an active session
+    const { data: existingSession } = await supabase
+      .from("user_import_sessions")
+      .select("status, started_at")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    // deno-lint-ignore no-explicit-any
+    const sessionData = existingSession as any;
+    if (sessionData?.status === "running") {
+      const startedAt = new Date(sessionData.started_at);
+      const minutesRunning = Math.floor((Date.now() - startedAt.getTime()) / 60000);
+      
+      // If running for more than 10 minutes, consider it stale and allow restart
+      if (minutesRunning < 10) {
+        return new Response(
+          JSON.stringify({ 
+            error: `Processamento já em andamento há ${minutesRunning} minutos`,
+            alreadyRunning: true,
+            sessionId: sessionData.status
+          }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Reset error files if requested
+    if (resetErrors) {
+      const { data: resetFiles } = await supabase
+        .from("imported_files")
+        .update({ status: "pending", error_message: null })
+        .eq("user_id", userId)
+        .eq("status", "error")
+        .not("error_message", "ilike", "%chat%")
+        .not("error_message", "ilike", "%vazio%")
+        .select("id");
+
+      // deno-lint-ignore no-explicit-any
+      if (resetFiles && (resetFiles as any[]).length > 0) {
+        // deno-lint-ignore no-explicit-any
+        console.log(`Reset ${(resetFiles as any[]).length} error files to pending for ${userName}`);
+      }
+    }
+
+    // Count pending files
+    const { count: pendingCount } = await supabase
+      .from("imported_files")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "pending");
+
+    const totalPending = pendingCount || 0;
+    const sessionId = crypto.randomUUID();
+
+    if (totalPending === 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          message: "Nenhum arquivo pendente para processar",
+          sessionId,
+          pendingFiles: 0
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`[${userName}] Starting processing of ${totalPending} files, session: ${sessionId}`);
+
+    // Create initial session record
+    await supabase
+      .from("user_import_sessions")
+      .upsert({
+        user_id: userId,
+        session_id: sessionId,
+        status: "running",
+        total_files: totalPending,
+        processed_files: 0,
+        success_count: 0,
+        error_count: 0,
+        started_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+
+    // FIRE-AND-FORGET: Start background processing
+    EdgeRuntime.waitUntil(
+      processUserFilesBackground(
+        SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY,
+        supabase,
+        userId,
+        userName,
+        sessionId,
+        maxFiles,
+        fileDelayMs
+      )
+    );
+
+    // Return immediately
+    return new Response(
+      JSON.stringify({
+        success: true,
+        sessionId,
+        message: `Processamento iniciado para ${totalPending} arquivos`,
+        userName,
+        pendingFiles: totalPending,
+        estimatedMinutes: Math.ceil(totalPending * 5 / 60),
+        trackVia: "realtime:user_import_sessions"
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+
+  } catch (error) {
+    console.error("Error in process-user-files:", error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});
