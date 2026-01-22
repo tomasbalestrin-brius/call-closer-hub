@@ -1,50 +1,51 @@
 
 
-# Plano: Otimização do analyze-call com Timeout Seguro
+# Plano: Corrigir Timeout Parcial no analyze-call
 
-## Objetivo
-Eliminar os erros de timeout (504) para transcrições longas implementando:
-- Timeout interno de 90 segundos (safety margin)
-- Batch size aumentado de 2 para 4 chunks paralelos
-- Fallback para análise parcial se timeout ocorrer
+## Problema Identificado
 
-## Arquitetura Atual vs. Nova
+O timeout interno de 90s está funcionando, porém quando é acionado **durante** um batch de chamadas OpenAI, a função é encerrada pelo Edge Runtime antes de conseguir retornar a análise parcial.
 
 ```text
-ATUAL (com problemas):
-┌─────────────────────────────────────────────────────────────────┐
-│  analyze-call (até 180s+ para calls longas)                    │
-│                                                                 │
-│  Chunks: batch de 2 + delay 1s entre batches                   │
-│  Sem timeout interno → função ultrapassa limite do Edge (150s) │
-│  Resultado: 504 Gateway Timeout                                │
-└─────────────────────────────────────────────────────────────────┘
-
-NOVA (otimizada):
-┌─────────────────────────────────────────────────────────────────┐
-│  analyze-call (máximo 90s garantido)                           │
-│                                                                 │
-│  Chunks: batch de 4 paralelos + sem delay                      │
-│  Timeout interno: 90s via AbortController                      │
-│  Fallback: retorna análise parcial se atingir timeout          │
-│  Resultado: sempre responde antes do limite do Edge            │
-└─────────────────────────────────────────────────────────────────┘
+Cenário problemático:
+┌───────────────────────────────────────────────────────────────┐
+│  0s          30s         60s         90s        120s    150s  │
+│  │──────────────│──────────────│──────────────│─────────│     │
+│  │   Batch 1    │   Batch 2 (processando...)  │         │     │
+│  │  (completo)  │ ←── timeout 90s dispara ──→ │  KILL   │     │
+│  │              │   mas batch 2 ainda roda    │   ⚠️    │     │
+│  │              │   função morre sem resposta │         │     │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-## Modificações no Arquivo
+## Solução: Timeout Rigoroso com Racing
 
-**Arquivo:** `supabase/functions/analyze-call/index.ts`
+Implementar `Promise.race` para forçar retorno imediato quando o timeout for atingido, independente do estado das chamadas OpenAI.
 
-### Modificação 1: Adicionar Constante de Timeout (após linha 12)
+## Modificações Necessárias
+
+### Arquivo: `supabase/functions/analyze-call/index.ts`
+
+#### 1. Adicionar Função de Racing com Timeout
 
 ```typescript
-const MAX_SIZE_FOR_DIRECT = 50000; // Files under 50KB go direct
-const FUNCTION_TIMEOUT = 90000; // 90 seconds safety timeout
+// Após a constante FUNCTION_TIMEOUT (linha ~13)
+const ANALYSIS_TIMEOUT = 85000; // 85 segundos para análise (5s antes do abort)
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T | null = null): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<T | null>((resolve) => 
+      setTimeout(() => {
+        console.log(`Promise timeout reached (${ms}ms), returning fallback`);
+        resolve(fallback);
+      }, ms)
+    )
+  ]);
+}
 ```
 
-### Modificação 2: Alterar Função analyzeWithChunking (linhas 1187-1217)
-
-Nova implementação com suporte a timeout e fallback parcial:
+#### 2. Modificar analyzeWithChunking para Racing
 
 ```typescript
 async function analyzeWithChunking(
@@ -55,14 +56,21 @@ async function analyzeWithChunking(
   console.log(`Starting chunked analysis for file: ${fileName}`);
   console.log(`Transcription length: ${transcription.length} chars`);
   
+  const startTime = Date.now();
   const chunks = splitTranscription(transcription);
+  console.log(`Split into ${chunks.length} chunks for parallel processing`);
+  
   const partialAnalyses: ChunkAnalysis[] = [];
-  const batchSize = 4; // Aumentado de 2 para 4
+  const batchSize = 4;
+  const BATCH_TIMEOUT = 40000; // 40s máximo por batch
   
   for (let i = 0; i < chunks.length; i += batchSize) {
-    // Verificar se foi abortado antes de processar próximo batch
-    if (abortSignal?.aborted) {
-      console.log(`Timeout reached at batch ${i}/${chunks.length}, proceeding with partial analysis`);
+    // Verificar tempo restante
+    const elapsed = Date.now() - startTime;
+    const remaining = ANALYSIS_TIMEOUT - elapsed;
+    
+    if (remaining < 10000 || abortSignal?.aborted) {
+      console.log(`Time limit approaching (${Math.round(elapsed/1000)}s elapsed), stopping with ${partialAnalyses.length} chunks`);
       break;
     }
     
@@ -71,126 +79,86 @@ async function analyzeWithChunking(
       analyzeChunk(chunk, i + batchIdx + 1, chunks.length)
     );
     
-    try {
-      const batchResults = await Promise.all(batchPromises);
-      partialAnalyses.push(...batchResults);
-      console.log(`Batch ${Math.floor(i/batchSize) + 1} completed: ${partialAnalyses.length}/${chunks.length} chunks`);
-    } catch (error) {
-      if (abortSignal?.aborted) {
-        console.log(`Batch aborted, using ${partialAnalyses.length} chunks already processed`);
-        break;
-      }
-      throw error;
+    // Racing: ou batch completa, ou timeout de batch dispara
+    const batchTimeout = Math.min(BATCH_TIMEOUT, remaining - 5000);
+    const batchResult = await withTimeout(
+      Promise.all(batchPromises),
+      batchTimeout,
+      null
+    );
+    
+    if (batchResult === null) {
+      console.log(`Batch ${Math.floor(i/batchSize) + 1} timed out, proceeding with ${partialAnalyses.length} chunks`);
+      break;
     }
     
-    // REMOVIDO: delay de 1 segundo entre batches
+    partialAnalyses.push(...batchResult);
+    console.log(`Batch ${Math.floor(i/batchSize) + 1} completed: ${partialAnalyses.length}/${chunks.length} chunks (${Math.round((Date.now() - startTime)/1000)}s elapsed)`);
   }
   
-  // Fallback: merge o que temos (mesmo que parcial)
   if (partialAnalyses.length === 0) {
-    throw new Error("No chunks analyzed before timeout");
+    throw new Error("No chunks analyzed before timeout - transcription may be too long");
   }
   
-  console.log(`Merging ${partialAnalyses.length}/${chunks.length} chunks (${partialAnalyses.length < chunks.length ? 'PARTIAL' : 'COMPLETE'})`);
-  const mergedAnalysis = await mergeChunkAnalyses(partialAnalyses);
+  // Merge com timeout também
+  const mergeTimeout = Math.max(ANALYSIS_TIMEOUT - (Date.now() - startTime) - 2000, 10000);
+  console.log(`Merging ${partialAnalyses.length}/${chunks.length} chunks with ${Math.round(mergeTimeout/1000)}s timeout...`);
+  
+  const mergedAnalysis = await withTimeout(
+    mergeChunkAnalyses(partialAnalyses),
+    mergeTimeout,
+    null
+  );
+  
+  if (!mergedAnalysis) {
+    throw new Error("Merge timed out");
+  }
   
   return mergedAnalysis;
 }
 ```
 
-### Modificação 3: Adicionar Timeout no Handler Principal (linhas 1503-1534)
+#### 3. Garantir Resposta Antes do Encerramento
+
+No handler principal, adicionar um fallback final:
 
 ```typescript
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  // Setup abort controller for function timeout
-  const abortController = new AbortController();
-  const timeoutId = setTimeout(() => {
-    console.log("Function timeout reached (90s), aborting...");
-    abortController.abort();
-  }, FUNCTION_TIMEOUT);
-
+  // ... código existente ...
+  
+  const startTime = Date.now();
+  
   try {
-    const { transcription, fileName } = await req.json();
+    // ... código de análise ...
     
-    if (!transcription) {
-      clearTimeout(timeoutId);
-      return new Response(
-        JSON.stringify({ error: "transcription is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log(`Analyzing call from file: ${fileName}, transcription length: ${transcription.length}`);
-
-    let data: AnalysisData;
-
-    // Check if chunking is needed
-    if (transcription.length > MAX_SIZE_FOR_DIRECT) {
-      console.log(`Large file detected (${transcription.length} chars > ${MAX_SIZE_FOR_DIRECT}), using CHUNKED analysis`);
-      data = await analyzeWithChunking(transcription, fileName, abortController.signal);
-    } else {
-      console.log(`Standard file size, using DIRECT analysis`);
-      const masterResponse = await callOpenAI(MASTER_PROMPT, transcription);
-      console.log("AI analysis completed");
-      console.log("Raw response length:", masterResponse.length);
-      data = await parseJSONFromResponse(masterResponse) as AnalysisData;
-    }
-    
-    clearTimeout(timeoutId);
-    
-    // ... resto do código existente (ensure stages, map to analysis, return)
-```
-
-### Modificação 4: Atualizar Error Handler (linhas 1665-1672)
-
-```typescript
   } catch (error: unknown) {
     clearTimeout(timeoutId);
-    console.error("Error in analyze-call:", error);
     
-    // Check if it was a timeout abort
-    if (error instanceof Error && error.name === 'AbortError') {
-      return new Response(
-        JSON.stringify({ error: "Analysis timeout - transcription too long, partial analysis not possible" }),
-        { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const elapsed = Date.now() - startTime;
+    console.error(`Error in analyze-call after ${Math.round(elapsed/1000)}s:`, error);
     
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    // ... tratamento de erro existente ...
   }
+});
 ```
 
-## Resumo das Mudanças
+## Arquivos a Modificar
 
-| Local | Antes | Depois |
-|-------|-------|--------|
-| Constante | - | `FUNCTION_TIMEOUT = 90000` |
-| Batch size | 2 | 4 |
-| Delay entre batches | 1 segundo | Removido |
-| Timeout interno | Nenhum | 90s com AbortController |
-| Fallback parcial | Não | Sim (merge chunks processados) |
-
-## Estimativa de Performance
-
-| Tamanho Call | Chunks | Tempo Atual | Tempo Novo |
-|--------------|--------|-------------|------------|
-| 30min (~40KB) | 1 (direto) | 20-30s | 20-30s |
-| 1h (~80KB) | 3-4 | 60-90s | 20-30s |
-| 2h (~150KB) | 6-7 | **TIMEOUT** | 40-50s |
-| 3h (~220KB) | 9-10 | **TIMEOUT** | 60-75s |
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/analyze-call/index.ts` | Racing timeout em batches + merge |
 
 ## Benefícios
 
-- **Zero timeouts 504**: Função sempre responde antes do limite
-- **2x mais rápido**: 4 chunks paralelos vs 2
-- **Fallback gracioso**: Análise parcial melhor que falha total
-- **Backward compatible**: Chamadas diretas para arquivos pequenos não mudam
+- **Resposta garantida**: Função sempre retorna antes do limite do Edge
+- **Análise parcial**: Retorna o que foi processado até o timeout
+- **Zero "Empty response"**: Erros substituídos por análises parciais
+
+## Resultado Esperado
+
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Call 1h (~80KB) | ✅ OK | ✅ OK |
+| Call 2h (~150KB) | ❌ Empty response | ✅ Análise parcial (2-3 chunks) |
+| Call 3h (~220KB) | ❌ Empty response | ✅ Análise parcial (2-4 chunks) |
 
