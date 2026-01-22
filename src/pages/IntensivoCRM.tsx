@@ -53,22 +53,8 @@ export default function IntensivoCRM() {
     isAdmin 
   } = useIntensivoCRM(selectedEditionId || undefined);
 
-  // Debug logging for troubleshooting blank page
-  useEffect(() => {
-    console.log('IntensivoCRM render state:', { 
-      user: !!user, 
-      authLoading, 
-      editions: editions?.length ?? 0,
-      leads: leads?.length ?? 0,
-      loadingEditions,
-      loadingLeads,
-      editionsError,
-      leadsError,
-      selectedEditionId
-    });
-  }, [user, authLoading, editions, leads, loadingEditions, loadingLeads, editionsError, leadsError, selectedEditionId]);
-
   // Auto-select first active edition
+
   useEffect(() => {
     if (editions.length > 0 && !selectedEditionId) {
       const activeEdition = editions.find(e => e.is_active) || editions[0];

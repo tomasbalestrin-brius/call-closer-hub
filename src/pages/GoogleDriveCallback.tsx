@@ -57,8 +57,6 @@ export default function GoogleDriveCallback() {
         // Get the redirect URI (must match exactly what was used in the auth request)
         const redirectUri = `${window.location.origin}/google-drive-callback`;
 
-        console.log('Exchanging code for tokens...');
-
         // Call our edge function to exchange the code for tokens
         const { data, error: fnError } = await supabase.functions.invoke('google-auth-callback', {
           body: { code, redirectUri, userId: user.id }
@@ -72,8 +70,6 @@ export default function GoogleDriveCallback() {
         if (data?.error) {
           throw new Error(data.error);
         }
-
-        console.log('Google Drive connected successfully:', data);
         
         // Clean up
         sessionStorage.removeItem('google_oauth_state');
@@ -89,8 +85,6 @@ export default function GoogleDriveCallback() {
             .select('drive_folder_id')
             .eq('user_id', user.id)
             .single();
-
-          console.log('Starting initial import for current month...');
           
           const { data: importData, error: importError } = await supabase.functions.invoke('initial-import', {
             body: { 
@@ -103,7 +97,6 @@ export default function GoogleDriveCallback() {
             console.error('Initial import error:', importError);
             // Don't fail the whole process, just log the error
           } else {
-            console.log('Initial import result:', importData);
             if (importData?.imported > 0) {
               setImportProgress(`${importData.imported} arquivos importados!`);
             } else if (importData?.message === 'No files to import') {
