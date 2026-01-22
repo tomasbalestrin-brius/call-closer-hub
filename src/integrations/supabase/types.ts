@@ -1214,6 +1214,48 @@ export type Database = {
           },
         ]
       }
+      system_logs: {
+        Row: {
+          created_at: string | null
+          duration_ms: number | null
+          error_message: string | null
+          id: string
+          level: string
+          metadata: Json | null
+          operation: string | null
+          service: string
+          stack_trace: string | null
+          timestamp: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          level: string
+          metadata?: Json | null
+          operation?: string | null
+          service: string
+          stack_trace?: string | null
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          level?: string
+          metadata?: Json | null
+          operation?: string | null
+          service?: string
+          stack_trace?: string | null
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       ticket_upgrades: {
         Row: {
           created_at: string
@@ -1395,6 +1437,32 @@ export type Database = {
         }
         Relationships: []
       }
+      stuck_files_report: {
+        Row: {
+          error_message: string | null
+          file_name: string | null
+          id: string | null
+          minutes_stuck: number | null
+          retry_count: number | null
+          started_processing_at: string | null
+          status: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Relationships: []
+      }
+      system_metrics_24h: {
+        Row: {
+          avg_duration_ms: number | null
+          error_count: number | null
+          max_duration_ms: number | null
+          service: string | null
+          success_rate_pct: number | null
+          total_operations: number | null
+          warning_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       claim_pending_files: {
@@ -1405,6 +1473,7 @@ export type Database = {
           id: string
         }[]
       }
+      cleanup_old_logs: { Args: never; Returns: number }
       create_client_notification: {
         Args: {
           p_message: string
@@ -1449,6 +1518,18 @@ export type Database = {
       is_squad_leader_of_user: {
         Args: { _leader_id: string; _user_id: string }
         Returns: boolean
+      }
+      log_event: {
+        Args: {
+          p_duration_ms?: number
+          p_error_message?: string
+          p_level: string
+          p_metadata?: Json
+          p_operation?: string
+          p_service: string
+          p_user_id?: string
+        }
+        Returns: string
       }
       map_product_to_ticket: {
         Args: { product_offered: string }

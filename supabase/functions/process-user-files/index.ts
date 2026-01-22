@@ -11,6 +11,61 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============= LOGGER HELPER =============
+class Logger {
+  // deno-lint-ignore no-explicit-any
+  private supabase: any;
+  private service: string;
+  private userId: string | null;
+  private startTime: number;
+
+  // deno-lint-ignore no-explicit-any
+  constructor(service: string, supabase: any, userId: string | null = null) {
+    this.service = service;
+    this.userId = userId;
+    this.startTime = Date.now();
+    this.supabase = supabase;
+  }
+
+  private async log(
+    level: 'debug' | 'info' | 'warning' | 'error' | 'critical',
+    operation: string,
+    metadata: Record<string, unknown> = {},
+    errorMessage: string | null = null
+  ) {
+    const duration = Date.now() - this.startTime;
+
+    console.log(`[${level.toUpperCase()}] ${this.service}:${operation}`, JSON.stringify(metadata));
+
+    try {
+      await this.supabase.rpc('log_event', {
+        p_level: level,
+        p_service: this.service,
+        p_user_id: this.userId,
+        p_operation: operation,
+        p_duration_ms: duration,
+        p_metadata: metadata,
+        p_error_message: errorMessage
+      });
+    } catch (err) {
+      console.error('Failed to write log to database:', err);
+    }
+  }
+
+  info(operation: string, metadata: Record<string, unknown> = {}) {
+    return this.log('info', operation, metadata);
+  }
+
+  warning(operation: string, metadata: Record<string, unknown> = {}, errorMessage: string | null = null) {
+    return this.log('warning', operation, metadata, errorMessage);
+  }
+
+  error(operation: string, error: Error | string, metadata: Record<string, unknown> = {}) {
+    const errorMessage = error instanceof Error ? error.message : error;
+    return this.log('error', operation, metadata, errorMessage);
+  }
+}
+
 interface PendingFile {
   id: string;
   drive_file_id: string;
@@ -158,8 +213,11 @@ async function processUserFilesBackground(
   maxFiles: number,
   fileDelayMs: number
 ): Promise<void> {
+  const logger = new Logger('process-user-files', supabase, userId);
+  
   try {
     console.log(`[${userName}] Starting individual processing session: ${sessionId}`);
+    await logger.info('session_started', { sessionId, userName, maxFiles });
 
     // 1. Reset any stale files first
     const resetCount = await resetStaleFiles(supabase, userId);
@@ -314,9 +372,20 @@ async function processUserFilesBackground(
       .eq("user_id", userId);
 
     console.log(`[${userName}] Completed: ${successCount} success, ${errorCount} errors`);
+    
+    // Log session completion
+    await logger.info('session_completed', { 
+      sessionId, 
+      successCount, 
+      errorCount, 
+      totalFiles: files.length 
+    });
 
   } catch (error) {
     console.error(`[${userName}] Error in processing:`, error);
+    
+    // Log session error
+    await logger.error('session_failed', error as Error, { sessionId });
     
     // Cleanup stuck files on error too
     await supabase

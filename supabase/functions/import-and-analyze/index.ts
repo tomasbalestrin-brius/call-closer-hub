@@ -6,6 +6,66 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============= LOGGER HELPER =============
+class Logger {
+  // deno-lint-ignore no-explicit-any
+  private supabase: any;
+  private service: string;
+  private userId: string | null;
+  private startTime: number;
+
+  // deno-lint-ignore no-explicit-any
+  constructor(service: string, supabase: any, userId: string | null = null) {
+    this.service = service;
+    this.userId = userId;
+    this.startTime = Date.now();
+    this.supabase = supabase;
+  }
+
+  private async log(
+    level: 'debug' | 'info' | 'warning' | 'error' | 'critical',
+    operation: string,
+    metadata: Record<string, unknown> = {},
+    errorMessage: string | null = null
+  ) {
+    const duration = Date.now() - this.startTime;
+
+    console.log(`[${level.toUpperCase()}] ${this.service}:${operation}`, JSON.stringify(metadata));
+
+    try {
+      await this.supabase.rpc('log_event', {
+        p_level: level,
+        p_service: this.service,
+        p_user_id: this.userId,
+        p_operation: operation,
+        p_duration_ms: duration,
+        p_metadata: metadata,
+        p_error_message: errorMessage
+      });
+    } catch (err) {
+      console.error('Failed to write log to database:', err);
+    }
+  }
+
+  info(operation: string, metadata: Record<string, unknown> = {}) {
+    return this.log('info', operation, metadata);
+  }
+
+  warning(operation: string, metadata: Record<string, unknown> = {}, errorMessage: string | null = null) {
+    return this.log('warning', operation, metadata, errorMessage);
+  }
+
+  error(operation: string, error: Error | string, metadata: Record<string, unknown> = {}) {
+    const errorMessage = error instanceof Error ? error.message : error;
+    return this.log('error', operation, metadata, errorMessage);
+  }
+
+  critical(operation: string, error: Error | string, metadata: Record<string, unknown> = {}) {
+    const errorMessage = error instanceof Error ? error.message : error;
+    return this.log('critical', operation, metadata, errorMessage);
+  }
+}
+
 // Helper function to safely convert to integer
 const toInt = (value: unknown): number | null => {
   if (value === null || value === undefined) return null;
@@ -111,12 +171,17 @@ serve(async (req) => {
   let fileId: string | null = null;
   let fileName: string | null = null;
   let importRecordId: string | null = null;
+  let logger: Logger | null = null;
 
   try {
     const body = await req.json();
     userId = body.userId;
     fileId = body.fileId;
     fileName = body.fileName;
+    
+    // Initialize logger
+    logger = new Logger('import-and-analyze', supabase, userId);
+    await logger.info('import_started', { fileId, fileName });
     
     if (!userId || !fileId) {
       return new Response(
@@ -478,6 +543,17 @@ serve(async (req) => {
       });
 
     console.log(`Import complete: ${fileName} -> Call ${callRecord.id}`);
+    
+    // Log success
+    if (logger) {
+      await logger.info('import_completed', {
+        callId: callRecord.id,
+        clientId,
+        score: analysis.call_score,
+        clientName,
+        deduplicated: false
+      });
+    }
 
     return new Response(
       JSON.stringify({ 
@@ -496,6 +572,11 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error("Error in import-and-analyze:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
+    
+    // Log error
+    if (logger) {
+      await logger.error('import_failed', error as Error, { fileId, fileName });
+    }
     
     // Ensure we always update the import record to error status (clear processing timestamp)
     if (userId && fileId) {
