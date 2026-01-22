@@ -95,6 +95,7 @@ export type Database = {
       calls: {
         Row: {
           ai_summary: string | null
+          analysis_metadata: Json | null
           analyzed_at: string | null
           call_conclusion: string | null
           call_date: string
@@ -107,6 +108,7 @@ export type Database = {
           closer_id: string
           company_name: string | null
           consciousness_level: string | null
+          content_hash: string | null
           created_at: string
           decision_reason: string | null
           duration_minutes: number | null
@@ -138,6 +140,7 @@ export type Database = {
         }
         Insert: {
           ai_summary?: string | null
+          analysis_metadata?: Json | null
           analyzed_at?: string | null
           call_conclusion?: string | null
           call_date?: string
@@ -150,6 +153,7 @@ export type Database = {
           closer_id: string
           company_name?: string | null
           consciousness_level?: string | null
+          content_hash?: string | null
           created_at?: string
           decision_reason?: string | null
           duration_minutes?: number | null
@@ -181,6 +185,7 @@ export type Database = {
         }
         Update: {
           ai_summary?: string | null
+          analysis_metadata?: Json | null
           analyzed_at?: string | null
           call_conclusion?: string | null
           call_date?: string
@@ -193,6 +198,7 @@ export type Database = {
           closer_id?: string
           company_name?: string | null
           consciousness_level?: string | null
+          content_hash?: string | null
           created_at?: string
           decision_reason?: string | null
           duration_minutes?: number | null
@@ -393,6 +399,7 @@ export type Database = {
           main_difficulty: string | null
           main_pain: string | null
           name: string
+          name_normalized: string | null
           negotiation_notes: string | null
           niche: string | null
           notes: string | null
@@ -429,6 +436,7 @@ export type Database = {
           main_difficulty?: string | null
           main_pain?: string | null
           name: string
+          name_normalized?: string | null
           negotiation_notes?: string | null
           niche?: string | null
           notes?: string | null
@@ -465,6 +473,7 @@ export type Database = {
           main_difficulty?: string | null
           main_pain?: string | null
           name?: string
+          name_normalized?: string | null
           negotiation_notes?: string | null
           niche?: string | null
           notes?: string | null
@@ -653,6 +662,7 @@ export type Database = {
           file_name: string
           id: string
           imported_at: string
+          retry_count: number | null
           started_processing_at: string | null
           status: Database["public"]["Enums"]["import_status"]
           user_id: string
@@ -665,6 +675,7 @@ export type Database = {
           file_name: string
           id?: string
           imported_at?: string
+          retry_count?: number | null
           started_processing_at?: string | null
           status?: Database["public"]["Enums"]["import_status"]
           user_id: string
@@ -677,6 +688,7 @@ export type Database = {
           file_name?: string
           id?: string
           imported_at?: string
+          retry_count?: number | null
           started_processing_at?: string | null
           status?: Database["public"]["Enums"]["import_status"]
           user_id?: string
@@ -1385,6 +1397,14 @@ export type Database = {
       }
     }
     Functions: {
+      claim_pending_files: {
+        Args: { p_max_files?: number; p_user_id: string }
+        Returns: {
+          drive_file_id: string
+          file_name: string
+          id: string
+        }[]
+      }
       create_client_notification: {
         Args: {
           p_message: string
@@ -1409,6 +1429,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_file_retry: { Args: { p_file_id: string }; Returns: undefined }
       insert_audit_log: {
         Args: {
           p_action_type: string
@@ -1433,6 +1454,8 @@ export type Database = {
         Args: { product_offered: string }
         Returns: Database["public"]["Enums"]["ticket_type"]
       }
+      normalize_client_name: { Args: { name: string }; Returns: string }
+      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
       call_status:

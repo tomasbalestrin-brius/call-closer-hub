@@ -71,6 +71,25 @@ async function safeReadJson(response: Response): Promise<{ data: unknown; error:
   }
 }
 
+// Helper function to generate SHA-256 hash from content for deduplication
+async function generateContentHash(content: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Helper function to normalize client name for deduplication
+function normalizeClientName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/\s+/g, ' ')  // Normalize multiple spaces
+    .trim();
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -216,17 +235,80 @@ serve(async (req) => {
     
     console.log(`Document fetched, content length: ${content.length}`);
 
-    // Analyze the call with safe JSON parsing
-    const analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({ transcription: content, fileName }),
-    });
+    // ========== DEDUPLICATION BY CONTENT HASH ==========
+    const contentHash = await generateContentHash(content);
+    console.log(`Content hash: ${contentHash.substring(0, 16)}...`);
 
-    const { data: analyzeResult, error: analyzeParseError } = await safeReadJson(analyzeResponse);
+    const { data: existingCall } = await supabase
+      .from("calls")
+      .select("id, client_id")
+      .eq("closer_id", userId)
+      .eq("content_hash", contentHash)
+      .maybeSingle();
+
+    if (existingCall) {
+      console.log(`Call already exists with hash ${contentHash.substring(0, 16)}..., updating imported_files`);
+      await supabase
+        .from("imported_files")
+        .update({
+          status: "completed",
+          call_id: existingCall.id,
+          started_processing_at: null,
+          imported_at: new Date().toISOString(),
+        })
+        .eq("id", importRecordId);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          callId: existingCall.id,
+          clientId: existingCall.client_id,
+          deduplicated: true,
+          message: "Call já existente (conteúdo duplicado)"
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ========== ANALYZE WITH RETRY FOR TIMEOUTS ==========
+    const MAX_RETRIES_ON_TIMEOUT = 2;
+    let retryCount = 0;
+    let analyzeResult: unknown = null;
+    let analyzeParseError: string | null = null;
+    let analyzeResponse: Response | null = null;
+
+    while (retryCount <= MAX_RETRIES_ON_TIMEOUT) {
+      console.log(`Analyze attempt ${retryCount + 1}/${MAX_RETRIES_ON_TIMEOUT + 1}`);
+      
+      analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({ transcription: content, fileName }),
+      });
+
+      const result = await safeReadJson(analyzeResponse);
+      analyzeResult = result.data;
+      analyzeParseError = result.error;
+
+      if (analyzeResponse.ok && !analyzeParseError) {
+        console.log("Analysis successful");
+        break;
+      }
+
+      // Retry only for timeouts (408)
+      if (analyzeResponse.status === 408 && retryCount < MAX_RETRIES_ON_TIMEOUT) {
+        console.log(`Timeout on attempt ${retryCount + 1}, retrying in 5s...`);
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        continue;
+      }
+
+      // Non-timeout error or last retry - exit loop
+      break;
+    }
 
     if (analyzeParseError) {
       const errorMsg = `Erro ao analisar call: ${analyzeParseError}`;
@@ -238,7 +320,7 @@ serve(async (req) => {
       throw new Error(errorMsg);
     }
 
-    if (!analyzeResponse.ok) {
+    if (!analyzeResponse?.ok) {
       const errorMsg = (analyzeResult as { error?: string })?.error || "Failed to analyze call";
       await supabase
         .from("imported_files")
@@ -259,17 +341,20 @@ serve(async (req) => {
     
     console.log("Analysis complete:", analysis.client_name);
 
-    // Check if client exists or create new one
+    // Check if client exists or create new one (using normalized name)
     let clientId: string | null = null;
     const clientName = analysis.client_name && analysis.client_name !== 'nao_informado' 
       ? analysis.client_name as string
       : `Lead - ${extractDateFromFileName(fileName || "")}`;
     
+    // Use normalized name for matching
+    const normalizedName = normalizeClientName(clientName);
+    
     const { data: existingClient } = await supabase
       .from("clients")
       .select("id")
       .eq("closer_id", userId)
-      .ilike("name", clientName)
+      .eq("name_normalized", normalizedName)
       .maybeSingle();
 
     if (existingClient) {
@@ -331,6 +416,7 @@ serve(async (req) => {
         status: callStatus,
         product: analysis.product && analysis.product !== 'nao_informado' ? analysis.product : null,
         transcription: content,
+        content_hash: contentHash,  // NEW: Hash for deduplication
         score: toInt(analysis.call_score),
         duration_minutes: toInt(analysis.duration_minutes),
         niche: analysis.niche && analysis.niche !== 'nao_informado' ? analysis.niche : null,
@@ -343,6 +429,7 @@ serve(async (req) => {
         lead_classification: analysis.lead_classification,
         closer_classification: analysis.closer_classification,
         technical_analysis: analysis.technical_analysis,
+        analysis_metadata: analysis.analysis_metadata || {},  // NEW: Partial analysis metadata
         main_errors: analysis.main_errors,
         main_wins: analysis.main_wins,
         loss_point: analysis.loss_point && analysis.loss_point !== 'nao_informado' ? analysis.loss_point : null,
