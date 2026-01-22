@@ -11,6 +11,21 @@ const CHUNK_SIZE = 25000; // ~25KB per chunk
 const CHUNK_OVERLAP = 2000; // 2KB overlap for context
 const MAX_SIZE_FOR_DIRECT = 50000; // Files under 50KB go direct
 const FUNCTION_TIMEOUT = 90000; // 90 seconds safety timeout (Edge limit is ~150s)
+const ANALYSIS_TIMEOUT = 85000; // 85 seconds for analysis (5s before abort)
+const BATCH_TIMEOUT = 40000; // 40 seconds max per batch
+
+// ============= RACING TIMEOUT HELPER =============
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T | null = null): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<T | null>((resolve) => 
+      setTimeout(() => {
+        console.log(`⏱️ Promise timeout reached (${ms}ms), returning fallback`);
+        resolve(fallback);
+      }, ms)
+    )
+  ]);
+}
 
 // ============= CHUNK ANALYSIS PROMPT (Simplified) =============
 const CHUNK_ANALYSIS_PROMPT = `Você é um analista de calls de vendas high ticket.
@@ -1193,18 +1208,23 @@ async function analyzeWithChunking(
   console.log(`Starting chunked analysis for file: ${fileName}`);
   console.log(`Transcription length: ${transcription.length} chars`);
   
+  const startTime = Date.now();
+  
   // Step 1: Split transcription into chunks
   const chunks = splitTranscription(transcription);
   console.log(`Split into ${chunks.length} chunks for parallel processing`);
   
-  // Step 2: Analyze chunks in parallel (batch of 4 for faster processing)
+  // Step 2: Analyze chunks in parallel with racing timeout
   const partialAnalyses: ChunkAnalysis[] = [];
-  const batchSize = 4; // Increased from 2 to 4 for faster processing
+  const batchSize = 4;
   
   for (let i = 0; i < chunks.length; i += batchSize) {
-    // Check if timeout was reached before processing next batch
-    if (abortSignal?.aborted) {
-      console.log(`Timeout reached at batch ${Math.floor(i/batchSize) + 1}, proceeding with ${partialAnalyses.length} chunks already processed`);
+    // Check remaining time before processing next batch
+    const elapsed = Date.now() - startTime;
+    const remaining = ANALYSIS_TIMEOUT - elapsed;
+    
+    if (remaining < 10000 || abortSignal?.aborted) {
+      console.log(`⏱️ Time limit approaching (${Math.round(elapsed/1000)}s elapsed, ${Math.round(remaining/1000)}s remaining), stopping with ${partialAnalyses.length} chunks`);
       break;
     }
     
@@ -1213,31 +1233,49 @@ async function analyzeWithChunking(
       analyzeChunk(chunk, i + batchIdx + 1, chunks.length)
     );
     
-    try {
-      const batchResults = await Promise.all(batchPromises);
-      partialAnalyses.push(...batchResults);
-      console.log(`Batch ${Math.floor(i/batchSize) + 1} completed: ${partialAnalyses.length}/${chunks.length} chunks processed`);
-    } catch (error) {
-      // Check if the error was due to abort
-      if (abortSignal?.aborted) {
-        console.log(`Batch aborted due to timeout, using ${partialAnalyses.length} chunks already processed`);
-        break;
-      }
-      throw error;
+    // Racing: either batch completes, or timeout fires
+    const batchTimeout = Math.min(BATCH_TIMEOUT, remaining - 5000);
+    console.log(`📦 Starting batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(chunks.length/batchSize)} with ${Math.round(batchTimeout/1000)}s timeout`);
+    
+    const batchResult = await withTimeout(
+      Promise.all(batchPromises),
+      batchTimeout,
+      null
+    );
+    
+    if (batchResult === null) {
+      console.log(`⏱️ Batch ${Math.floor(i/batchSize) + 1} timed out, proceeding with ${partialAnalyses.length} chunks already processed`);
+      break;
     }
     
-    // No delay between batches - removed for faster processing
+    partialAnalyses.push(...batchResult);
+    const elapsedNow = Date.now() - startTime;
+    console.log(`✅ Batch ${Math.floor(i/batchSize) + 1} completed: ${partialAnalyses.length}/${chunks.length} chunks (${Math.round(elapsedNow/1000)}s elapsed)`);
   }
   
-  // Step 3: Merge whatever we have (even if partial due to timeout)
+  // Step 3: Merge whatever we have (even if partial)
   if (partialAnalyses.length === 0) {
     throw new Error("No chunks analyzed before timeout - transcription may be too long");
   }
   
   const isPartial = partialAnalyses.length < chunks.length;
-  console.log(`Merging ${partialAnalyses.length}/${chunks.length} chunks (${isPartial ? 'PARTIAL due to timeout' : 'COMPLETE'})`);
+  const mergeStartTime = Date.now();
+  const mergeTimeout = Math.max(ANALYSIS_TIMEOUT - (mergeStartTime - startTime) - 2000, 10000);
   
-  const mergedAnalysis = await mergeChunkAnalyses(partialAnalyses);
+  console.log(`🔀 Merging ${partialAnalyses.length}/${chunks.length} chunks (${isPartial ? 'PARTIAL' : 'COMPLETE'}) with ${Math.round(mergeTimeout/1000)}s timeout...`);
+  
+  const mergedAnalysis = await withTimeout(
+    mergeChunkAnalyses(partialAnalyses),
+    mergeTimeout,
+    null
+  );
+  
+  if (!mergedAnalysis) {
+    throw new Error("Merge timed out - returning partial data not possible");
+  }
+  
+  const totalTime = Date.now() - startTime;
+  console.log(`✅ Chunked analysis completed in ${Math.round(totalTime/1000)}s (${partialAnalyses.length}/${chunks.length} chunks)`);
   
   return mergedAnalysis;
 }
