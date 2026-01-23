@@ -255,7 +255,50 @@ export function ImportStatusPanel() {
         }
       });
 
-      if (error) throw error;
+      // Defensive handling (older backend returned 409)
+      if (error) {
+        if (error.message?.includes('409') || error.message?.toLowerCase().includes('already')) {
+          toast.info(`Processamento já está em andamento para ${userName}`);
+
+          // Load current session so the panel can track progress immediately
+          const { data: session } = await supabase
+            .from('user_import_sessions')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (session) {
+            setCloserSessions(prev => {
+              const next = new Map(prev);
+              next.set(userId, session as UserSession);
+              return next;
+            });
+          }
+          return;
+        }
+
+        throw error;
+      }
+
+      if ((data as any)?.alreadyRunning) {
+        toast.info(`Processamento já está em andamento para ${userName}`);
+
+        const { data: session } = await supabase
+          .from('user_import_sessions')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (session) {
+          setCloserSessions(prev => {
+            const next = new Map(prev);
+            next.set(userId, session as UserSession);
+            return next;
+          });
+        }
+
+        return;
+      }
 
       toast.success(`Processamento iniciado para ${userName}`);
     } catch (error) {
