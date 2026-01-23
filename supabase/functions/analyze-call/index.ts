@@ -2,6 +2,19 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
+// ============= API USAGE STATS TYPES =============
+interface ApiUsageStat {
+  service: string;
+  model: string;
+  operation: string;
+  tokensInput: number;
+  tokensOutput: number;
+}
+
+declare global {
+  var apiUsageStats: ApiUsageStat[] | undefined;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -989,7 +1002,7 @@ function splitTranscription(text: string): string[] {
 
       // Priority 1: Paragraph breaks (double newline)
       const paragraphRegex = /\n\n/g;
-      let match;
+      let match: RegExpExecArray | null;
       while ((match = paragraphRegex.exec(searchRange)) !== null) {
         breakPoints.push({ pos: match.index, priority: 1 });
       }
@@ -1010,7 +1023,7 @@ function splitTranscription(text: string): string[] {
       const newlineRegex = /\n/g;
       while ((match = newlineRegex.exec(searchRange)) !== null) {
         // Skip if already captured as paragraph or speaker
-        const alreadyCaptured = breakPoints.some(bp => Math.abs(bp.pos - match.index) < 5);
+        const alreadyCaptured = breakPoints.some(bp => Math.abs(bp.pos - match!.index) < 5);
         if (!alreadyCaptured) {
           breakPoints.push({ pos: match.index, priority: 4 });
         }
@@ -1711,6 +1724,8 @@ interface AnalysisData {
       mensagem_sugerida_whats?: string;
     };
   };
+  // Alias for __metadata (used when parsing AI response)
+  __metadata?: AnalysisMetadata;
   // Analysis metadata for partial analysis tracking
   analysis_metadata?: AnalysisMetadata;
 }
@@ -1971,8 +1986,8 @@ serve(async (req) => {
       }
 
       // Calculate and log total
-      const totalInput = globalThis.apiUsageStats.reduce((sum, s) => sum + s.tokensInput, 0);
-      const totalOutput = globalThis.apiUsageStats.reduce((sum, s) => sum + s.tokensOutput, 0);
+      const totalInput = globalThis.apiUsageStats.reduce((sum: number, s: ApiUsageStat) => sum + s.tokensInput, 0);
+      const totalOutput = globalThis.apiUsageStats.reduce((sum: number, s: ApiUsageStat) => sum + s.tokensOutput, 0);
       console.log(`💰 Total tokens: ${totalInput} input + ${totalOutput} output = ${totalInput + totalOutput}`);
     }
 
