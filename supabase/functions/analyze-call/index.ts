@@ -1289,6 +1289,109 @@ async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<Ana
   return merged;
 }
 
+// ============= EMERGENCY SYNTHESIS FUNCTION =============
+// When merge times out, builds a synthetic analysis from already processed chunks
+function buildPartialAnalysisFromChunks(chunks: ChunkAnalysis[], totalChunksExpected: number): AnalysisData {
+  console.log(`🔧 Building synthetic analysis from ${chunks.length} chunks (merge fallback)`);
+  
+  // Extract identification from first chunk with data
+  const identificacao = chunks.reduce((acc: { nome_lead: string | null; nome_closer: string | null; produto_ofertado: string | null; houve_venda: string }, chunk) => {
+    if (!acc.nome_lead && chunk.identificacao?.nome_lead) 
+      acc.nome_lead = chunk.identificacao.nome_lead;
+    if (!acc.nome_closer && chunk.identificacao?.nome_closer) 
+      acc.nome_closer = chunk.identificacao.nome_closer;
+    if (!acc.produto_ofertado && chunk.identificacao?.produto_ofertado) 
+      acc.produto_ofertado = chunk.identificacao.produto_ofertado;
+    if (acc.houve_venda === 'nao_identificado' && chunk.identificacao?.houve_venda) 
+      acc.houve_venda = chunk.identificacao.houve_venda;
+    return acc;
+  }, { nome_lead: null, nome_closer: null, produto_ofertado: null, houve_venda: 'nao_identificado' });
+  
+  // Combine extracted data from all chunks
+  const dadosExtraidos: Record<string, unknown> = {};
+  for (const chunk of chunks) {
+    const d = chunk.dados_extraidos || {};
+    if (d.nicho_profissao && !dadosExtraidos.nicho_profissao) 
+      dadosExtraidos.nicho_profissao = d.nicho_profissao;
+    if (d.faturamento && !dadosExtraidos.faturamento_mensal_bruto) 
+      dadosExtraidos.faturamento_mensal_bruto = d.faturamento;
+    if (d.dor_principal && !dadosExtraidos.dor_principal_declarada) 
+      dadosExtraidos.dor_principal_declarada = { texto: d.dor_principal, evidencia: '' };
+    if (d.dor_profunda && !dadosExtraidos.dor_profunda) 
+      dadosExtraidos.dor_profunda = { texto: d.dor_profunda, evidencia: '' };
+    if (d.objecoes?.length && !dadosExtraidos.objecoes_levantadas) {
+      dadosExtraidos.objecoes_levantadas = d.objecoes.map((o: string) => ({ objecao: o, evidencia: '' }));
+    }
+  }
+  
+  // Calculate average score from identified stages
+  const todasEtapas = chunks.flatMap(c => c.etapas_identificadas || []);
+  const notaMedia = todasEtapas.length > 0 
+    ? Math.round(todasEtapas.reduce((sum: number, e) => sum + (e.nota || 0), 0) / todasEtapas.length * 10) / 10
+    : 5;
+  
+  // Collect observations (deduplicated)
+  const pontosFortes = [...new Set(chunks.flatMap(c => c.observacoes?.pontos_fortes_gerais || []))];
+  const pontosFracos = [...new Set(chunks.flatMap(c => c.observacoes?.pontos_fracos_gerais || []))];
+  
+  console.log(`📊 Synthetic analysis: nota=${notaMedia}, fortes=${pontosFortes.length}, fracos=${pontosFracos.length}`);
+  
+  return {
+    framework_selecionado: identificacao.produto_ofertado || 'Não identificado',
+    confianca_framework: 0.5,
+    motivo_escolha_framework: ['Análise de emergência - merge expirou, síntese local aplicada'],
+    identificacao: {
+      nome_lead: identificacao.nome_lead || undefined,
+      nome_closer: identificacao.nome_closer || undefined,
+      produto_ofertado: identificacao.produto_ofertado || undefined,
+      houve_venda: identificacao.houve_venda
+    },
+    dados_extraidos: dadosExtraidos as AnalysisData['dados_extraidos'],
+    nota_geral: notaMedia,
+    justificativa_nota_geral: ['Nota calculada automaticamente pela média das etapas (síntese de emergência - merge expirou)'],
+    maiores_acertos: pontosFortes.slice(0, 3).map(p => ({
+      acerto: p,
+      evidencia: 'Extraído de análise parcial',
+      porque_importa: '',
+      como_repetir: ''
+    })),
+    maiores_erros: pontosFracos.slice(0, 3).map(p => ({
+      erro: p,
+      evidencia: 'Extraído de análise parcial',
+      impacto: '',
+      como_corrigir: [],
+      frase_pronta: { antes: '', depois: '' }
+    })),
+    ponto_de_perda_da_venda: null,
+    sinais_da_perda: [],
+    se_vendeu: { porque_comprou: [], gatilhos_que_mais_pesaram: [] },
+    checklist_erros_recorrentes: {},
+    analise_por_etapa: {},
+    plano_de_acao_direto: {
+      ajuste_numero_1: {
+        diagnostico: 'Análise de emergência - recomenda-se reanálise completa',
+        o_que_fazer_na_proxima_call: [],
+        script_30_segundos: ''
+      },
+      treino_recomendado: [],
+      proxima_acao_com_lead: {
+        status: 'nao_informado',
+        passo: '',
+        mensagem_sugerida_whats: ''
+      }
+    },
+    analysis_metadata: {
+      is_partial_analysis: true,
+      chunks_analyzed: chunks.length,
+      chunks_total: totalChunksExpected,
+      confidence_level: 'low' as const,
+      analysis_method: 'chunked' as const,
+      timeout_occurred: true,
+      is_emergency_synthesis: true
+    }
+  };
+}
+
 async function analyzeWithChunking(
   transcription: string, 
   fileName: string,
@@ -1353,14 +1456,17 @@ async function analyzeWithChunking(
 
   console.log(`🔀 Merging ${partialAnalyses.length}/${chunks.length} chunks (${isPartial ? 'PARTIAL due to timeout' : 'COMPLETE'}) with ${Math.round(mergeTimeout/1000)}s timeout...`);
 
-  const mergedAnalysis = await withTimeout(
+  let mergedAnalysis = await withTimeout(
     mergeChunkAnalyses(partialAnalyses),
     mergeTimeout,
     null
   );
 
+  // If merge timed out, build synthetic analysis locally from chunks
   if (!mergedAnalysis) {
-    throw new Error("Merge timed out - returning partial data not possible");
+    console.log("⚠️ Merge timed out, building synthetic partial analysis from chunks...");
+    mergedAnalysis = buildPartialAnalysisFromChunks(partialAnalyses, chunks.length);
+    console.log(`✅ Synthetic analysis built with score ${mergedAnalysis.nota_geral || 5}`);
   }
 
   const totalTime = Date.now() - startTime;
@@ -1655,6 +1761,7 @@ interface AnalysisMetadata {
   confidence_level: 'low' | 'high';
   analysis_method: 'chunked' | 'direct';
   timeout_occurred: boolean;
+  is_emergency_synthesis?: boolean;
 }
 
 interface AnalysisData {
