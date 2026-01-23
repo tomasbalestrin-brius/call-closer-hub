@@ -215,6 +215,11 @@ GRANT SELECT ON daily_costs_summary TO authenticated;
 GRANT SELECT ON current_month_user_costs TO authenticated;
 GRANT SELECT ON expensive_calls TO authenticated;
 
+-- Grant EXECUTE on functions to service_role (needed for Edge Functions)
+GRANT EXECUTE ON FUNCTION calculate_api_cost TO service_role;
+GRANT EXECUTE ON FUNCTION log_api_cost TO service_role;
+GRANT EXECUTE ON FUNCTION log_api_cost TO authenticated;
+
 -- Comment on table
 COMMENT ON TABLE api_costs IS 'Tracks actual API usage and costs per request for OpenAI, Anthropic, and other AI services';
 COMMENT ON COLUMN api_costs.cost_usd IS 'Calculated cost in USD based on model pricing and token usage';
