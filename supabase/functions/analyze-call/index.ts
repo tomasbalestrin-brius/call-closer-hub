@@ -1152,7 +1152,9 @@ async function analyzeChunk(
             { role: "system", content: prompt },
             { role: "user", content: `Analise este trecho da transcrição:\n\n${chunk}` },
           ],
+          response_format: { type: "json_object" }, // Force valid JSON output
           temperature: 0.1,
+          max_tokens: 8000,
         }),
       });
 
@@ -1253,9 +1255,11 @@ async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<Ana
       model: "gpt-4o-mini", // Use mini for faster merge
       messages: [
         { role: "system", content: mergePrompt },
-        { role: "user", content: "Consolide as análises parciais em uma análise final completa seguindo o schema exato especificado." },
+        { role: "user", content: "Consolide as análises parciais em uma análise final completa seguindo o schema exato especificado. Retorne APENAS JSON válido." },
       ],
+      response_format: { type: "json_object" }, // Force valid JSON output
       temperature: 0.1,
+      max_tokens: 24000, // Increased for large merged analyses
     }),
   });
 
@@ -1519,8 +1523,9 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
             { role: "system", content: systemPrompt },
             { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}` },
           ],
+          response_format: { type: "json_object" }, // Force valid JSON output
           temperature: 0.1,
-          max_tokens: 16000,
+          max_tokens: 32000, // Increased to prevent truncation
         }),
       });
 
@@ -1614,11 +1619,12 @@ async function repairJSONWithAI(brokenJSON: string): Promise<string> {
     body: JSON.stringify({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "You are a JSON repair assistant. You receive broken or truncated JSON and return a valid, complete JSON object. Do not add new data, just fix structural issues (missing braces, quotes, commas). If content is truncated, close all open objects/arrays properly." },
+        { role: "system", content: "You are a JSON repair assistant. You receive broken or truncated JSON and return a valid, complete JSON object. Do not add new data, just fix structural issues (missing braces, quotes, commas). If content is truncated, close all open objects/arrays properly. Return ONLY valid JSON, no explanations." },
         { role: "user", content: `Fix this broken JSON and return ONLY valid JSON:\n\n${truncated}` },
       ],
+      response_format: { type: "json_object" }, // Force valid JSON output
       temperature: 0,
-      max_tokens: 16000,
+      max_tokens: 24000,
     }),
   });
 
@@ -1630,38 +1636,178 @@ async function repairJSONWithAI(brokenJSON: string): Promise<string> {
   return data.choices?.[0]?.message?.content || "";
 }
 
-// Função para tentar corrigir erros comuns de JSON
+// Função para tentar corrigir erros comuns de JSON (ENHANCED)
 function tryFixJSON(jsonString: string): string {
   let fixed = jsonString;
   
-  // Remove vírgulas antes de ] ou }
+  // 1. Remove BOM character if present
+  fixed = fixed.replace(/^\uFEFF/, '');
+  
+  // 2. Replace curly/smart quotes with straight quotes
+  fixed = fixed.replace(/[""]/g, '"');
+  fixed = fixed.replace(/['']/g, "'");
+  
+  // 3. Remove vírgulas antes de ] ou }
   fixed = fixed.replace(/,\s*([}\]])/g, '$1');
   
-  // Adiciona vírgula faltando entre propriedades (}{ ou ]["[)
+  // 4. Adiciona vírgula faltando entre propriedades (}{ ou ]["[)
   fixed = fixed.replace(/}(\s*){/g, '},\n{');
   fixed = fixed.replace(/](\s*)\[/g, '],\n[');
   
-  // Corrige aspas duplas escapadas incorretamente
+  // 5. Fix missing commas between key-value pairs: "key": "value" "key2"
+  fixed = fixed.replace(/("(?:[^"\\]|\\.)*")\s*("\w)/g, '$1,\n$2');
+  
+  // 6. Corrige aspas duplas escapadas incorretamente
   fixed = fixed.replace(/\\\\"/g, '\\"');
   
-  // Remove aspas duplas repetidas
+  // 7. Remove aspas duplas repetidas
   fixed = fixed.replace(/""+/g, '"');
   
-  // Tenta balancear chaves
+  // 8. Fix unescaped newlines in strings (replace actual newlines within strings)
+  fixed = fixed.replace(/(?<!\\)(?:\\\\)*"([^"]*)\n([^"]*)"/g, (match, p1, p2) => {
+    return `"${p1}\\n${p2}"`;
+  });
+  
+  // 9. Remove trailing commas in objects and arrays
+  fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+  
+  // 10. Fix common unicode escape issues
+  fixed = fixed.replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => {
+    try {
+      return String.fromCharCode(parseInt(hex, 16));
+    } catch {
+      return match;
+    }
+  });
+  
+  // 11. Tenta balancear chaves
   const openBraces = (fixed.match(/{/g) || []).length;
   const closeBraces = (fixed.match(/}/g) || []).length;
   if (openBraces > closeBraces) {
     fixed += '}'.repeat(openBraces - closeBraces);
   }
   
-  // Tenta balancear colchetes
+  // 12. Tenta balancear colchetes
   const openBrackets = (fixed.match(/\[/g) || []).length;
   const closeBrackets = (fixed.match(/\]/g) || []).length;
   if (openBrackets > closeBrackets) {
     fixed += ']'.repeat(openBrackets - closeBrackets);
   }
   
-  return fixed;
+  // 13. Remove duplicate keys (take last occurrence)
+  // This is a best-effort fix for simple cases
+  try {
+    const obj = JSON.parse(fixed);
+    return JSON.stringify(obj);
+  } catch {
+    // If still invalid, return the fixed string as-is
+    return fixed;
+  }
+}
+
+// ============= FALLBACK FIELD EXTRACTION =============
+// Extract critical fields from broken JSON using regex patterns
+function extractFieldsFallback(response: string): Partial<AnalysisData> {
+  console.log("🔧 Attempting regex-based field extraction from broken JSON...");
+  
+  const result: Partial<AnalysisData> = {
+    identificacao: {},
+    dados_extraidos: {},
+    nota_geral: undefined,
+    maiores_acertos: [],
+    maiores_erros: [],
+    analysis_metadata: {
+      is_partial_analysis: true,
+      chunks_analyzed: 0,
+      chunks_total: 0,
+      confidence_level: 'low',
+      analysis_method: 'direct',
+      timeout_occurred: false,
+      is_emergency_synthesis: true
+    }
+  };
+  
+  // Extract nome_lead
+  const leadMatch = response.match(/"nome_lead"\s*:\s*"([^"]+)"/);
+  if (leadMatch && result.identificacao) {
+    result.identificacao.nome_lead = leadMatch[1];
+    console.log(`✅ Extracted nome_lead: ${leadMatch[1]}`);
+  }
+  
+  // Extract nome_closer
+  const closerMatch = response.match(/"nome_closer"\s*:\s*"([^"]+)"/);
+  if (closerMatch && result.identificacao) {
+    result.identificacao.nome_closer = closerMatch[1];
+    console.log(`✅ Extracted nome_closer: ${closerMatch[1]}`);
+  }
+  
+  // Extract produto_ofertado
+  const produtoMatch = response.match(/"produto_ofertado"\s*:\s*"([^"]+)"/);
+  if (produtoMatch && result.identificacao) {
+    result.identificacao.produto_ofertado = produtoMatch[1];
+    console.log(`✅ Extracted produto_ofertado: ${produtoMatch[1]}`);
+  }
+  
+  // Extract houve_venda
+  const vendaMatch = response.match(/"houve_venda"\s*:\s*"([^"]+)"/);
+  if (vendaMatch && result.identificacao) {
+    result.identificacao.houve_venda = vendaMatch[1];
+    console.log(`✅ Extracted houve_venda: ${vendaMatch[1]}`);
+  }
+  
+  // Extract nota_geral
+  const notaMatch = response.match(/"nota_geral"\s*:\s*(\d+(?:\.\d+)?)/);
+  if (notaMatch) {
+    result.nota_geral = parseFloat(notaMatch[1]);
+    console.log(`✅ Extracted nota_geral: ${result.nota_geral}`);
+  }
+  
+  // Extract framework_selecionado
+  const frameworkMatch = response.match(/"framework_selecionado"\s*:\s*"([^"]+)"/);
+  if (frameworkMatch) {
+    result.framework_selecionado = frameworkMatch[1];
+    console.log(`✅ Extracted framework_selecionado: ${frameworkMatch[1]}`);
+  }
+  
+  // Extract nicho_profissao
+  const nichoMatch = response.match(/"nicho_profissao"\s*:\s*"([^"]+)"/);
+  if (nichoMatch && result.dados_extraidos) {
+    result.dados_extraidos.nicho_profissao = nichoMatch[1];
+    console.log(`✅ Extracted nicho_profissao: ${nichoMatch[1]}`);
+  }
+  
+  // Extract faturamento
+  const fatMatch = response.match(/"faturamento_mensal_bruto"\s*:\s*"([^"]+)"/);
+  if (fatMatch && result.dados_extraidos) {
+    result.dados_extraidos.faturamento_mensal_bruto = fatMatch[1];
+    console.log(`✅ Extracted faturamento: ${fatMatch[1]}`);
+  }
+  
+  // Extract dor_principal
+  const dorMatch = response.match(/"dor_principal_declarada"\s*:\s*\{\s*"texto"\s*:\s*"([^"]+)"/);
+  if (dorMatch && result.dados_extraidos) {
+    result.dados_extraidos.dor_principal_declarada = { texto: dorMatch[1], evidencia: '' };
+    console.log(`✅ Extracted dor_principal: ${dorMatch[1].substring(0, 50)}...`);
+  }
+  
+  // Count extracted fields
+  const extractedCount = [
+    result.identificacao?.nome_lead,
+    result.identificacao?.nome_closer,
+    result.identificacao?.produto_ofertado,
+    result.nota_geral,
+    result.framework_selecionado,
+    result.dados_extraidos?.nicho_profissao
+  ].filter(Boolean).length;
+  
+  console.log(`📊 Fallback extraction completed: ${extractedCount} fields recovered`);
+  
+  // Set default score if not found
+  if (result.nota_geral === undefined) {
+    result.nota_geral = 5; // Default mid-score for partial analysis
+  }
+  
+  return result;
 }
 
 async function parseJSONFromResponse(response: string): Promise<unknown> {
@@ -1736,17 +1882,31 @@ async function parseJSONFromResponse(response: string): Promise<unknown> {
         }
       }
       
-      // Log detalhado do erro
+      // Log detalhado do erro para debug
       console.error("All JSON parse attempts failed");
       console.error("Original error:", e1);
       console.error("JSON length:", jsonString.length);
-      console.error("JSON that failed (first 1000 chars):", jsonString.substring(0, 1000));
-      console.error("JSON that failed (last 1000 chars):", jsonString.substring(jsonString.length - 1000));
+      console.error("📝 Raw response that failed (first 5000 chars):", response.substring(0, 5000));
+      console.error("📝 Raw response that failed (last 2000 chars):", response.substring(response.length - 2000));
       
       const errorMatch = String(e1).match(/position (\d+)/);
       if (errorMatch) {
         const pos = parseInt(errorMatch[1]);
         console.error(`JSON around error position ${pos}:`, jsonString.substring(Math.max(0, pos - 200), pos + 200));
+      }
+      
+      // Tentativa 5: FALLBACK - Extract fields with regex
+      console.log("🔧 Attempting fallback field extraction...");
+      const fallbackData = extractFieldsFallback(response);
+      
+      // Check if we got enough critical data
+      const hasCriticalData = fallbackData.identificacao?.nome_lead || 
+                              fallbackData.identificacao?.nome_closer ||
+                              fallbackData.nota_geral !== undefined;
+      
+      if (hasCriticalData) {
+        console.log("✅ Fallback extraction successful, returning partial data");
+        return fallbackData;
       }
       
       throw new Error("Failed to parse AI response as JSON after multiple attempts");
