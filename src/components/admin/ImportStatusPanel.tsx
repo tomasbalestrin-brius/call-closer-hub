@@ -18,7 +18,9 @@ import {
   Rocket,
   RotateCcw,
   Loader2,
-  StopCircle
+  StopCircle,
+  AlertTriangle,
+  RefreshCcw
 } from "lucide-react";
 
 interface CloserImportStatus {
@@ -70,6 +72,8 @@ export function ImportStatusPanel() {
   const [processing, setProcessing] = useState(false);
   const [closerSessions, setCloserSessions] = useState<Map<string, UserSession>>(new Map());
   const [lastProcessResult, setLastProcessResult] = useState<{success: number, errors: number} | null>(null);
+  const [resettingStuck, setResettingStuck] = useState(false);
+  const [stuckFilesCount, setStuckFilesCount] = useState(0);
 
   const fetchImportStatuses = useCallback(async () => {
     try {
@@ -428,6 +432,60 @@ export function ImportStatusPanel() {
     }
   };
 
+  // Check for stuck files on load and periodically
+  const checkStuckFiles = useCallback(async () => {
+    try {
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      
+      const { count, error } = await supabase
+        .from('imported_files')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'processing')
+        .lt('started_processing_at', fiveMinutesAgo);
+      
+      if (!error && count !== null) {
+        setStuckFilesCount(count);
+      }
+    } catch (error) {
+      console.error('Error checking stuck files:', error);
+    }
+  }, []);
+
+  // Auto-recovery: check for stuck files every 2 minutes
+  useEffect(() => {
+    checkStuckFiles();
+    const interval = setInterval(checkStuckFiles, 120000); // 2 minutes
+    return () => clearInterval(interval);
+  }, [checkStuckFiles]);
+
+  const resetStuckFilesAndSessions = async () => {
+    try {
+      setResettingStuck(true);
+      
+      // Call the stale-file-cleanup edge function
+      const { data, error } = await supabase.functions.invoke('stale-file-cleanup');
+      
+      if (error) throw error;
+      
+      const result = data || {};
+      const totalReset = (result.stuckFilesReset || 0) + (result.staleProgressReset || 0) + (result.staleSessionsReset || 0);
+      
+      if (totalReset > 0) {
+        toast.success(`Reset completo: ${result.stuckFilesReset || 0} arquivos + ${result.staleSessionsReset || 0} sessões`);
+      } else {
+        toast.info('Nenhum arquivo ou sessão travado encontrado');
+      }
+      
+      setStuckFilesCount(0);
+      await fetchImportStatuses();
+    } catch (error) {
+      console.error('Error resetting stuck files:', error);
+      toast.error('Erro ao resetar arquivos travados');
+    } finally {
+      setResettingStuck(false);
+    }
+  };
+
   const getSessionForUser = (userId: string): UserSession | undefined => {
     return closerSessions.get(userId);
   };
@@ -595,6 +653,37 @@ export function ImportStatusPanel() {
                   Último processamento: {lastProcessResult.success} sucesso, {lastProcessResult.errors} erros
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Stuck Files Alert */}
+          {stuckFilesCount > 0 && !hasActiveProcessing && (
+            <div className="bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-orange-600" />
+                  <span className="font-medium text-orange-900 dark:text-orange-100">
+                    {stuckFilesCount} arquivo(s) travado(s) detectado(s)
+                  </span>
+                </div>
+                <Button
+                  onClick={resetStuckFilesAndSessions}
+                  disabled={resettingStuck}
+                  variant="outline"
+                  size="sm"
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                >
+                  {resettingStuck ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <RefreshCcw className="h-4 w-4 mr-1" />
+                  )}
+                  Reset Automático
+                </Button>
+              </div>
+              <p className="text-sm text-orange-700 dark:text-orange-300 mt-2">
+                Arquivos parados há mais de 5 minutos. Clique para resetar e liberar para reprocessamento.
+              </p>
             </div>
           )}
 
