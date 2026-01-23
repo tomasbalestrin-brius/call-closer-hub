@@ -92,7 +92,7 @@ async function safeReadJson(response: Response): Promise<{ data: unknown; error:
 }
 
 // Process a single file with timeout and retry
-const ANALYSIS_TIMEOUT_MS = 90000; // 90 seconds
+const ANALYSIS_TIMEOUT_MS = 140000; // 140 seconds (closer to Edge limit of 150s)
 
 async function processFile(
   supabaseUrl: string,
@@ -134,9 +134,10 @@ async function processFile(
           continue;
         }
 
-        // Empty response - retry
-        if (parseError === "Empty response from function") {
-          await new Promise(r => setTimeout(r, 10000));
+        // Timeout (408) or Empty response - treat as retryable
+        if (response.status === 408 || parseError === "Empty response from function") {
+          console.log(`Retryable error for ${fileName}: ${response.status === 408 ? 'Timeout 408' : 'Empty response'}`);
+          await new Promise(r => setTimeout(r, 5000)); // Wait 5s before retry
           continue;
         }
 
