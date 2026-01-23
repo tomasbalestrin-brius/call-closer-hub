@@ -6,6 +6,66 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============= LOGGER HELPER =============
+class Logger {
+  // deno-lint-ignore no-explicit-any
+  private supabase: any;
+  private service: string;
+  private userId: string | null;
+  private startTime: number;
+
+  // deno-lint-ignore no-explicit-any
+  constructor(service: string, supabase: any, userId: string | null = null) {
+    this.service = service;
+    this.userId = userId;
+    this.startTime = Date.now();
+    this.supabase = supabase;
+  }
+
+  private async log(
+    level: 'debug' | 'info' | 'warning' | 'error' | 'critical',
+    operation: string,
+    metadata: Record<string, unknown> = {},
+    errorMessage: string | null = null
+  ) {
+    const duration = Date.now() - this.startTime;
+
+    console.log(`[${level.toUpperCase()}] ${this.service}:${operation}`, JSON.stringify(metadata));
+
+    try {
+      await this.supabase.rpc('log_event', {
+        p_level: level,
+        p_service: this.service,
+        p_user_id: this.userId,
+        p_operation: operation,
+        p_duration_ms: duration,
+        p_metadata: metadata,
+        p_error_message: errorMessage
+      });
+    } catch (err) {
+      console.error('Failed to write log to database:', err);
+    }
+  }
+
+  info(operation: string, metadata: Record<string, unknown> = {}) {
+    return this.log('info', operation, metadata);
+  }
+
+  warning(operation: string, metadata: Record<string, unknown> = {}, errorMessage: string | null = null) {
+    return this.log('warning', operation, metadata, errorMessage);
+  }
+
+  error(operation: string, error: Error | string, metadata: Record<string, unknown> = {}) {
+    const errorMessage = error instanceof Error ? error.message : error;
+    return this.log('error', operation, metadata, errorMessage);
+  }
+
+  critical(operation: string, error: Error | string, metadata: Record<string, unknown> = {}) {
+    const errorMessage = error instanceof Error ? error.message : error;
+    return this.log('critical', operation, metadata, errorMessage);
+  }
+}
+
 // Helper function to safely convert to integer
 const toInt = (value: unknown): number | null => {
   if (value === null || value === undefined) return null;
@@ -71,7 +131,7 @@ async function safeReadJson(response: Response): Promise<{ data: unknown; error:
   }
 }
 
-// Helper function to generate SHA-256 hash from content
+// Helper function to generate SHA-256 hash from content for deduplication
 async function generateContentHash(content: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(content);
@@ -79,6 +139,16 @@ async function generateContentHash(content: string): Promise<string> {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const contentHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   return contentHash;
+}
+
+// Helper function to normalize client name for deduplication
+function normalizeClientName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/\s+/g, ' ')  // Normalize multiple spaces
+    .trim();
 }
 
 serve(async (req) => {
@@ -102,12 +172,17 @@ serve(async (req) => {
   let fileId: string | null = null;
   let fileName: string | null = null;
   let importRecordId: string | null = null;
+  let logger: Logger | null = null;
 
   try {
     const body = await req.json();
     userId = body.userId;
     fileId = body.fileId;
     fileName = body.fileName;
+    
+    // Initialize logger
+    logger = new Logger('import-and-analyze', supabase, userId);
+    await logger.info('import_started', { fileId, fileName });
     
     if (!userId || !fileId) {
       return new Response(
@@ -226,29 +301,29 @@ serve(async (req) => {
     
     console.log(`Document fetched, content length: ${content.length}`);
 
-    // Verificar duplicata por hash de conteúdo
+    // ========== DEDUPLICATION BY CONTENT HASH ==========
     console.log("Generating content hash for deduplication...");
     const contentHash = await generateContentHash(content);
     console.log(`Content hash: ${contentHash.substring(0, 16)}...`);
 
     // Verificar se já existe call com mesmo hash para este closer
-    const { data: existingCallByHash } = await supabase
+    const { data: existingCall } = await supabase
       .from("calls")
       .select("id, client_id, client_name, call_date")
       .eq("closer_id", userId)
       .eq("content_hash", contentHash)
       .maybeSingle();
 
-    if (existingCallByHash) {
+    if (existingCall) {
       console.log(`⚠️ Call já existe com mesmo conteúdo (hash: ${contentHash.substring(0, 16)}...)`);
-      console.log(`Existing call ID: ${existingCallByHash.id}, cliente: ${existingCallByHash.client_name}`);
+      console.log(`Existing call ID: ${existingCall.id}, cliente: ${existingCall.client_name}`);
 
       // Marcar arquivo como completo, apontando para call existente
       await supabase
         .from("imported_files")
         .update({
           status: "completed",
-          call_id: existingCallByHash.id,
+          call_id: existingCall.id,
           imported_at: new Date().toISOString(),
           started_processing_at: null,
         })
@@ -257,10 +332,10 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          callId: existingCallByHash.id,
-          clientId: existingCallByHash.client_id,
+          callId: existingCall.id,
+          clientId: existingCall.client_id,
           deduplicated: true,
-          message: `Call duplicada detectada por hash de conteúdo. Vinculada à call existente: ${existingCallByHash.client_name} (${existingCallByHash.call_date})`
+          message: `Call duplicada detectada por hash de conteúdo. Vinculada à call existente: ${existingCall.client_name} (${existingCall.call_date})`
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -268,17 +343,84 @@ serve(async (req) => {
 
     console.log("No duplicate found by content hash, proceeding with analysis...");
 
-    // Analyze the call with safe JSON parsing
-    const analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({ transcription: content, fileName }),
-    });
+    // ========== RATE LIMITING CHECK ==========
+    interface RateLimitResult {
+      allowed: boolean;
+      current_requests: number;
+      current_tokens: number;
+      reset_at: string;
+    }
+    
+    const { data: rateLimitData } = await supabase
+      .rpc('check_rate_limit', {
+        p_user_id: userId,
+        p_service: 'openai',
+        p_max_requests: 100,      // 100 análises/hora
+        p_max_tokens: 10000000    // 10M tokens/hora
+      });
+    
+    // RPC returns an array, get first result
+    const rateLimitCheck = (Array.isArray(rateLimitData) ? rateLimitData[0] : rateLimitData) as RateLimitResult | null;
 
-    const { data: analyzeResult, error: analyzeParseError } = await safeReadJson(analyzeResponse);
+    if (rateLimitCheck && !rateLimitCheck.allowed) {
+      const errorMsg = `Rate limit exceeded. Reset at ${rateLimitCheck.reset_at}`;
+      console.error(errorMsg);
+      await supabase
+        .from("imported_files")
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+      
+      return new Response(
+        JSON.stringify({
+          error: errorMsg,
+          current_usage: {
+            requests: rateLimitCheck.current_requests,
+            tokens: rateLimitCheck.current_tokens
+          }
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ========== ANALYZE WITH RETRY FOR TIMEOUTS ==========
+    const MAX_RETRIES_ON_TIMEOUT = 2;
+    let retryCount = 0;
+    let analyzeResult: unknown = null;
+    let analyzeParseError: string | null = null;
+    let analyzeResponse: Response | null = null;
+
+    while (retryCount <= MAX_RETRIES_ON_TIMEOUT) {
+      console.log(`Analyze attempt ${retryCount + 1}/${MAX_RETRIES_ON_TIMEOUT + 1}`);
+      
+      analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({ transcription: content, fileName }),
+      });
+
+      const result = await safeReadJson(analyzeResponse);
+      analyzeResult = result.data;
+      analyzeParseError = result.error;
+
+      if (analyzeResponse.ok && !analyzeParseError) {
+        console.log("Analysis successful");
+        break;
+      }
+
+      // Retry only for timeouts (408)
+      if (analyzeResponse.status === 408 && retryCount < MAX_RETRIES_ON_TIMEOUT) {
+        console.log(`Timeout on attempt ${retryCount + 1}, retrying in 5s...`);
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        continue;
+      }
+
+      // Non-timeout error or last retry - exit loop
+      break;
+    }
 
     if (analyzeParseError) {
       const errorMsg = `Erro ao analisar call: ${analyzeParseError}`;
@@ -290,7 +432,7 @@ serve(async (req) => {
       throw new Error(errorMsg);
     }
 
-    if (!analyzeResponse.ok) {
+    if (!analyzeResponse?.ok) {
       const errorMsg = (analyzeResult as { error?: string })?.error || "Failed to analyze call";
       await supabase
         .from("imported_files")
@@ -311,17 +453,20 @@ serve(async (req) => {
     
     console.log("Analysis complete:", analysis.client_name);
 
-    // Check if client exists or create new one
+    // Check if client exists or create new one (using normalized name)
     let clientId: string | null = null;
     const clientName = analysis.client_name && analysis.client_name !== 'nao_informado' 
       ? analysis.client_name as string
       : `Lead - ${extractDateFromFileName(fileName || "")}`;
     
+    // Use normalized name for matching
+    const normalizedName = normalizeClientName(clientName);
+    
     const { data: existingClient } = await supabase
       .from("clients")
       .select("id")
       .eq("closer_id", userId)
-      .ilike("name", clientName)
+      .eq("name_normalized", normalizedName)
       .maybeSingle();
 
     if (existingClient) {
@@ -383,7 +528,7 @@ serve(async (req) => {
         status: callStatus,
         product: analysis.product && analysis.product !== 'nao_informado' ? analysis.product : null,
         transcription: content,
-        content_hash: contentHash,
+        content_hash: contentHash,  // Hash for deduplication
         score: toInt(analysis.call_score),
         duration_minutes: toInt(analysis.duration_minutes),
         niche: analysis.niche && analysis.niche !== 'nao_informado' ? analysis.niche : null,
@@ -396,7 +541,7 @@ serve(async (req) => {
         lead_classification: analysis.lead_classification,
         closer_classification: analysis.closer_classification,
         technical_analysis: analysis.technical_analysis,
-        analysis_metadata: (analysis as { analysis_metadata?: unknown }).analysis_metadata || {},
+        analysis_metadata: (analysis as { analysis_metadata?: unknown }).analysis_metadata || {},  // Partial analysis metadata
         main_errors: analysis.main_errors,
         main_wins: analysis.main_wins,
         loss_point: analysis.loss_point && analysis.loss_point !== 'nao_informado' ? analysis.loss_point : null,
@@ -445,6 +590,24 @@ serve(async (req) => {
       });
 
     console.log(`Import complete: ${fileName} -> Call ${callRecord.id}`);
+    
+    // Increment rate limit counter after successful analysis
+    await supabase.rpc('increment_rate_limit', {
+      p_user_id: userId,
+      p_service: 'openai',
+      p_tokens: 5000 // Estimated tokens per analysis
+    });
+    
+    // Log success
+    if (logger) {
+      await logger.info('import_completed', {
+        callId: callRecord.id,
+        clientId,
+        score: analysis.call_score,
+        clientName,
+        deduplicated: false
+      });
+    }
 
     return new Response(
       JSON.stringify({ 
@@ -463,6 +626,11 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error("Error in import-and-analyze:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
+    
+    // Log error
+    if (logger) {
+      await logger.error('import_failed', error as Error, { fileId, fileName });
+    }
     
     // Ensure we always update the import record to error status (clear processing timestamp)
     if (userId && fileId) {

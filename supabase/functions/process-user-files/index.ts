@@ -11,6 +11,61 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============= LOGGER HELPER =============
+class Logger {
+  // deno-lint-ignore no-explicit-any
+  private supabase: any;
+  private service: string;
+  private userId: string | null;
+  private startTime: number;
+
+  // deno-lint-ignore no-explicit-any
+  constructor(service: string, supabase: any, userId: string | null = null) {
+    this.service = service;
+    this.userId = userId;
+    this.startTime = Date.now();
+    this.supabase = supabase;
+  }
+
+  private async log(
+    level: 'debug' | 'info' | 'warning' | 'error' | 'critical',
+    operation: string,
+    metadata: Record<string, unknown> = {},
+    errorMessage: string | null = null
+  ) {
+    const duration = Date.now() - this.startTime;
+
+    console.log(`[${level.toUpperCase()}] ${this.service}:${operation}`, JSON.stringify(metadata));
+
+    try {
+      await this.supabase.rpc('log_event', {
+        p_level: level,
+        p_service: this.service,
+        p_user_id: this.userId,
+        p_operation: operation,
+        p_duration_ms: duration,
+        p_metadata: metadata,
+        p_error_message: errorMessage
+      });
+    } catch (err) {
+      console.error('Failed to write log to database:', err);
+    }
+  }
+
+  info(operation: string, metadata: Record<string, unknown> = {}) {
+    return this.log('info', operation, metadata);
+  }
+
+  warning(operation: string, metadata: Record<string, unknown> = {}, errorMessage: string | null = null) {
+    return this.log('warning', operation, metadata, errorMessage);
+  }
+
+  error(operation: string, error: Error | string, metadata: Record<string, unknown> = {}) {
+    const errorMessage = error instanceof Error ? error.message : error;
+    return this.log('error', operation, metadata, errorMessage);
+  }
+}
+
 interface PendingFile {
   id: string;
   drive_file_id: string;
@@ -158,8 +213,11 @@ async function processUserFilesBackground(
   maxFiles: number,
   fileDelayMs: number
 ): Promise<void> {
+  const logger = new Logger('process-user-files', supabase, userId);
+  
   try {
     console.log(`[${userName}] Starting individual processing session: ${sessionId}`);
+    await logger.info('session_started', { sessionId, userName, maxFiles });
 
     // 1. Reset any stale files first
     const resetCount = await resetStaleFiles(supabase, userId);
@@ -167,7 +225,7 @@ async function processUserFilesBackground(
       console.log(`[${userName}] Reset ${resetCount} stale files`);
     }
 
-    // 2. Get pending files for this user usando lock atômico
+    // 2. Get pending files using atomic lock function (FOR UPDATE SKIP LOCKED)
     const { data: pendingFiles, error: fetchError } = await supabase
       .rpc('claim_pending_files', {
         p_user_id: userId,
@@ -175,7 +233,7 @@ async function processUserFilesBackground(
       });
 
     if (fetchError) {
-      throw new Error(`Failed to fetch pending files: ${fetchError.message}`);
+      throw new Error(`Failed to claim pending files: ${fetchError.message}`);
     }
 
     const files = pendingFiles as PendingFile[] | null;
@@ -200,7 +258,7 @@ async function processUserFilesBackground(
       return;
     }
 
-    console.log(`[${userName}] Processing ${files.length} files`);
+    console.log(`[${userName}] Claimed ${files.length} files with atomic lock`);
 
     // 3. Update session with total
     await supabase
@@ -220,7 +278,7 @@ async function processUserFilesBackground(
     let successCount = 0;
     let errorCount = 0;
 
-    // 4. Process each file sequentially
+    // 4. Process each file sequentially (already locked atomically)
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
 
@@ -236,7 +294,7 @@ async function processUserFilesBackground(
         break;
       }
 
-      // Lock já foi feito no claim_pending_files(), não precisa fazer aqui
+      // Lock already done in claim_pending_files() - no need to lock here again
 
       // Update session progress
       await supabase
@@ -265,7 +323,7 @@ async function processUserFilesBackground(
         errorCount++;
         console.log(`[${userName}] ✗ ${file.file_name}: ${result.error}`);
 
-        // Incrementar contador de retry
+        // Increment retry count
         await supabase.rpc('increment_file_retry', {
           p_file_id: file.id
         });
@@ -318,9 +376,20 @@ async function processUserFilesBackground(
       .eq("user_id", userId);
 
     console.log(`[${userName}] Completed: ${successCount} success, ${errorCount} errors`);
+    
+    // Log session completion
+    await logger.info('session_completed', { 
+      sessionId, 
+      successCount, 
+      errorCount, 
+      totalFiles: files.length 
+    });
 
   } catch (error) {
     console.error(`[${userName}] Error in processing:`, error);
+    
+    // Log session error
+    await logger.error('session_failed', error as Error, { sessionId });
     
     // Cleanup stuck files on error too
     await supabase
@@ -497,24 +566,22 @@ serve(async (req) => {
       )
     );
 
-    // Return immediately
+    // Return immediate response
     return new Response(
-      JSON.stringify({
+      JSON.stringify({ 
         success: true,
+        message: `Iniciando processamento de ${totalPending} arquivos`,
         sessionId,
-        message: `Processamento iniciado para ${totalPending} arquivos`,
-        userName,
-        pendingFiles: totalPending,
-        estimatedMinutes: Math.ceil(totalPending * 5 / 60),
-        trackVia: "realtime:user_import_sessions"
+        pendingFiles: totalPending
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
     console.error("Error in process-user-files:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
