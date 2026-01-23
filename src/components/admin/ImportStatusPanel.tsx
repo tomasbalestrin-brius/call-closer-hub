@@ -442,12 +442,14 @@ export function ImportStatusPanel() {
     const runningSessions = Array.from(closerSessions.values()).filter(s => s.status === 'running');
     if (runningSessions.length === 0) return '';
 
-    const totalRemaining = runningSessions.reduce((sum, s) => {
-      return sum + ((s.total_files || 0) - (s.processed_files || 0));
-    }, 0);
+    // Find the session with the most remaining files (bottleneck)
+    // Since parallel processing means we wait for the slowest one
+    const maxRemainingInSingleSession = Math.max(
+      ...runningSessions.map(s => (s.total_files || 0) - (s.processed_files || 0))
+    );
 
-    const avgTimePerFile = 15; // seconds
-    const totalSeconds = totalRemaining * avgTimePerFile;
+    const avgTimePerFile = 15; // seconds per file
+    const totalSeconds = maxRemainingInSingleSession * avgTimePerFile;
     
     if (totalSeconds < 60) return `~${totalSeconds}s`;
     if (totalSeconds < 3600) return `~${Math.ceil(totalSeconds / 60)}min`;
