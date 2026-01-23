@@ -80,7 +80,7 @@ async function listFilesFromDrive(
   dateFrom: string
 ): Promise<DriveFile[]> {
   const targetFolderId = folderId || "root";
-  
+
   // Build query - get documents from current month
   let query = `'${targetFolderId}' in parents and trashed = false`;
   query += ` and createdTime >= '${dateFrom}'`;
@@ -88,21 +88,49 @@ async function listFilesFromDrive(
 
   console.log("Fetching files with query:", query);
 
-  const filesResponse = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,createdTime)&orderBy=createdTime desc&pageSize=100`,
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
+  // Paginate through all results
+  let allFiles: DriveFile[] = [];
+  let pageToken: string | undefined = undefined;
+  let pageCount = 0;
+  const maxPages = 50; // Safety limit: 5000 files max (50 pages * 100 per page)
+
+  do {
+    const url = new URL('https://www.googleapis.com/drive/v3/files');
+    url.searchParams.set('q', query);
+    url.searchParams.set('fields', 'files(id,name,mimeType,createdTime),nextPageToken');
+    url.searchParams.set('orderBy', 'createdTime desc');
+    url.searchParams.set('pageSize', '100');
+    if (pageToken) {
+      url.searchParams.set('pageToken', pageToken);
     }
-  );
 
-  if (!filesResponse.ok) {
-    const error = await filesResponse.text();
-    console.error("Failed to list files:", error);
-    throw new Error("Failed to list Google Drive files");
-  }
+    const filesResponse = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
 
-  const filesData = await filesResponse.json();
-  return filesData.files || [];
+    if (!filesResponse.ok) {
+      const error = await filesResponse.text();
+      console.error("Failed to list files:", error);
+      throw new Error("Failed to list Google Drive files");
+    }
+
+    const filesData = await filesResponse.json();
+    const files = filesData.files || [];
+    allFiles = allFiles.concat(files);
+
+    pageToken = filesData.nextPageToken;
+    pageCount++;
+
+    console.log(`Fetched page ${pageCount}: ${files.length} files (total: ${allFiles.length})`);
+
+    if (pageCount >= maxPages) {
+      console.warn(`Reached maximum page limit (${maxPages}). Stopping pagination.`);
+      break;
+    }
+  } while (pageToken);
+
+  console.log(`Pagination complete: ${allFiles.length} total files found across ${pageCount} pages`);
+  return allFiles;
 }
 
 serve(async (req) => {
