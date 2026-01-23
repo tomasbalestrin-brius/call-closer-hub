@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,7 +9,7 @@ const corsHeaders = {
 
 // ============= CHUNKING CONFIGURATION =============
 const CHUNK_SIZE = 80000; // ~80KB per chunk (~20K tokens, gpt-4o supports 128K)
-const CHUNK_OVERLAP = 4000; // 4KB overlap for context
+const CHUNK_OVERLAP = 8000; // 8KB overlap for context (ensures full sentence preservation)
 const MAX_SIZE_FOR_DIRECT = 100000; // Files under 100KB go direct
 const FUNCTION_TIMEOUT = 120000; // 120 seconds safety timeout (Edge limit is ~150s)
 const ANALYSIS_TIMEOUT = 110000; // 110 seconds for analysis (10s buffer)
@@ -977,34 +978,64 @@ function splitTranscription(text: string): string[] {
   
   while (position < text.length && chunks.length < MAX_CHUNKS) {
     let end = Math.min(position + CHUNK_SIZE, text.length);
-    
-    // Find natural break point (end of speaker line)
+
+    // Find natural break point (sentence boundaries or speaker lines)
     if (end < text.length) {
-      // Look for newline after speaker pattern like "Nome:" or timestamps
-      const searchRange = text.substring(end - 500, Math.min(end + 500, text.length));
-      const newlinePositions: number[] = [];
-      
-      for (let i = 0; i < searchRange.length; i++) {
-        if (searchRange[i] === '\n') {
-          newlinePositions.push(i);
+      // Search window: 1000 chars before to 1000 chars after target position
+      const searchStart = Math.max(0, end - 1000);
+      const searchEnd = Math.min(text.length, end + 1000);
+      const searchRange = text.substring(searchStart, searchEnd);
+      const breakPoints: Array<{pos: number, priority: number}> = [];
+
+      // Priority 1: Paragraph breaks (double newline)
+      const paragraphRegex = /\n\n/g;
+      let match;
+      while ((match = paragraphRegex.exec(searchRange)) !== null) {
+        breakPoints.push({ pos: match.index, priority: 1 });
+      }
+
+      // Priority 2: Speaker changes (Name: pattern after newline)
+      const speakerRegex = /\n[A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝ][a-zàáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿ\s]+:/g;
+      while ((match = speakerRegex.exec(searchRange)) !== null) {
+        breakPoints.push({ pos: match.index, priority: 2 });
+      }
+
+      // Priority 3: Sentence endings (. ! ? followed by space or newline)
+      const sentenceRegex = /[.!?][\s\n]/g;
+      while ((match = sentenceRegex.exec(searchRange)) !== null) {
+        breakPoints.push({ pos: match.index + 1, priority: 3 }); // +1 to include punctuation
+      }
+
+      // Priority 4: Single newlines
+      const newlineRegex = /\n/g;
+      while ((match = newlineRegex.exec(searchRange)) !== null) {
+        // Skip if already captured as paragraph or speaker
+        const alreadyCaptured = breakPoints.some(bp => Math.abs(bp.pos - match.index) < 5);
+        if (!alreadyCaptured) {
+          breakPoints.push({ pos: match.index, priority: 4 });
         }
       }
-      
-      // Find the best break point closest to our target
-      if (newlinePositions.length > 0) {
-        const targetPos = 500; // Middle of search range
-        let bestBreak = newlinePositions[0];
-        let minDistance = Math.abs(newlinePositions[0] - targetPos);
-        
-        for (const pos of newlinePositions) {
-          const distance = Math.abs(pos - targetPos);
-          if (distance < minDistance) {
-            minDistance = distance;
-            bestBreak = pos;
+
+      // Find best break point: prioritize closer to target with higher priority
+      if (breakPoints.length > 0) {
+        const targetPosInRange = end - searchStart;
+        let bestBreak = breakPoints[0];
+        let bestScore = Infinity;
+
+        for (const bp of breakPoints) {
+          const distance = Math.abs(bp.pos - targetPosInRange);
+          // Score: distance weighted by priority (lower is better)
+          const score = distance + (bp.priority * 200); // Priority penalty
+          if (score < bestScore) {
+            bestScore = score;
+            bestBreak = bp;
           }
         }
-        
-        end = (end - 500) + bestBreak;
+
+        end = searchStart + bestBreak.pos;
+        console.log(`Found natural break at priority ${bestBreak.priority} (distance: ${Math.abs(bestBreak.pos - targetPosInRange)} chars)`);
+      } else {
+        console.log(`No natural break found, using hard cut at ${end}`);
       }
     }
     
@@ -1141,6 +1172,18 @@ async function analyzeChunk(
         throw new Error("Empty response from chunk analysis");
       }
 
+      // Extract usage stats for cost tracking (stored globally for later logging)
+      if (data.usage) {
+        globalThis.apiUsageStats = globalThis.apiUsageStats || [];
+        globalThis.apiUsageStats.push({
+          service: 'openai',
+          model: 'gpt-4o-mini',
+          operation: `analyze-chunk-${chunkIndex}`,
+          tokensInput: data.usage.prompt_tokens || 0,
+          tokensOutput: data.usage.completion_tokens || 0
+        });
+      }
+
       const parsed = await parseJSONFromResponse(content) as ChunkAnalysis;
       console.log(`✅ Chunk ${chunkIndex} analyzed successfully`);
       return parsed;
@@ -1210,14 +1253,26 @@ async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<Ana
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
-  
+
   if (!content) {
     throw new Error("Empty response from merge analysis");
   }
 
+  // Extract usage stats for cost tracking
+  if (data.usage) {
+    globalThis.apiUsageStats = globalThis.apiUsageStats || [];
+    globalThis.apiUsageStats.push({
+      service: 'openai',
+      model: 'gpt-4o-mini',
+      operation: 'merge-analysis',
+      tokensInput: data.usage.prompt_tokens || 0,
+      tokensOutput: data.usage.completion_tokens || 0
+    });
+  }
+
   const merged = await parseJSONFromResponse(content) as AnalysisData;
   console.log("Merge completed successfully");
-  
+
   return merged;
 }
 
@@ -1381,6 +1436,18 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
 
       if (!content) {
         throw new Error("Empty response from OpenAI");
+      }
+
+      // Extract usage stats for cost tracking
+      if (data.usage) {
+        globalThis.apiUsageStats = globalThis.apiUsageStats || [];
+        globalThis.apiUsageStats.push({
+          service: 'openai',
+          model: 'gpt-4o',
+          operation: 'direct-analysis',
+          tokensInput: data.usage.prompt_tokens || 0,
+          tokensOutput: data.usage.completion_tokens || 0
+        });
       }
 
       console.log("✅ OpenAI response received, length:", content.length);
@@ -1648,6 +1715,51 @@ interface AnalysisData {
   analysis_metadata?: AnalysisMetadata;
 }
 
+// ============= API COST LOGGING =============
+
+async function logApiCost(
+  userId: string,
+  service: string,
+  model: string,
+  operation: string,
+  tokensInput: number,
+  tokensOutput: number,
+  callId: string | null = null,
+  fileId: string | null = null
+): Promise<void> {
+  try {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn("⚠️ Supabase credentials not configured, skipping cost logging");
+      return;
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const { error } = await supabase.rpc('log_api_cost', {
+      p_user_id: userId,
+      p_service: service,
+      p_model: model,
+      p_operation: operation,
+      p_tokens_input: tokensInput,
+      p_tokens_output: tokensOutput,
+      p_call_id: callId,
+      p_file_id: fileId
+    });
+
+    if (error) {
+      console.error("Failed to log API cost:", error);
+    } else {
+      console.log(`💰 Logged cost: ${service}/${model} - ${tokensInput}+${tokensOutput} tokens`);
+    }
+  } catch (error) {
+    console.error("Error logging API cost:", error);
+    // Don't throw - cost logging is non-critical
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -1661,8 +1773,8 @@ serve(async (req) => {
   }, FUNCTION_TIMEOUT);
 
   try {
-    const { transcription, fileName } = await req.json();
-    
+    const { transcription, fileName, userId, callId, fileId } = await req.json();
+
     if (!transcription) {
       clearTimeout(timeoutId);
       return new Response(
@@ -1670,6 +1782,9 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Initialize API usage tracking for this request
+    globalThis.apiUsageStats = [];
 
     console.log(`Analyzing call from file: ${fileName}, transcription length: ${transcription.length}`);
 
@@ -1836,6 +1951,30 @@ serve(async (req) => {
     };
 
     console.log("Analysis complete, client:", analysis.client_name, "score:", analysis.call_score);
+
+    // Log API costs if userId provided and usage stats collected
+    if (userId && globalThis.apiUsageStats && globalThis.apiUsageStats.length > 0) {
+      console.log(`Logging ${globalThis.apiUsageStats.length} API usage records...`);
+
+      // Log each API call cost
+      for (const stat of globalThis.apiUsageStats) {
+        await logApiCost(
+          userId,
+          stat.service,
+          stat.model,
+          stat.operation,
+          stat.tokensInput,
+          stat.tokensOutput,
+          callId || null,
+          fileId || null
+        );
+      }
+
+      // Calculate and log total
+      const totalInput = globalThis.apiUsageStats.reduce((sum, s) => sum + s.tokensInput, 0);
+      const totalOutput = globalThis.apiUsageStats.reduce((sum, s) => sum + s.tokensOutput, 0);
+      console.log(`💰 Total tokens: ${totalInput} input + ${totalOutput} output = ${totalInput + totalOutput}`);
+    }
 
     return new Response(
       JSON.stringify({ success: true, analysis }),

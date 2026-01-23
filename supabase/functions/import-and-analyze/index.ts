@@ -298,8 +298,92 @@ serve(async (req) => {
         .eq("id", importRecordId);
       throw new Error(errorMsg);
     }
-    
+
     console.log(`Document fetched, content length: ${content.length}`);
+
+    // ========== QUALITY VALIDATION ==========
+    console.log("Validating content quality...");
+
+    // Reject calls shorter than ~5 minutes (estimated at ~150 words/min = ~3750 chars)
+    const MIN_CONTENT_LENGTH = 3750;
+    if (content.length < MIN_CONTENT_LENGTH) {
+      const errorMsg = `Call muito curta (${content.length} caracteres). Mínimo: ${MIN_CONTENT_LENGTH} caracteres (~5 minutos de conversa)`;
+      console.warn(`⚠️ ${errorMsg}`);
+      await supabase
+        .from("imported_files")
+        .update({
+          status: "error",
+          error_message: errorMsg,
+          imported_at: new Date().toISOString()
+        })
+        .eq("id", importRecordId);
+
+      return new Response(
+        JSON.stringify({
+          error: errorMsg,
+          qualityRejected: true,
+          contentLength: content.length,
+          minimumLength: MIN_CONTENT_LENGTH
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Detect gibberish: content should have at least 60% alphabetic characters
+    const alphaChars = (content.match(/[a-zA-ZÀ-ÿ]/g) || []).length;
+    const alphaRatio = alphaChars / content.length;
+
+    if (alphaRatio < 0.6) {
+      const errorMsg = `Conteúdo inválido ou corrompido (apenas ${Math.round(alphaRatio * 100)}% de caracteres alfabéticos)`;
+      console.warn(`⚠️ ${errorMsg}`);
+      await supabase
+        .from("imported_files")
+        .update({
+          status: "error",
+          error_message: errorMsg,
+          imported_at: new Date().toISOString()
+        })
+        .eq("id", importRecordId);
+
+      return new Response(
+        JSON.stringify({
+          error: errorMsg,
+          qualityRejected: true,
+          alphaRatio: Math.round(alphaRatio * 100)
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Detect language: should contain Portuguese patterns
+    const portuguesePatterns = /\b(o|a|de|da|do|para|com|em|que|não|sim|você|seu|sua|cliente|venda|produto)\b/gi;
+    const portugueseMatches = (content.match(portuguesePatterns) || []).length;
+    const wordCount = content.split(/\s+/).length;
+    const portugueseRatio = portugueseMatches / wordCount;
+
+    if (portugueseRatio < 0.05 && wordCount > 100) { // At least 5% Portuguese words
+      const errorMsg = `Idioma não detectado como português (${Math.round(portugueseRatio * 100)}% de palavras portuguesas)`;
+      console.warn(`⚠️ ${errorMsg}`);
+      await supabase
+        .from("imported_files")
+        .update({
+          status: "error",
+          error_message: errorMsg,
+          imported_at: new Date().toISOString()
+        })
+        .eq("id", importRecordId);
+
+      return new Response(
+        JSON.stringify({
+          error: errorMsg,
+          qualityRejected: true,
+          portugueseRatio: Math.round(portugueseRatio * 100)
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`✅ Quality validation passed: ${content.length} chars, ${Math.round(alphaRatio * 100)}% alpha, ${Math.round(portugueseRatio * 100)}% PT words`);
 
     // ========== DEDUPLICATION BY CONTENT HASH ==========
     console.log("Generating content hash for deduplication...");
@@ -398,7 +482,13 @@ serve(async (req) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         },
-        body: JSON.stringify({ transcription: content, fileName }),
+        body: JSON.stringify({
+          transcription: content,
+          fileName,
+          userId: userId,
+          callId: null, // Will be set after call is created
+          fileId: importRecordId
+        }),
       });
 
       const result = await safeReadJson(analyzeResponse);
