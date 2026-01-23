@@ -129,6 +129,7 @@ export type Database = {
         Row: {
           ai_summary: string | null
           analysis_metadata: Json | null
+          analysis_quality_score: number | null
           analyzed_at: string | null
           call_conclusion: string | null
           call_date: string
@@ -144,6 +145,8 @@ export type Database = {
           content_hash: string | null
           created_at: string
           decision_reason: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           duration_minutes: number | null
           entry_value: number | null
           google_doc_id: string | null
@@ -174,6 +177,7 @@ export type Database = {
         Insert: {
           ai_summary?: string | null
           analysis_metadata?: Json | null
+          analysis_quality_score?: number | null
           analyzed_at?: string | null
           call_conclusion?: string | null
           call_date?: string
@@ -189,6 +193,8 @@ export type Database = {
           content_hash?: string | null
           created_at?: string
           decision_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           duration_minutes?: number | null
           entry_value?: number | null
           google_doc_id?: string | null
@@ -219,6 +225,7 @@ export type Database = {
         Update: {
           ai_summary?: string | null
           analysis_metadata?: Json | null
+          analysis_quality_score?: number | null
           analyzed_at?: string | null
           call_conclusion?: string | null
           call_date?: string
@@ -234,6 +241,8 @@ export type Database = {
           content_hash?: string | null
           created_at?: string
           decision_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           duration_minutes?: number | null
           entry_value?: number | null
           google_doc_id?: string | null
