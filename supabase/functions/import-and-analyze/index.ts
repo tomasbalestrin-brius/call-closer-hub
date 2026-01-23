@@ -137,7 +137,8 @@ async function generateContentHash(content: string): Promise<string> {
   const data = encoder.encode(content);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const contentHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return contentHash;
 }
 
 // Helper function to normalize client name for deduplication
@@ -301,25 +302,30 @@ serve(async (req) => {
     console.log(`Document fetched, content length: ${content.length}`);
 
     // ========== DEDUPLICATION BY CONTENT HASH ==========
+    console.log("Generating content hash for deduplication...");
     const contentHash = await generateContentHash(content);
     console.log(`Content hash: ${contentHash.substring(0, 16)}...`);
 
+    // Verificar se já existe call com mesmo hash para este closer
     const { data: existingCall } = await supabase
       .from("calls")
-      .select("id, client_id")
+      .select("id, client_id, client_name, call_date")
       .eq("closer_id", userId)
       .eq("content_hash", contentHash)
       .maybeSingle();
 
     if (existingCall) {
-      console.log(`Call already exists with hash ${contentHash.substring(0, 16)}..., updating imported_files`);
+      console.log(`⚠️ Call já existe com mesmo conteúdo (hash: ${contentHash.substring(0, 16)}...)`);
+      console.log(`Existing call ID: ${existingCall.id}, cliente: ${existingCall.client_name}`);
+
+      // Marcar arquivo como completo, apontando para call existente
       await supabase
         .from("imported_files")
         .update({
           status: "completed",
           call_id: existingCall.id,
-          started_processing_at: null,
           imported_at: new Date().toISOString(),
+          started_processing_at: null,
         })
         .eq("id", importRecordId);
 
@@ -329,11 +335,13 @@ serve(async (req) => {
           callId: existingCall.id,
           clientId: existingCall.client_id,
           deduplicated: true,
-          message: "Call já existente (conteúdo duplicado)"
+          message: `Call duplicada detectada por hash de conteúdo. Vinculada à call existente: ${existingCall.client_name} (${existingCall.call_date})`
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log("No duplicate found by content hash, proceeding with analysis...");
 
     // ========== RATE LIMITING CHECK ==========
     interface RateLimitResult {
@@ -520,7 +528,7 @@ serve(async (req) => {
         status: callStatus,
         product: analysis.product && analysis.product !== 'nao_informado' ? analysis.product : null,
         transcription: content,
-        content_hash: contentHash,  // NEW: Hash for deduplication
+        content_hash: contentHash,  // Hash for deduplication
         score: toInt(analysis.call_score),
         duration_minutes: toInt(analysis.duration_minutes),
         niche: analysis.niche && analysis.niche !== 'nao_informado' ? analysis.niche : null,
@@ -533,7 +541,7 @@ serve(async (req) => {
         lead_classification: analysis.lead_classification,
         closer_classification: analysis.closer_classification,
         technical_analysis: analysis.technical_analysis,
-        analysis_metadata: analysis.analysis_metadata || {},  // NEW: Partial analysis metadata
+        analysis_metadata: (analysis as { analysis_metadata?: unknown }).analysis_metadata || {},  // Partial analysis metadata
         main_errors: analysis.main_errors,
         main_wins: analysis.main_wins,
         loss_point: analysis.loss_point && analysis.loss_point !== 'nao_informado' ? analysis.loss_point : null,

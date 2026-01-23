@@ -294,6 +294,8 @@ async function processUserFilesBackground(
         break;
       }
 
+      // Lock already done in claim_pending_files() - no need to lock here again
+
       // Update session progress
       await supabase
         .from("user_import_sessions")
@@ -320,17 +322,19 @@ async function processUserFilesBackground(
       } else {
         errorCount++;
         console.log(`[${userName}] ✗ ${file.file_name}: ${result.error}`);
-        
+
         // Increment retry count
-        await supabase.rpc('increment_file_retry', { p_file_id: file.id });
-        
+        await supabase.rpc('increment_file_retry', {
+          p_file_id: file.id
+        });
+
         // Mark file as error instead of leaving in processing
         await supabase
           .from("imported_files")
-          .update({ 
-            status: "error", 
+          .update({
+            status: "error",
             error_message: result.error || "Falha no processamento",
-            started_processing_at: null 
+            started_processing_at: null
           })
           .eq("id", file.id);
       }

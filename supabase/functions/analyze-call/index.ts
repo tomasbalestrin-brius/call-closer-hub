@@ -1257,41 +1257,42 @@ async function analyzeWithChunking(
   if (partialAnalyses.length === 0) {
     throw new Error("No chunks analyzed before timeout - transcription may be too long");
   }
-  
+
   const isPartial = partialAnalyses.length < chunks.length;
   const mergeStartTime = Date.now();
   const mergeTimeout = Math.max(ANALYSIS_TIMEOUT - (mergeStartTime - startTime) - 2000, 10000);
-  
-  console.log(`🔀 Merging ${partialAnalyses.length}/${chunks.length} chunks (${isPartial ? 'PARTIAL' : 'COMPLETE'}) with ${Math.round(mergeTimeout/1000)}s timeout...`);
-  
+
+  console.log(`🔀 Merging ${partialAnalyses.length}/${chunks.length} chunks (${isPartial ? 'PARTIAL due to timeout' : 'COMPLETE'}) with ${Math.round(mergeTimeout/1000)}s timeout...`);
+
   const mergedAnalysis = await withTimeout(
     mergeChunkAnalyses(partialAnalyses),
     mergeTimeout,
     null
   );
-  
+
   if (!mergedAnalysis) {
     throw new Error("Merge timed out - returning partial data not possible");
   }
-  
+
   const totalTime = Date.now() - startTime;
   console.log(`✅ Chunked analysis completed in ${Math.round(totalTime/1000)}s (${partialAnalyses.length}/${chunks.length} chunks)`);
-  
+
   // Add metadata for partial analysis tracking
+  const timeoutOccurred = abortSignal?.aborted || false;
   const metadata = {
     is_partial_analysis: isPartial,
     chunks_analyzed: partialAnalyses.length,
     chunks_total: chunks.length,
     confidence_level: isPartial ? 'low' as const : 'high' as const,
     analysis_method: 'chunked' as const,
-    timeout_occurred: abortSignal?.aborted || false
+    timeout_occurred: timeoutOccurred
   };
-  
-  console.log(`📊 Analysis metadata:`, metadata);
-  
+
+  console.log(`📊 Analysis metadata:`, JSON.stringify(metadata, null, 2));
+
   return {
     ...mergedAnalysis,
-    __metadata: metadata
+    analysis_metadata: metadata
   };
 }
 
@@ -1586,8 +1587,8 @@ interface AnalysisData {
       mensagem_sugerida_whats?: string;
     };
   };
-  // NEW: Analysis metadata for partial analysis tracking
-  __metadata?: AnalysisMetadata;
+  // Analysis metadata for partial analysis tracking
+  analysis_metadata?: AnalysisMetadata;
 }
 
 serve(async (req) => {
@@ -1628,9 +1629,9 @@ serve(async (req) => {
       console.log("AI analysis completed");
       console.log("Raw response length:", masterResponse.length);
       data = await parseJSONFromResponse(masterResponse) as AnalysisData;
-      
+
       // Add metadata for direct analysis
-      data.__metadata = {
+      data.analysis_metadata = {
         is_partial_analysis: false,
         chunks_analyzed: 1,
         chunks_total: 1,
