@@ -7,12 +7,12 @@ const corsHeaders = {
 };
 
 // ============= CHUNKING CONFIGURATION =============
-const CHUNK_SIZE = 25000; // ~25KB per chunk
-const CHUNK_OVERLAP = 2000; // 2KB overlap for context
-const MAX_SIZE_FOR_DIRECT = 50000; // Files under 50KB go direct
-const FUNCTION_TIMEOUT = 90000; // 90 seconds safety timeout (Edge limit is ~150s)
-const ANALYSIS_TIMEOUT = 85000; // 85 seconds for analysis (5s before abort)
-const BATCH_TIMEOUT = 40000; // 40 seconds max per batch
+const CHUNK_SIZE = 80000; // ~80KB per chunk (~20K tokens, gpt-4o supports 128K)
+const CHUNK_OVERLAP = 4000; // 4KB overlap for context
+const MAX_SIZE_FOR_DIRECT = 100000; // Files under 100KB go direct
+const FUNCTION_TIMEOUT = 120000; // 120 seconds safety timeout (Edge limit is ~150s)
+const ANALYSIS_TIMEOUT = 110000; // 110 seconds for analysis (10s buffer)
+const BATCH_TIMEOUT = 50000; // 50 seconds max per batch
 
 // ============= RACING TIMEOUT HELPER =============
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T | null = null): Promise<T | null> {
@@ -1090,8 +1090,9 @@ async function analyzeChunk(
 
   console.log(`Analyzing chunk ${chunkIndex}/${totalChunks} (${chunk.length} chars)...`);
 
-  const maxRetries = 2;
+  const maxRetries = 3; // Increased from 2 to 3
   let lastError: Error | null = null;
+  let lastStatusCode = 0;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -1111,6 +1112,23 @@ async function analyzeChunk(
         }),
       });
 
+      lastStatusCode = response.status;
+
+      // Handle rate limit with exponential backoff
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+
+        console.log(`⚠️ Rate limit (429) on chunk ${chunkIndex}, attempt ${attempt + 1}/${maxRetries}. Waiting ${waitTime}ms...`);
+
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue; // Retry
+        }
+
+        throw new Error(`Rate limit exceeded after ${maxRetries} attempts`);
+      }
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Chunk analysis API error: ${response.status} - ${errorText}`);
@@ -1118,20 +1136,23 @@ async function analyzeChunk(
 
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
-      
+
       if (!content) {
         throw new Error("Empty response from chunk analysis");
       }
 
       const parsed = await parseJSONFromResponse(content) as ChunkAnalysis;
-      console.log(`Chunk ${chunkIndex} analyzed successfully`);
+      console.log(`✅ Chunk ${chunkIndex} analyzed successfully`);
       return parsed;
     } catch (error) {
-      console.log(`Chunk ${chunkIndex} attempt ${attempt + 1} failed:`, error);
+      console.log(`❌ Chunk ${chunkIndex} attempt ${attempt + 1}/${maxRetries} failed:`, error);
       lastError = error instanceof Error ? error : new Error(String(error));
-      
-      if (attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+
+      // Exponential backoff for non-429 errors
+      if (attempt < maxRetries - 1 && lastStatusCode !== 429) {
+        const waitTime = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+        console.log(`Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
   }
@@ -1300,53 +1321,89 @@ async function analyzeWithChunking(
 
 async function callOpenAI(systemPrompt: string, transcription: string): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-  
+
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
   }
 
   console.log("Calling OpenAI with gpt-4o model...");
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}` },
-      ],
-      temperature: 0.1,
-      max_tokens: 16000,
-    }),
-  });
+  const maxRetries = 3;
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("OpenAI API error:", response.status, errorText);
-    
-    if (response.status === 429) {
-      throw new Error("Rate limit exceeded. Please try again later.");
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Analise a seguinte transcrição de call:\n\n${transcription}` },
+          ],
+          temperature: 0.1,
+          max_tokens: 16000,
+        }),
+      });
+
+      // Handle rate limit with exponential backoff
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt + 1) * 2000; // 4s, 8s, 16s
+
+        console.log(`⚠️ Rate limit (429), attempt ${attempt + 1}/${maxRetries}. Waiting ${waitTime}ms...`);
+
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue; // Retry
+        }
+
+        throw new Error(`Rate limit exceeded after ${maxRetries} attempts`);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("OpenAI API error:", response.status, errorText);
+
+        if (response.status === 402 || response.status === 401) {
+          throw new Error("Invalid API key or payment required.");
+        }
+
+        throw new Error(`OpenAI API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+
+      if (!content) {
+        throw new Error("Empty response from OpenAI");
+      }
+
+      console.log("✅ OpenAI response received, length:", content.length);
+      return content;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.log(`❌ OpenAI call attempt ${attempt + 1}/${maxRetries} failed:`, lastError.message);
+
+      // Don't retry on auth/payment errors
+      if (lastError.message.includes('Invalid API key') || lastError.message.includes('payment required')) {
+        throw lastError;
+      }
+
+      // Exponential backoff for other errors
+      if (attempt < maxRetries - 1) {
+        const waitTime = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+        console.log(`Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
-    if (response.status === 402 || response.status === 401) {
-      throw new Error("Invalid API key or payment required.");
-    }
-    
-    throw new Error(`OpenAI API error: ${response.status}`);
   }
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  
-  if (!content) {
-    throw new Error("Empty response from OpenAI");
-  }
-
-  console.log("OpenAI response received, length:", content.length);
-  return content;
+  throw lastError || new Error('OpenAI call failed after all retries');
 }
 
 // Fallback: Try to repair invalid JSON using a short model call
