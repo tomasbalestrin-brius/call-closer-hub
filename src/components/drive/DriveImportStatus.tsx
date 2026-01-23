@@ -271,7 +271,7 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
         body: { 
           userId: user.id,
           maxFiles: 100,
-          fileDelayMs: 3000,
+          fileDelayMs: 500, // Reduced delay for faster processing (rate limit handled in processFile)
           resetErrors: true
         },
       });
@@ -421,7 +421,7 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
         body: { 
           userId: user.id,
           maxFiles: 100,
-          fileDelayMs: 3000,
+          fileDelayMs: 500, // Reduced delay for faster processing (rate limit handled in processFile)
           resetErrors: true
         },
       });
