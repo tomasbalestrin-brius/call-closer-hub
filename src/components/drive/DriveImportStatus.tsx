@@ -276,13 +276,24 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
         },
       });
 
+      // Older backend versions could return 409 when a session is already running.
+      // Treat that as an expected state so realtime tracking can continue.
       if (response.error) {
+        const msg = response.error.message || '';
+        if (msg.includes('409') || msg.toLowerCase().includes('already') || msg.toLowerCase().includes('andamento')) {
+          toast.info('Processamento já está em andamento. Acompanhe o progresso abaixo.');
+          return; // keep `processing=true` for realtime subscription
+        }
+
         throw new Error(response.error.message || 'Failed to process');
       }
 
       const data = response.data;
       
-      if (data.sessionId) {
+      if ((data as any)?.alreadyRunning) {
+        toast.info('Processamento já está em andamento. Acompanhe o progresso abaixo.');
+        // keep `processing=true` for realtime subscription
+      } else if (data.sessionId) {
         toast.success('Processamento iniciado! Acompanhe o progresso abaixo.');
         // Processing state will be cleared by realtime subscription when complete
       } else if (data.pendingFiles === 0) {
@@ -427,12 +438,22 @@ export default function DriveImportStatus({ onImportComplete }: DriveImportStatu
       });
 
       if (response.error) {
+        const msg = response.error.message || '';
+        if (msg.includes('409') || msg.toLowerCase().includes('already') || msg.toLowerCase().includes('andamento')) {
+          toast.info('Reprocessamento já está em andamento. Acompanhe o progresso.');
+          setProcessing(true);
+          return;
+        }
+
         throw new Error(response.error.message || 'Failed to process');
       }
 
       const data = response.data;
       
-      if (data.sessionId) {
+      if ((data as any)?.alreadyRunning) {
+        toast.info('Reprocessamento já está em andamento. Acompanhe o progresso.');
+        setProcessing(true);
+      } else if (data.sessionId) {
         toast.success('Reprocessamento iniciado! Acompanhe o progresso.');
         setProcessing(true); // Enable realtime tracking
         onImportComplete?.();

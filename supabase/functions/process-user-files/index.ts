@@ -474,25 +474,31 @@ serve(async (req) => {
     // Check if user already has an active session
     const { data: existingSession } = await supabase
       .from("user_import_sessions")
-      .select("status, started_at")
+      .select("status, started_at, session_id")
       .eq("user_id", userId)
       .maybeSingle();
 
     // deno-lint-ignore no-explicit-any
     const sessionData = existingSession as any;
     if (sessionData?.status === "running") {
-      const startedAt = new Date(sessionData.started_at);
-      const minutesRunning = Math.floor((Date.now() - startedAt.getTime()) / 60000);
-      
-      // If running for more than 10 minutes, consider it stale and allow restart
+      const startedAtIso = sessionData.started_at as string | null | undefined;
+      const startedAtMs = startedAtIso ? new Date(startedAtIso).getTime() : NaN;
+      const minutesRunning = Number.isFinite(startedAtMs)
+        ? Math.floor((Date.now() - startedAtMs) / 60000)
+        : 999;
+
+      // If running for more than 10 minutes, consider it stale and allow restart.
+      // Otherwise, treat this as an expected state (no error) so the UI can keep tracking progress.
       if (minutesRunning < 10) {
         return new Response(
-          JSON.stringify({ 
-            error: `Processamento já em andamento há ${minutesRunning} minutos`,
+          JSON.stringify({
+            success: true,
             alreadyRunning: true,
-            sessionId: sessionData.status
+            message: `Processamento já em andamento há ${minutesRunning} minutos`,
+            minutesRunning,
+            sessionId: sessionData.session_id || null,
           }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
