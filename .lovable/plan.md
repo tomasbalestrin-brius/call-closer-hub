@@ -1,87 +1,52 @@
 
-
-# Plano: Reset de Arquivos Travados + Disparo de Processamento
+# Plano: Reset e Disparo de Processamento Turbo
 
 ## Situação Atual
-
-- **117 arquivos** travados em `processing` há mais de 17 horas
-- **5 sessões** marcadas como `running` mas sem workers ativos
-- **18 arquivos** com status `error` (podem ser reprocessados também)
+- **120** arquivos completed
+- **108** arquivos travados em `processing`
+- **14** arquivos com erro
 
 ## Ações a Executar
 
-### Fase 1: Limpar Estado Corrompido
+### Passo 1: Reset dos Arquivos Travados
+Executar SQL para resetar os 108 arquivos de `processing` para `pending`:
 
-**1.1 - Resetar arquivos travados para `pending`**
 ```sql
 UPDATE imported_files 
 SET status = 'pending', 
     started_processing_at = NULL, 
     error_message = NULL
-WHERE status = 'processing'
-  AND started_processing_at < NOW() - INTERVAL '5 minutes';
+WHERE status = 'processing';
 ```
 
-**1.2 - Marcar sessões órfãs como `error`**
+### Passo 2: Reset das Sessões Órfãs
+Marcar sessões `running` antigas como `error`:
+
 ```sql
 UPDATE user_import_sessions 
 SET status = 'error', 
     completed_at = NOW(),
-    current_file_name = 'Sessão expirada - reset manual'
-WHERE status = 'running'
-  AND started_at < NOW() - INTERVAL '15 minutes';
+    current_file_name = 'Reset para reprocessamento'
+WHERE status = 'running';
 ```
 
-### Fase 2: Disparar Novo Processamento
+### Passo 3: Confirmar Estado Limpo
+Verificar que todos os arquivos estão em `pending` para processamento.
 
-Após o reset, o painel de administração mostrará os arquivos como `pending` novamente. O processamento pode ser reiniciado:
-
-- Via botão **"Turbo (3x)"** ou **"Ultra (6x)"** no painel Admin
-- Cada closer com arquivos pendentes será processado em paralelo
-
-### Fase 3: Melhoria Preventiva (Opcional)
-
-Adicionar lógica de auto-recovery no `ImportStatusPanel` que:
-1. Detecta sessões `running` por mais de 15 minutos
-2. Chama automaticamente o `stale-file-cleanup` Edge Function
-3. Exibe alerta ao admin quando há arquivos travados
+### Passo 4: Instruções para Disparo Manual
+Após o reset, você precisará:
+1. Ir ao painel Admin > Importações
+2. Clicar no botão **"Turbo (3x)"** para iniciar o processamento paralelo
+3. Monitorar o progresso em tempo real no painel
 
 ## Resultado Esperado
 
 | Antes | Depois |
 |-------|--------|
-| 117 arquivos travados | 0 arquivos travados |
-| 5 sessões órfãs | 0 sessões órfãs |
-| Processamento parado | Processamento retomado |
+| 108 arquivos em processing | 108 arquivos em pending |
+| Processamento bloqueado | Pronto para Turbo (3x) |
 
-## Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| (Banco de dados) | 2 queries UPDATE para reset |
-| `src/components/admin/ImportStatusPanel.tsx` | Adicionar botão "Reset Stuck Files" + auto-recovery |
-
-## Sequência de Execução
-
-```text
-┌─────────────────────────────────────────────────────┐
-│  PASSO 1: Executar UPDATE nos arquivos travados    │
-│  → 117 arquivos: processing → pending              │
-├─────────────────────────────────────────────────────┤
-│  PASSO 2: Executar UPDATE nas sessões órfãs        │
-│  → 5 sessões: running → error                      │
-├─────────────────────────────────────────────────────┤
-│  PASSO 3: Adicionar botão de reset manual no Admin │
-│  → Para evitar precisar de intervenção futura      │
-├─────────────────────────────────────────────────────┤
-│  PASSO 4: Usuário clica "Turbo (3x)" para iniciar  │
-│  → Processamento retomado automaticamente          │
-└─────────────────────────────────────────────────────┘
-```
-
-## Tempo Estimado de Processamento
-
-Após o reset:
-- **117 arquivos pendentes** ÷ 6 closers em paralelo = ~20 arquivos/closer
-- **20 arquivos** × 15 segundos = **~5 minutos** em modo Turbo
-
+## Tempo Estimado
+Com as correções aplicadas (timeout 140s, delay 500ms):
+- **108 arquivos** ÷ 3 workers paralelos = ~36 arquivos/worker
+- ~36 arquivos × 2 segundos = **~1-2 minutos** em modo Turbo
