@@ -466,6 +466,49 @@ serve(async (req) => {
       );
     }
 
+    // ========== BUDGET CHECK ==========
+    interface BudgetCheckResult {
+      allowed: boolean;
+      current_spend_usd: number;
+      monthly_limit_usd: number | null;
+      remaining_usd: number | null;
+      usage_percent: number;
+      warning_threshold_reached: boolean;
+    }
+
+    const { data: budgetData } = await supabase
+      .rpc('check_user_budget', {
+        p_user_id: userId,
+        p_estimated_cost: 0.50 // Estimate $0.50 per analysis
+      });
+
+    const budgetCheck = (Array.isArray(budgetData) ? budgetData[0] : budgetData) as BudgetCheckResult | null;
+
+    if (budgetCheck && !budgetCheck.allowed) {
+      const errorMsg = `Monthly budget limit exceeded ($${budgetCheck.current_spend_usd}/$${budgetCheck.monthly_limit_usd}). Cannot analyze more calls this month.`;
+      console.error(errorMsg);
+      await supabase
+        .from("imported_files")
+        .update({ status: "error", error_message: errorMsg, imported_at: new Date().toISOString() })
+        .eq("id", importRecordId);
+
+      return new Response(
+        JSON.stringify({
+          error: errorMsg,
+          budgetExceeded: true,
+          currentSpend: budgetCheck.current_spend_usd,
+          monthlyLimit: budgetCheck.monthly_limit_usd,
+          usagePercent: budgetCheck.usage_percent
+        }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } } // 402 Payment Required
+      );
+    }
+
+    // Log warning if approaching limit (80%+)
+    if (budgetCheck && budgetCheck.warning_threshold_reached) {
+      console.warn(`⚠️ Budget warning: User ${userId} at ${budgetCheck.usage_percent}% of monthly budget ($${budgetCheck.current_spend_usd}/$${budgetCheck.monthly_limit_usd})`);
+    }
+
     // ========== ANALYZE WITH RETRY FOR TIMEOUTS ==========
     const MAX_RETRIES_ON_TIMEOUT = 2;
     let retryCount = 0;
