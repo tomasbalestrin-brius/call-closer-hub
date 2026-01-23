@@ -404,6 +404,9 @@ export interface Call {
     analysis_method?: 'chunked' | 'direct';
     timeout_occurred?: boolean;
   } | null;
+  analysis_quality_score: number | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
   created_at: string;
   updated_at: string;
 }

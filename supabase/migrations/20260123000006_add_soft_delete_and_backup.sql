@@ -270,30 +270,55 @@ $$;
 
 -- Update RLS policies to respect soft delete
 DROP POLICY IF EXISTS "Users can view own calls" ON calls;
+DROP POLICY IF EXISTS "Closers can view their own calls" ON calls;
+DROP POLICY IF EXISTS "Admins can view all calls" ON calls;
+DROP POLICY IF EXISTS "Leaders can view squad member calls" ON calls;
+DROP POLICY IF EXISTS "Leaders can update squad member calls" ON calls;
 DROP POLICY IF EXISTS "Users can insert own calls" ON calls;
 DROP POLICY IF EXISTS "Users can update own calls" ON calls;
 DROP POLICY IF EXISTS "Users can delete own calls" ON calls;
 
-CREATE POLICY "Users can view own active calls"
+-- SELECT policies (respect soft delete)
+CREATE POLICY "Closers can view their own active calls"
   ON calls
   FOR SELECT
   USING (auth.uid() = closer_id AND deleted_at IS NULL);
 
-CREATE POLICY "Users can view own deleted calls"
+CREATE POLICY "Closers can view their own deleted calls"
   ON calls
   FOR SELECT
   USING (auth.uid() = closer_id AND deleted_at IS NOT NULL);
 
+-- Admins can view ALL calls (including deleted)
+CREATE POLICY "Admins can view all calls"
+  ON calls
+  FOR SELECT
+  USING (has_role(auth.uid(), 'admin'::user_role));
+
+-- Leaders can view squad member calls (including deleted)
+CREATE POLICY "Leaders can view squad member calls"
+  ON calls
+  FOR SELECT
+  USING (is_squad_leader_of_user(auth.uid(), closer_id));
+
+-- INSERT policy
 CREATE POLICY "Users can insert own calls"
   ON calls
   FOR INSERT
   WITH CHECK (auth.uid() = closer_id);
 
-CREATE POLICY "Users can update own active calls"
+-- UPDATE policies
+CREATE POLICY "Closers can update own active calls"
   ON calls
   FOR UPDATE
-  USING (auth.uid() = closer_id)
+  USING (auth.uid() = closer_id AND deleted_at IS NULL)
   WITH CHECK (auth.uid() = closer_id);
+
+CREATE POLICY "Leaders can update squad member calls"
+  ON calls
+  FOR UPDATE
+  USING (is_squad_leader_of_user(auth.uid(), closer_id))
+  WITH CHECK (is_squad_leader_of_user(auth.uid(), closer_id));
 
 -- Soft delete via function only
 -- Users should call soft_delete_call() instead of DELETE
