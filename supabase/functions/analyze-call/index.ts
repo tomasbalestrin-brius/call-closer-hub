@@ -1663,10 +1663,15 @@ function tryFixJSON(jsonString: string): string {
   // 7. Remove aspas duplas repetidas
   fixed = fixed.replace(/""+/g, '"');
   
-  // 8. Fix unescaped newlines in strings (replace actual newlines within strings)
-  fixed = fixed.replace(/(?<!\\)(?:\\\\)*"([^"]*)\n([^"]*)"/g, (match, p1, p2) => {
-    return `"${p1}\\n${p2}"`;
-  });
+  // 8. Fix unescaped newlines in strings - simplified approach
+  // Replace actual newlines that appear within JSON string values
+  fixed = fixed.split('\n').map((line, i, arr) => {
+    // If line doesn't start a new JSON property/value, it might be a continuation
+    if (i > 0 && !line.trim().match(/^["\[{},\]]/) && !line.trim().match(/^\d/) && arr[i-1].trim().endsWith('"')) {
+      return '\\n' + line;
+    }
+    return line;
+  }).join('\n');
   
   // 9. Remove trailing commas in objects and arrays
   fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
