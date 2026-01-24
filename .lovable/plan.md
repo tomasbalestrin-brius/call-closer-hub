@@ -1,114 +1,77 @@
 
-# Plano: Melhorar Tratamento de JSON no analyze-call
+# Plano: Corrigir Salvamento de Dados de Clientes
 
 ## Diagnóstico do Problema
 
-Após análise do código em `supabase/functions/analyze-call/index.ts`, identifiquei que **10 arquivos falharam** com "Failed to parse AI response as JSON after multiple attempts". O fluxo atual de recuperação de JSON é:
+O salvamento de informações de clientes está falhando devido a uma **incompatibilidade de tipo de dados** entre as tabelas `clients` e `clients_backup`.
 
-1. Parse direto
-2. `tryFixJSON()` - correções básicas de sintaxe
-3. Extração por posição do erro
-4. `repairJSONWithAI()` - chamada extra ao gpt-4o-mini
+### Causa Raiz Identificada
 
-O problema: quando a resposta da OpenAI vem truncada ou com formatação inconsistente, todas as tentativas falham.
+| Tabela | Coluna | Tipo Atual |
+|--------|--------|------------|
+| `clients` | `contract_validity` | `TEXT` |
+| `clients_backup` | `contract_validity` | `DATE` |
 
-## Causa Raiz Identificada
+Quando um usuário tenta salvar um cliente (ex: via `SaleFormDialog`), o seguinte acontece:
 
-| Cenário | Problema |
-|---------|----------|
-| Resposta truncada | O modelo atinge `max_tokens` e corta o JSON no meio |
-| Markdown aninhado | Code blocks dentro do JSON quebram a extração |
-| Caracteres especiais | Aspas curvas, caracteres unicode em evidências |
-| Output muito longo | O merge de chunks produz JSON maior que o buffer |
+1. O frontend envia dados como `contract_validity: "12 meses"` (texto)
+2. O trigger `backup_client_trigger` é executado ANTES do UPDATE
+3. O trigger tenta inserir na tabela `clients_backup` onde `contract_validity` espera um `DATE`
+4. O banco de dados retorna erro: **"column 'contract_validity' is of type date but expression is of type text"**
+5. Toda a transação é revertida - nenhum dado é salvo!
+
+Este problema afeta **qualquer atualização de cliente** que tenha um valor em `contract_validity`.
 
 ## Solução Proposta
 
-### 1. Adicionar `response_format: { type: "json_object" }` na OpenAI API
+### Opção Escolhida: Alinhar tipos de dados (TEXT em ambas as tabelas)
 
-Forçar o modelo a retornar apenas JSON válido, sem markdown ou texto adicional.
+Como a UI permite entrada livre ("12 meses", "1 ano", etc.), o tipo `TEXT` é mais apropriado.
 
-```typescript
-// Em callOpenAI() e analyzeChunk()
-body: JSON.stringify({
-  model: "gpt-4o",
-  messages: [...],
-  response_format: { type: "json_object" }, // NOVO
-  temperature: 0.1,
-  max_tokens: 16000,
-})
+### Passos da Implementação
+
+**1. Corrigir a coluna na tabela de backup**
+
+Executar uma migração SQL para alterar o tipo da coluna `contract_validity` na tabela `clients_backup` de `DATE` para `TEXT`:
+
+```sql
+ALTER TABLE clients_backup 
+ALTER COLUMN contract_validity TYPE TEXT 
+USING contract_validity::TEXT;
 ```
 
-### 2. Melhorar a função `tryFixJSON()` com mais correções
+**2. Verificar se há dados existentes na tabela de backup**
 
-Adicionar tratamento para:
-- Aspas curvas ("" '') para aspas retas
-- Remover caracteres BOM
-- Escapar newlines não escapados dentro de strings
-- Detectar e corrigir propriedades duplicadas
-
-### 3. Adicionar fallback de extração progressiva
-
-Quando todas as tentativas falharem, extrair campos individuais via regex antes de falhar completamente:
-
-```typescript
-function extractFieldsFallback(response: string): Partial<AnalysisData> {
-  // Extrair campos críticos mesmo de JSON quebrado
-  const clientName = response.match(/"nome_lead"\s*:\s*"([^"]+)"/)?.[1];
-  const closerName = response.match(/"nome_closer"\s*:\s*"([^"]+)"/)?.[1];
-  const score = response.match(/"nota_geral"\s*:\s*(\d+)/)?.[1];
-  // ... outros campos essenciais
-  
-  return { /* objeto parcial */ };
-}
-```
-
-### 4. Aumentar `max_tokens` para evitar truncamento
-
-O merge de chunks pode gerar respostas muito longas. Aumentar de 16000 para 32000 tokens.
-
-### 5. Implementar logging detalhado para debug
-
-Salvar a resposta raw em caso de falha para análise posterior:
-
-```typescript
-// Em caso de falha, logar os primeiros 5000 chars
-console.error("Raw response that failed parsing:", response.substring(0, 5000));
-```
-
-## Arquivos a Modificar
-
-| Arquivo | Modificações |
-|---------|--------------|
-| `supabase/functions/analyze-call/index.ts` | Adicionar `response_format`, melhorar `tryFixJSON()`, novo fallback de extração |
-
-## Implementação Detalhada
-
-### Passo 1: Adicionar response_format nas chamadas OpenAI
-- Modificar `callOpenAI()` (linha 1516)
-- Modificar `analyzeChunk()` (linha 1149)
-- Modificar `mergeChunkAnalyses()` (linha 1252)
-- Modificar `repairJSONWithAI()` (linha 1614)
-
-### Passo 2: Melhorar tryFixJSON()
-- Expandir a função (linhas 1633-1665) com mais correções
-
-### Passo 3: Criar extractFieldsFallback()
-- Nova função para recuperar dados parciais
-
-### Passo 4: Atualizar parseJSONFromResponse()
-- Adicionar o fallback como última tentativa antes de falhar
-- Retornar análise parcial em vez de erro total
+Se houver datas formatadas como `DATE`, elas serão convertidas automaticamente para texto no formato ISO (YYYY-MM-DD).
 
 ## Resultado Esperado
 
-- **Redução de 90%+ nos erros de JSON**: O `response_format: json_object` força a API a retornar JSON válido
-- **Recuperação de dados em falhas**: Mesmo quando o JSON está quebrado, extrair campos críticos
-- **Melhor debugging**: Logs detalhados para identificar padrões de falha
+- Todas as atualizações de clientes funcionarão normalmente
+- O trigger de backup continuará operando sem erros
+- Os usuários poderão salvar dados como "12 meses", "1 ano", ou qualquer texto livre
 
-## Riscos e Mitigações
+## Impacto
 
-| Risco | Mitigação |
-|-------|-----------|
-| `response_format` não suportado em modelos antigos | Só usamos gpt-4o e gpt-4o-mini (suportados) |
-| Aumentar `max_tokens` aumenta custo | Custo marginal vs benefício de 90% menos erros |
-| Fallback retorna dados incompletos | Marcar como `is_partial_analysis: true` |
+| Item | Impacto |
+|------|---------|
+| Downtime | Zero - migração é instantânea |
+| Dados existentes | Preservados (conversão automática) |
+| Funcionalidade | Restaurada imediatamente |
+
+## Seção Técnica
+
+### SQL de Migração
+
+```sql
+-- Corrigir tipo da coluna contract_validity na tabela de backup
+ALTER TABLE clients_backup 
+ALTER COLUMN contract_validity TYPE TEXT 
+USING contract_validity::TEXT;
+
+-- Comentário explicativo para documentação
+COMMENT ON COLUMN clients_backup.contract_validity IS 'Vigência do contrato em formato texto livre (ex: 12 meses, 1 ano)';
+```
+
+### Arquivos Que Não Precisam de Alteração
+
+O código do frontend (`SaleFormDialog.tsx`) já está correto - ele envia texto para um campo que deveria ser texto. O problema era apenas a inconsistência no banco de dados.
