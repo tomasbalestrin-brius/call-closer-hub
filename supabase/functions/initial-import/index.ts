@@ -84,7 +84,8 @@ async function listFilesFromDrive(
   // Build query - get documents from current month
   let query = `'${targetFolderId}' in parents and trashed = false`;
   query += ` and createdTime >= '${dateFrom}'`;
-  query += ` and (mimeType = 'application/vnd.google-apps.document' or mimeType = 'text/plain' or mimeType = 'application/pdf')`;
+  query += ` and (mimeType = 'application/vnd.google-apps.document' or mimeType = 'text/plain')`;
+  // NOTE: PDF support removed - fetch-drive-document doesn't support PDF extraction
 
   console.log("Fetching files with query:", query);
 
@@ -278,10 +279,15 @@ serve(async (req) => {
     }
 
     // Update drive_last_sync
-    await supabase
+    const { error: syncUpdateError } = await supabase
       .from("profiles")
       .update({ drive_last_sync: new Date().toISOString() })
       .eq("user_id", userId);
+
+    if (syncUpdateError) {
+      console.error(`Failed to update drive_last_sync:`, syncUpdateError);
+      // Continue - sync timestamp failure shouldn't block import response
+    }
 
     console.log(`Initial import complete: ${createdCount} files queued for processing`);
 

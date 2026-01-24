@@ -297,7 +297,7 @@ async function processUserFilesBackground(
       // Lock already done in claim_pending_files() - no need to lock here again
 
       // Update session progress
-      await supabase
+      const { error: progressError } = await supabase
         .from("user_import_sessions")
         .update({
           current_file_name: file.file_name,
@@ -306,6 +306,11 @@ async function processUserFilesBackground(
           error_count: errorCount,
         })
         .eq("user_id", userId);
+
+      if (progressError) {
+        console.error(`Failed to update session progress:`, progressError);
+        // Continue processing - progress tracking failure shouldn't block imports
+      }
 
       // Process the file
       const result = await processFile(
@@ -324,12 +329,15 @@ async function processUserFilesBackground(
         console.log(`[${userName}] ✗ ${file.file_name}: ${result.error}`);
 
         // Increment retry count
-        await supabase.rpc('increment_file_retry', {
+        const { error: retryError } = await supabase.rpc('increment_file_retry', {
           p_file_id: file.id
         });
+        if (retryError) {
+          console.error(`Failed to increment retry count for file ${file.id}:`, retryError);
+        }
 
         // Mark file as error instead of leaving in processing
-        await supabase
+        const { error: updateError } = await supabase
           .from("imported_files")
           .update({
             status: "error",
@@ -337,6 +345,10 @@ async function processUserFilesBackground(
             started_processing_at: null
           })
           .eq("id", file.id);
+
+        if (updateError) {
+          console.error(`Failed to mark file ${file.id} as error:`, updateError);
+        }
       }
 
       // Delay between files - minimum 2 seconds to prevent race conditions
@@ -347,23 +359,26 @@ async function processUserFilesBackground(
     }
 
     // 5. Cleanup: Reset any files still stuck in 'processing' to 'pending'
-    const { data: stuckFiles } = await supabase
+    const { data: stuckFiles, error: stuckError } = await supabase
       .from("imported_files")
-      .update({ 
-        status: "pending", 
+      .update({
+        status: "pending",
         started_processing_at: null,
-        error_message: "Reset após sessão" 
+        error_message: "Reset após sessão"
       })
       .eq("user_id", userId)
       .eq("status", "processing")
       .select("id");
 
-    if (stuckFiles && stuckFiles.length > 0) {
+    if (stuckError) {
+      console.error(`Failed to reset stuck files:`, stuckError);
+      // Continue - cleanup failure shouldn't block session completion
+    } else if (stuckFiles && stuckFiles.length > 0) {
       console.log(`[${userName}] Reset ${stuckFiles.length} stuck files after session`);
     }
 
     // 6. Mark session as completed
-    await supabase
+    const { error: sessionCompleteError } = await supabase
       .from("user_import_sessions")
       .update({
         status: "completed",
@@ -374,6 +389,12 @@ async function processUserFilesBackground(
         current_file_name: null,
       })
       .eq("user_id", userId);
+
+    if (sessionCompleteError) {
+      console.error(`CRITICAL: Failed to mark session as completed:`, sessionCompleteError);
+      // This is critical - if this fails, user won't be able to start new sessions
+      throw new Error(`Failed to complete session: ${sessionCompleteError.message}`);
+    }
 
     console.log(`[${userName}] Completed: ${successCount} success, ${errorCount} errors`);
     
