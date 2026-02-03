@@ -1525,7 +1525,7 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
           ],
           response_format: { type: "json_object" }, // Force valid JSON output
           temperature: 0.1,
-          max_tokens: 32000, // Increased to prevent truncation
+          max_tokens: 16000, // Maximum supported by gpt-4o output
         }),
       });
 
