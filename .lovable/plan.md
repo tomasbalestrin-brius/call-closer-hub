@@ -1,64 +1,85 @@
 
+# Plano: Corrigir max_tokens para gpt-4o-mini
 
-# Plano: Atualizar Data Mínima para 01/02/2026
+## Problema Crítico Identificado
 
-## Problema Identificado
+A importação de calls está **100% falhando** (13 erros, 0 sucesso) porque o código está pedindo 24.000 tokens, mas o modelo `gpt-4o-mini` suporta no máximo **16.384 tokens**.
 
-As funções de importação estão configuradas para importar a partir de **01/01/2026**, mas o correto é **01/02/2026**.
-
-## Alterações Necessárias
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/initial-import/index.ts` | Alterar linha 185 |
-| `supabase/functions/sync-drive-files/index.ts` | Alterar linha 69 |
-
-### Código Atual vs Novo
-
-```text
-// ATUAL (incorreto)
-const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
-
-// NOVO (correto)
-const MIN_IMPORT_DATE = '2026-02-01T00:00:00.000Z';
+**Mensagem de erro:**
+```
+max_tokens is too large: 24000. This model supports at most 16384 completion tokens
 ```
 
-## Sobre Sincronização Automática
+## Arquivos com Erro
 
-O sistema já possui sync automático configurado:
+| Arquivo | Erro |
+|---------|------|
+| mcx-wqbi-ktp | max_tokens muito grande |
+| jdq-tidu-fia | max_tokens muito grande |
+| nhx-heiv-utt | OpenAI API error: 400 |
+| cxv-jnvz-eix | OpenAI API error: 400 |
+| rgb-cqqg-sgb | OpenAI API error: 400 |
+| mkj-drmq-aqu | OpenAI API error: 400 |
+| vyb-hpno-kvh | OpenAI API error: 400 |
+| kvo-wuhm-kue | OpenAI API error: 400 |
+| afy-jxyc-pmh | OpenAI API error: 400 |
+| jak-nrvo-viu | OpenAI API error: 400 |
+| nrw-jkqy-crf | OpenAI API error: 400 |
+| yiv-jqny-fci | Call curta (filtro válido) |
+| cbk-gdtd-wey | Call curta (filtro válido) |
 
-1. **Cron Job**: A cada 10 minutos, o `sync-drive-files` verifica novas calls
-2. **Requisito**: O usuário deve ter `drive_auto_import = true` no perfil
-3. **Comportamento**: Busca arquivos desde o último sync, respeitando a data mínima
+## Correção Proposta
+
+### Arquivo: `supabase/functions/analyze-call/index.ts`
+
+**Alteração 1** - Linha 1262 (função `mergeChunkAnalyses`):
+```typescript
+// De:
+max_tokens: 24000, // Increased for large merged analyses
+
+// Para:
+max_tokens: 16000, // Maximum supported by gpt-4o-mini
+```
+
+**Alteração 2** - Linha 1627 (função `repairJSONWithAI`):
+```typescript
+// De:
+max_tokens: 24000,
+
+// Para:
+max_tokens: 16000, // Maximum supported by gpt-4o-mini
+```
 
 ## Resultado Esperado
 
-Após a alteração:
-- Importação manual via botão: só arquivos >= 01/02/2026
-- Sync automático: só arquivos >= 01/02/2026
-- Arquivos de janeiro serão ignorados permanentemente
+Após a correção:
+- A análise com IA funcionará corretamente
+- Os 11 arquivos com erro serão reprocessados com sucesso
+- O sync automático voltará a funcionar
+
+## Passos Após Aprovação
+
+1. Aplicar as alterações no código
+2. Fazer deploy da edge function `analyze-call`
+3. Resetar os arquivos com erro para "pending"
+4. Reprocessar os arquivos
 
 ## Seção Técnica
 
-### Alteração 1: `initial-import/index.ts` (linha 185)
+### Limites do Modelo gpt-4o-mini
 
-```typescript
-// De:
-const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
+| Propriedade | Valor |
+|-------------|-------|
+| Context window | 128K tokens |
+| Max output tokens | 16.384 tokens |
 
-// Para:
-const MIN_IMPORT_DATE = '2026-02-01T00:00:00.000Z';
+### Linhas Afetadas
+
+```text
+Linha 1262: max_tokens: 24000, // Increased for large merged analyses
+Linha 1627: max_tokens: 24000,
 ```
 
-### Alteração 2: `sync-drive-files/index.ts` (linha 69)
+### Impacto
 
-```typescript
-// De:
-const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
-
-// Para:
-const MIN_IMPORT_DATE = '2026-02-01T00:00:00.000Z';
-```
-
+As análises muito longas podem ficar ligeiramente truncadas (16K vs 24K tokens), mas isso é preferível a 100% de falha. Na prática, a maioria das análises fica abaixo de 12K tokens.
