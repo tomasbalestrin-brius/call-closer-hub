@@ -1,77 +1,132 @@
 
-# Plano: Corrigir Salvamento de Dados de Clientes
 
-## Diagnóstico do Problema
+# Plano: Limpar Calls Antigas (Anteriores a 01/02/2026)
 
-O salvamento de informações de clientes está falhando devido a uma **incompatibilidade de tipo de dados** entre as tabelas `clients` e `clients_backup`.
+## Resumo do Escopo
 
-### Causa Raiz Identificada
+Serão removidos os seguintes dados de **todos os usuários**:
 
-| Tabela | Coluna | Tipo Atual |
-|--------|--------|------------|
-| `clients` | `contract_validity` | `TEXT` |
-| `clients_backup` | `contract_validity` | `DATE` |
+| Tipo de Dado | Quantidade | Ação |
+|--------------|------------|------|
+| Calls | 144 | Deletar todas (nenhuma é >= 01/02/2026) |
+| Arquivos Importados | 370 | Deletar todos os registros |
+| Clientes Google Drive | 134 | Deletar (são vinculados às calls importadas) |
+| Clientes Manuais | 11 | **MANTER** (criados manualmente) |
 
-Quando um usuário tenta salvar um cliente (ex: via `SaleFormDialog`), o seguinte acontece:
+### Distribuição de Calls por Usuário
 
-1. O frontend envia dados como `contract_validity: "12 meses"` (texto)
-2. O trigger `backup_client_trigger` é executado ANTES do UPDATE
-3. O trigger tenta inserir na tabela `clients_backup` onde `contract_validity` espera um `DATE`
-4. O banco de dados retorna erro: **"column 'contract_validity' is of type date but expression is of type text"**
-5. Toda a transação é revertida - nenhum dado é salvo!
+| Closer ID | Total de Calls | Período |
+|-----------|----------------|---------|
+| db049238-... | 34 | 06/01 - 22/01 |
+| 5dda698b-... | 27 | 05/01 - 22/01 |
+| e6aa380a-... | 22 | 05/01 - 23/01 |
+| 6582d39f-... | 20 | 07/01 - 22/01 |
+| 03874296-... | 17 | 05/01 - 23/01 |
+| 9c93a63f-... | 15 | 08/01 - 22/01 |
+| eec82ac3-... | 9 | 13/01 - 22/01 |
 
-Este problema afeta **qualquer atualização de cliente** que tenha um valor em `contract_validity`.
+## Passos da Implementação
 
-## Solução Proposta
+### 1. Deletar Calls Antigas (com backup automático via trigger)
 
-### Opção Escolhida: Alinhar tipos de dados (TEXT em ambas as tabelas)
-
-Como a UI permite entrada livre ("12 meses", "1 ano", etc.), o tipo `TEXT` é mais apropriado.
-
-### Passos da Implementação
-
-**1. Corrigir a coluna na tabela de backup**
-
-Executar uma migração SQL para alterar o tipo da coluna `contract_validity` na tabela `clients_backup` de `DATE` para `TEXT`:
+O trigger `backup_call_before_change` já existe e fará backup automático de cada call antes de deletar.
 
 ```sql
-ALTER TABLE clients_backup 
-ALTER COLUMN contract_validity TYPE TEXT 
-USING contract_validity::TEXT;
+DELETE FROM calls 
+WHERE call_date < '2026-02-01';
 ```
 
-**2. Verificar se há dados existentes na tabela de backup**
+### 2. Limpar Arquivos Importados
 
-Se houver datas formatadas como `DATE`, elas serão convertidas automaticamente para texto no formato ISO (YYYY-MM-DD).
+Resetar todos os registros de arquivos importados para permitir reimportação futura:
+
+```sql
+DELETE FROM imported_files;
+```
+
+### 3. Limpar Sessões de Importação
+
+```sql
+DELETE FROM user_import_sessions;
+```
+
+### 4. Deletar Clientes Importados do Google Drive
+
+Mantendo apenas clientes criados manualmente:
+
+```sql
+DELETE FROM clients 
+WHERE source = 'google_drive';
+```
+
+### 5. Limpar Notas de Clientes Órfãs
+
+```sql
+DELETE FROM client_notes 
+WHERE client_id NOT IN (SELECT id FROM clients);
+```
+
+### 6. Limpar Indicações Órfãs
+
+```sql
+DELETE FROM indications 
+WHERE client_id NOT IN (SELECT id FROM clients);
+```
 
 ## Resultado Esperado
 
-- Todas as atualizações de clientes funcionarão normalmente
-- O trigger de backup continuará operando sem erros
-- Os usuários poderão salvar dados como "12 meses", "1 ano", ou qualquer texto livre
+Após a limpeza:
+- **0 calls** anteriores a 01/02/2026
+- Sistema pronto para novas importações
+- **11 clientes manuais** preservados
+- Backups das calls deletadas disponíveis na tabela `calls_backup`
 
 ## Impacto
 
 | Item | Impacto |
 |------|---------|
-| Downtime | Zero - migração é instantânea |
-| Dados existentes | Preservados (conversão automática) |
-| Funcionalidade | Restaurada imediatamente |
+| Downtime | Zero |
+| Dados Manuais | Preservados |
+| Backups | Automáticos via trigger |
+| Reimportação | Habilitada (arquivos limpos) |
 
 ## Seção Técnica
 
-### SQL de Migração
+### SQL Completo de Limpeza
 
 ```sql
--- Corrigir tipo da coluna contract_validity na tabela de backup
-ALTER TABLE clients_backup 
-ALTER COLUMN contract_validity TYPE TEXT 
-USING contract_validity::TEXT;
+-- 1. Deletar calls antigas (backup automático via trigger)
+DELETE FROM calls WHERE call_date < '2026-02-01';
 
--- Comentário explicativo para documentação
-COMMENT ON COLUMN clients_backup.contract_validity IS 'Vigência do contrato em formato texto livre (ex: 12 meses, 1 ano)';
+-- 2. Limpar arquivos importados
+DELETE FROM imported_files;
+
+-- 3. Limpar sessões de importação
+DELETE FROM user_import_sessions;
+
+-- 4. Deletar clientes importados do Google Drive
+DELETE FROM clients WHERE source = 'google_drive';
+
+-- 5. Limpar notas de clientes órfãs
+DELETE FROM client_notes 
+WHERE client_id NOT IN (SELECT id FROM clients);
+
+-- 6. Limpar indicações órfãs
+DELETE FROM indications 
+WHERE client_id NOT IN (SELECT id FROM clients);
+
+-- 7. Limpar atividades de clientes órfãs
+DELETE FROM client_activities 
+WHERE client_id NOT IN (SELECT id FROM clients);
 ```
 
-### Arquivos Que Não Precisam de Alteração
+### Verificação Pós-Limpeza
 
-O código do frontend (`SaleFormDialog.tsx`) já está correto - ele envia texto para um campo que deveria ser texto. O problema era apenas a inconsistência no banco de dados.
+```sql
+SELECT 
+  (SELECT COUNT(*) FROM calls) as remaining_calls,
+  (SELECT COUNT(*) FROM imported_files) as remaining_imports,
+  (SELECT COUNT(*) FROM clients) as remaining_clients,
+  (SELECT COUNT(*) FROM calls_backup) as backup_count;
+```
+
