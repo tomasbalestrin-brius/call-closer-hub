@@ -1259,7 +1259,7 @@ async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<Ana
       ],
       response_format: { type: "json_object" }, // Force valid JSON output
       temperature: 0.1,
-      max_tokens: 24000, // Increased for large merged analyses
+      max_tokens: 16000, // Maximum supported by gpt-4o-mini
     }),
   });
 
@@ -1624,7 +1624,7 @@ async function repairJSONWithAI(brokenJSON: string): Promise<string> {
       ],
       response_format: { type: "json_object" }, // Force valid JSON output
       temperature: 0,
-      max_tokens: 24000,
+      max_tokens: 16000, // Maximum supported by gpt-4o-mini
     }),
   });
 
