@@ -181,8 +181,8 @@ serve(async (req) => {
       profile as { user_id: string; google_access_token: string; google_refresh_token: string; google_token_expires_at: string }
     );
 
-    // Fixed minimum import date: January 2026
-    const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
+    // Fixed minimum import date: February 2026
+    const MIN_IMPORT_DATE = '2026-02-01T00:00:00.000Z';
     const dateFrom = MIN_IMPORT_DATE;
 
     console.log(`Fetching files from ${dateFrom} (fixed minimum date)`);

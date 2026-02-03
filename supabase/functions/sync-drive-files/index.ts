@@ -65,8 +65,8 @@ serve(async (req) => {
       );
     }
 
-    // Data mínima fixa: apenas arquivos de janeiro de 2026 em diante
-    const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
+    // Data mínima fixa: apenas arquivos de fevereiro de 2026 em diante
+    const MIN_IMPORT_DATE = '2026-02-01T00:00:00.000Z';
 
     // Use last sync time or 7 days ago as fallback
     const lastSync = profile.drive_last_sync 
