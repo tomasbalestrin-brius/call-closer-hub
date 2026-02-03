@@ -1,92 +1,64 @@
 
 
-# Plano: Ocultar Módulos de Closer para Usuário Admin
+# Plano: Atualizar Data Mínima para 01/02/2026
 
-## Objetivo
+## Problema Identificado
 
-Remover os módulos **Calls**, **CRM Calls** e **CRM Intensivo** do menu lateral para usuários com role `admin`. Estes módulos são específicos para closers e líderes que realizam operações de vendas.
+As funções de importação estão configuradas para importar a partir de **01/01/2026**, mas o correto é **01/02/2026**.
 
-## Lógica Atual
+## Alterações Necessárias
 
-O sidebar atualmente funciona assim:
+### Arquivos a Modificar
 
-```
-baseNavigation (todos os usuários)
-+ leaderNavigation (líderes e admins)
-+ adminNavigation (apenas admins)
-```
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/initial-import/index.ts` | Alterar linha 185 |
+| `supabase/functions/sync-drive-files/index.ts` | Alterar linha 69 |
 
-## Nova Lógica
+### Código Atual vs Novo
 
-Será reestruturado para:
+```text
+// ATUAL (incorreto)
+const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
 
-```
-Se admin:
-  → Navegação administrativa (sem Calls, CRM Calls, CRM Intensivo)
-Senão:
-  → Navegação base completa
-  → + leaderNavigation se for líder ou admin
+// NOVO (correto)
+const MIN_IMPORT_DATE = '2026-02-01T00:00:00.000Z';
 ```
 
-## Itens do Menu por Role
+## Sobre Sincronização Automática
 
-| Item | Admin | Líder | Closer |
-|------|-------|-------|--------|
-| Dashboard | Sim | Sim | Sim |
-| Calls | **Não** | Sim | Sim |
-| CRM Calls | **Não** | Sim | Sim |
-| CRM Intensivo | **Não** | Sim | Sim |
-| Carteira | Sim | Sim | Sim |
-| Notificações | Sim | Sim | Sim |
-| Configurações | Sim | Sim | Sim |
-| Relatórios | Sim | Sim | Não |
-| Ver Time | Sim | Sim | Não |
-| Admin | Sim | Não | Não |
+O sistema já possui sync automático configurado:
 
-## Seção Técnica
-
-### Alteração no Arquivo `src/components/layout/Sidebar.tsx`
-
-Modificar a construção do array `navigation` para filtrar itens baseado no role:
-
-```tsx
-// Itens que admin NÃO deve ver (específicos de operação de closer)
-const closerOnlyItems = ['/calls', '/clients', '/intensivo-crm'];
-
-// Navegação base filtrada para admin
-const getBaseNavigation = (isAdmin: boolean) => {
-  if (isAdmin) {
-    return baseNavigation.filter(item => !closerOnlyItems.includes(item.href));
-  }
-  return baseNavigation;
-};
-
-// Construir navegação final
-const navigation = [
-  ...getBaseNavigation(isAdmin),
-  ...(isAdmin || isLeader ? leaderNavigation : []),
-  ...(isAdmin ? adminNavigation : []),
-];
-```
+1. **Cron Job**: A cada 10 minutos, o `sync-drive-files` verifica novas calls
+2. **Requisito**: O usuário deve ter `drive_auto_import = true` no perfil
+3. **Comportamento**: Busca arquivos desde o último sync, respeitando a data mínima
 
 ## Resultado Esperado
 
-Para usuário **admin**, o menu lateral mostrará:
-- Dashboard
-- Carteira
-- Notificações
-- Configurações
-- Relatórios
-- Ver Time
-- Admin
+Após a alteração:
+- Importação manual via botão: só arquivos >= 01/02/2026
+- Sync automático: só arquivos >= 01/02/2026
+- Arquivos de janeiro serão ignorados permanentemente
 
-**Não aparecerão:** Calls, CRM Calls, CRM Intensivo
+## Seção Técnica
 
-## Impacto
+### Alteração 1: `initial-import/index.ts` (linha 185)
 
-| Item | Impacto |
-|------|---------|
-| Funcionalidade | Apenas visual - rotas continuam acessíveis via URL |
-| Segurança | Mantida (RLS protege dados) |
-| Outros usuários | Sem alteração |
+```typescript
+// De:
+const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
+
+// Para:
+const MIN_IMPORT_DATE = '2026-02-01T00:00:00.000Z';
+```
+
+### Alteração 2: `sync-drive-files/index.ts` (linha 69)
+
+```typescript
+// De:
+const MIN_IMPORT_DATE = '2026-01-01T00:00:00.000Z';
+
+// Para:
+const MIN_IMPORT_DATE = '2026-02-01T00:00:00.000Z';
+```
 
