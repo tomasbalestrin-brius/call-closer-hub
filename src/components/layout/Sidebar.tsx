@@ -31,6 +31,16 @@ const baseNavigation = [
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
 
+// Itens específicos de operação de closer (admin não precisa ver)
+const closerOnlyItems = ['/calls', '/clients', '/intensivo-crm'];
+
+const getBaseNavigation = (isAdmin: boolean) => {
+  if (isAdmin) {
+    return baseNavigation.filter(item => !closerOnlyItems.includes(item.href));
+  }
+  return baseNavigation;
+};
+
 const leaderNavigation = [
   { name: 'Relatórios', href: '/squad-reports', icon: BarChart3 },
   { name: 'Ver Time', href: '/squad-view', icon: Users },
@@ -47,7 +57,7 @@ export default function Sidebar() {
   const { isAdmin, isLeader } = useUserRole();
 
   const navigation = [
-    ...baseNavigation,
+    ...getBaseNavigation(isAdmin),
     ...(isAdmin || isLeader ? leaderNavigation : []),
     ...(isAdmin ? adminNavigation : []),
   ];
