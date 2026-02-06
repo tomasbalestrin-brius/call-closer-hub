@@ -501,6 +501,23 @@ export function ImportStatusPanel() {
     return () => clearInterval(interval);
   }, [checkStuckFiles]);
 
+  // Auto-recovery: run stale-file-cleanup every 10 minutes for automatic retry
+  useEffect(() => {
+    const autoRecoveryInterval = setInterval(async () => {
+      try {
+        console.log('[Auto-Recovery] Running scheduled cleanup...');
+        const { data, error } = await supabase.functions.invoke('stale-file-cleanup');
+        if (!error && data?.results?.autoRetried > 0) {
+          console.log(`[Auto-Recovery] ${data.results.autoRetried} arquivos resetados para retry`);
+          fetchImportStatuses();
+        }
+      } catch (err) {
+        console.error('[Auto-Recovery] Error:', err);
+      }
+    }, 600000); // 10 minutes
+    return () => clearInterval(autoRecoveryInterval);
+  }, [fetchImportStatuses]);
+
   const resetStuckFilesAndSessions = async () => {
     try {
       setResettingStuck(true);
