@@ -23,7 +23,7 @@ const corsHeaders = {
 // ============= CHUNKING CONFIGURATION =============
 const CHUNK_SIZE = 80000; // ~80KB per chunk (~20K tokens, gpt-4o supports 128K)
 const CHUNK_OVERLAP = 8000; // 8KB overlap for context (ensures full sentence preservation)
-const MAX_SIZE_FOR_DIRECT = 100000; // Files under 100KB go direct
+const MAX_SIZE_FOR_DIRECT = 60000; // Files under 60KB go direct (reduced to force more files into chunked path with timeout protection)
 const FUNCTION_TIMEOUT = 120000; // 120 seconds safety timeout (Edge limit is ~150s)
 const ANALYSIS_TIMEOUT = 110000; // 110 seconds for analysis (10s buffer)
 const BATCH_TIMEOUT = 50000; // 50 seconds max per batch
@@ -1497,7 +1497,7 @@ async function analyzeWithChunking(
 
 // ============= OPENAI API FUNCTIONS =============
 
-async function callOpenAI(systemPrompt: string, transcription: string): Promise<string> {
+async function callOpenAI(systemPrompt: string, transcription: string, abortSignal?: AbortSignal): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
   if (!OPENAI_API_KEY) {
@@ -1513,6 +1513,7 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
+        signal: abortSignal,
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
@@ -2053,6 +2054,7 @@ serve(async (req) => {
   }
 
   // Setup abort controller for function timeout (90s safety margin)
+  const startTime = Date.now();
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => {
     console.log("⚠️ Function timeout reached (90s), triggering abort for graceful shutdown...");
@@ -2083,8 +2085,25 @@ serve(async (req) => {
       data = await analyzeWithChunking(transcription, fileName, abortController.signal);
     } else {
       console.log(`Standard file size, using DIRECT analysis`);
-      // Run single comprehensive analysis
-      const masterResponse = await callOpenAI(MASTER_PROMPT, transcription);
+      // Run single comprehensive analysis WITH timeout protection
+      const directTimeout = Math.max(ANALYSIS_TIMEOUT - (Date.now() - startTime), 10000);
+      console.log(`Direct analysis timeout set to ${Math.round(directTimeout/1000)}s`);
+      
+      const masterResponse = await withTimeout(
+        callOpenAI(MASTER_PROMPT, transcription, abortController.signal),
+        directTimeout,
+        null
+      );
+
+      if (!masterResponse) {
+        console.log("⚠️ Direct analysis timed out, returning 408");
+        clearTimeout(timeoutId);
+        return new Response(
+          JSON.stringify({ error: "Analysis timeout on direct mode" }),
+          { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       console.log("AI analysis completed");
       console.log("Raw response length:", masterResponse.length);
       data = await parseJSONFromResponse(masterResponse) as AnalysisData;
@@ -2227,7 +2246,7 @@ serve(async (req) => {
       closer_justification: data.justificativa_nota_geral?.join(" "),
       
       // NEW: Analysis metadata for partial analysis tracking
-      analysis_metadata: data.__metadata || {
+      analysis_metadata: data.analysis_metadata || {
         is_partial_analysis: false,
         chunks_analyzed: 1,
         chunks_total: 1,
