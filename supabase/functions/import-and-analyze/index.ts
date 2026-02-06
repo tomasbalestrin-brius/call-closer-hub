@@ -519,40 +519,66 @@ serve(async (req) => {
     while (retryCount <= MAX_RETRIES_ON_TIMEOUT) {
       console.log(`Analyze attempt ${retryCount + 1}/${MAX_RETRIES_ON_TIMEOUT + 1}`);
       
-      analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        },
-        body: JSON.stringify({
-          transcription: content,
-          fileName,
-          userId: userId,
-          callId: null, // Will be set after call is created
-          fileId: importRecordId
-        }),
-      });
+      // AbortController with 120s timeout to prevent hanging if analyze-call dies
+      const analyzeController = new AbortController();
+      const analyzeTimeoutId = setTimeout(() => analyzeController.abort(), 120000);
 
-      const result = await safeReadJson(analyzeResponse);
-      analyzeResult = result.data;
-      analyzeParseError = result.error;
+      try {
+        analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
+          method: "POST",
+          signal: analyzeController.signal,
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({
+            transcription: content,
+            fileName,
+            userId: userId,
+            callId: null, // Will be set after call is created
+            fileId: importRecordId
+          }),
+        });
 
-      if (analyzeResponse.ok && !analyzeParseError) {
-        console.log("Analysis successful");
+        clearTimeout(analyzeTimeoutId);
+
+        const result = await safeReadJson(analyzeResponse);
+        analyzeResult = result.data;
+        analyzeParseError = result.error;
+
+        if (analyzeResponse.ok && !analyzeParseError) {
+          console.log("Analysis successful");
+          break;
+        }
+
+        // Retry for timeouts (408) AND empty responses (runtime killed the function)
+        const isRetryable = analyzeResponse.status === 408 || analyzeParseError === "Empty response from function";
+        if (isRetryable && retryCount < MAX_RETRIES_ON_TIMEOUT) {
+          console.log(`Retryable error on attempt ${retryCount + 1} (status=${analyzeResponse.status}, parseError=${analyzeParseError}), retrying in 5s...`);
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          continue;
+        }
+
+        // Non-retryable error or last retry - exit loop
+        break;
+      } catch (fetchErr) {
+        clearTimeout(analyzeTimeoutId);
+        
+        // Treat AbortError (our timeout) as retryable
+        if (fetchErr instanceof Error && fetchErr.name === 'AbortError' && retryCount < MAX_RETRIES_ON_TIMEOUT) {
+          console.log(`Fetch timeout (AbortError) on attempt ${retryCount + 1}, retrying in 5s...`);
+          retryCount++;
+          analyzeParseError = "Fetch timeout (AbortError)";
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          continue;
+        }
+        
+        // Non-abort error or last retry
+        analyzeParseError = fetchErr instanceof Error ? fetchErr.message : "Unknown fetch error";
+        console.error("Fetch error calling analyze-call:", analyzeParseError);
         break;
       }
-
-      // Retry only for timeouts (408)
-      if (analyzeResponse.status === 408 && retryCount < MAX_RETRIES_ON_TIMEOUT) {
-        console.log(`Timeout on attempt ${retryCount + 1}, retrying in 5s...`);
-        retryCount++;
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        continue;
-      }
-
-      // Non-timeout error or last retry - exit loop
-      break;
     }
 
     if (analyzeParseError) {
