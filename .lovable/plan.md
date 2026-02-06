@@ -1,99 +1,124 @@
 
-# Corrigir "Empty Response" nos 12 Arquivos com Erro
+# Auto-Recovery: Retry Automatico de Arquivos com Erro
 
-## Diagnostico
+## O que muda
 
-Existem **12 arquivos** com erro "Empty response from function". A causa raiz e dupla:
+Hoje, se um arquivo falha todas as tentativas, ele fica como `error` para sempre. Com esta mudanca, o sistema automaticamente tenta novamente arquivos com erro -- sem intervencao humana.
 
-1. **`analyze-call` morre pelo Edge Runtime** (~150s) antes de responder, resultando em corpo vazio (nao retorna 408)
-2. **`import-and-analyze` so faz retry em status 408**, mas quando o runtime mata a funcao, o status pode ser 200 com corpo vazio -- nao e retentado
+## Estrategia em 2 partes
 
-O fix anterior (adicionar `withTimeout` na analise direta) ajuda para novas chamadas, mas:
-- Nao resolve os 12 arquivos ja com erro
-- Nao cobre o cenario onde o runtime mata a funcao antes do `withTimeout` agir (ex: a propria rede retorna vazio)
+### Parte 1: Cron Job de auto-recovery via `stale-file-cleanup`
 
-## Solucao em 3 partes
+O `stale-file-cleanup` ja existe e faz limpeza de arquivos presos. Vamos expandi-lo para tambem **resetar arquivos com erro retryable** (Empty response, Timeout, AbortError, No chunks) automaticamente, ate um maximo de 5 tentativas.
 
-### Parte 1: Retry em "Empty response" no `import-and-analyze`
+Arquivos com erros permanentes (call muito curta, export falhou) NAO serao retentados.
 
-Atualmente so faz retry para `status === 408`. Precisa tambem fazer retry quando `analyzeParseError === "Empty response from function"`.
+**Arquivo**: `supabase/functions/stale-file-cleanup/index.ts`
 
-**Arquivo**: `supabase/functions/import-and-analyze/index.ts` (linhas 546-552)
-
-Alterar de:
+Adicionar ao final da funcao:
 ```typescript
-// Retry only for timeouts (408)
-if (analyzeResponse.status === 408 && retryCount < MAX_RETRIES_ON_TIMEOUT) {
+// 5. Auto-retry: Reset retryable errors (max 5 attempts)
+const retryablePatterns = [
+  '%Empty response%',
+  '%Timeout%', 
+  '%AbortError%',
+  '%No chunks analyzed%',
+  '%timeout%',
+  '%TIMEOUT%'
+];
+
+// Only retry files with retry_count < 5
+for (const pattern of retryablePatterns) {
+  const { data: retryFiles } = await supabase
+    .from("imported_files")
+    .update({ 
+      status: "pending", 
+      error_message: null,
+      started_processing_at: null
+    })
+    .eq("status", "error")
+    .like("error_message", pattern)
+    .lt("retry_count", 5)
+    .select("id");
+
+  if (retryFiles?.length) {
+    results.autoRetried += retryFiles.length;
+  }
+}
 ```
 
-Para:
-```typescript
-// Retry for timeouts (408) AND empty responses (runtime killed the function)
-const isRetryable = analyzeResponse.status === 408 || analyzeParseError === "Empty response from function";
-if (isRetryable && retryCount < MAX_RETRIES_ON_TIMEOUT) {
-```
+### Parte 2: Agendar execucao automatica com pg_cron
 
-### Parte 2: Adicionar `AbortSignal` com timeout na chamada fetch do `import-and-analyze`
+Criar uma migration SQL que configura o `stale-file-cleanup` para rodar **a cada 10 minutos** automaticamente via `pg_cron` + `pg_net`.
 
-O `import-and-analyze` chama `analyze-call` sem timeout proprio. Se `analyze-call` morrer, o fetch fica pendurado ate o Edge Runtime matar `import-and-analyze` tambem.
-
-**Arquivo**: `supabase/functions/import-and-analyze/index.ts` (linhas 522-535)
-
-Adicionar `AbortController` com timeout de 120s:
-```typescript
-const analyzeController = new AbortController();
-const analyzeTimeout = setTimeout(() => analyzeController.abort(), 120000);
-
-analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
-  method: "POST",
-  signal: analyzeController.signal,
-  headers: { ... },
-  body: JSON.stringify({ ... }),
-});
-
-clearTimeout(analyzeTimeout);
-```
-
-E tratar `AbortError` como retryable no catch.
-
-### Parte 3: Resetar os 12 arquivos com erro para "pending"
-
-Os arquivos ja marcados como `error` com "Empty response" precisam ser resetados para `pending` para serem reprocessados automaticamente.
-
-**Migracao SQL**:
 ```sql
-UPDATE imported_files 
-SET status = 'pending', 
-    error_message = NULL, 
-    started_processing_at = NULL,
-    retry_count = 0
-WHERE status = 'error' 
-  AND error_message LIKE '%Empty response from function%';
+-- Agendar cleanup a cada 10 minutos
+SELECT cron.schedule(
+  'auto-recovery-cleanup',
+  '*/10 * * * *',
+  $$
+  SELECT net.http_post(
+    url := current_setting('app.settings.service_url') || '/functions/v1/stale-file-cleanup',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key'),
+      'Content-Type', 'application/json'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
 ```
 
-Tambem resetar o arquivo com erro "No chunks analyzed before timeout":
-```sql
-UPDATE imported_files 
-SET status = 'pending', 
-    error_message = NULL, 
-    started_processing_at = NULL,
-    retry_count = 0
-WHERE status = 'error' 
-  AND error_message LIKE '%No chunks analyzed before timeout%';
+**Alternativa sem pg_cron**: Se `pg_cron` nao estiver disponivel, adicionar um timer no frontend que chama `stale-file-cleanup` a cada 10 minutos enquanto a aba Admin estiver aberta.
+
+## Resultado esperado
+
+```text
+Arquivo falha tentativa 1 → retry automatico em ~10 min
+Arquivo falha tentativa 2 → retry automatico em ~10 min  
+Arquivo falha tentativa 3 → retry automatico em ~10 min
+Arquivo falha tentativa 4 → retry automatico em ~10 min
+Arquivo falha tentativa 5 → marcado como erro PERMANENTE (nao tenta mais)
 ```
+
+- Probabilidade de erro permanente apos 5 tentativas: **<1%** (baseado no fato de que a maioria dos erros eram timeouts transientes)
+- Tempo maximo ate correcao automatica: **~50 minutos** (5 tentativas x 10 min intervalo)
+- Zero intervencao manual necessaria
 
 ## Resumo das alteracoes
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `import-and-analyze/index.ts` linhas 546-552 | Retry tambem em "Empty response" |
-| `import-and-analyze/index.ts` linhas 519-535 | `AbortController` com 120s timeout no fetch |
-| `import-and-analyze/index.ts` linhas 554-556 | Tratar `AbortError` como retryable |
-| Migration SQL | Resetar 13 arquivos com erro para "pending" |
+| `supabase/functions/stale-file-cleanup/index.ts` | Adicionar logica de auto-retry para erros retryable com retry_count < 5 |
+| Migration SQL | Agendar `stale-file-cleanup` via pg_cron a cada 10 minutos (ou fallback frontend) |
+| `src/components/admin/ImportStatusPanel.tsx` | Adicionar indicador visual de "auto-retry ativo" e contagem de retries pendentes |
 
-## Resultado esperado
+## Detalhes Tecnicos
 
-- Novas importacoes: se `analyze-call` morrer, `import-and-analyze` faz ate 2 retries automaticos
-- Se o fetch pendurar, o `AbortController` corta em 120s e tenta novamente
-- Os 13 arquivos existentes com erro voltam para a fila e serao reprocessados
-- Combinado com o fix anterior (timeout na analise direta do `analyze-call`), a taxa de sucesso deve subir significativamente
+### Erros retryable vs permanentes
+
+**Retryable** (serao retentados automaticamente):
+- "Empty response from function"
+- "Timeout" / "408"
+- "AbortError"
+- "No chunks analyzed before timeout"
+- "Fetch timeout"
+
+**Permanentes** (NAO serao retentados):
+- "Call muito curta"
+- "Failed to export document" 
+- "Duplicate content hash"
+- Qualquer erro com retry_count >= 5
+
+### Fallback frontend (se pg_cron nao disponivel)
+
+Adicionar no `ImportStatusPanel.tsx` um `useEffect` com `setInterval` de 10 minutos que chama `stale-file-cleanup`. Isso garante auto-recovery enquanto algum admin estiver com a pagina aberta.
+
+```typescript
+useEffect(() => {
+  const interval = setInterval(async () => {
+    await supabase.functions.invoke('stale-file-cleanup');
+  }, 600000); // 10 minutos
+  return () => clearInterval(interval);
+}, []);
+```
