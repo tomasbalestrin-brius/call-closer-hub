@@ -1,113 +1,99 @@
 
-# Corrigir Timeout de Análise e Metadados de Análise Parcial
+# Corrigir "Empty Response" nos 12 Arquivos com Erro
 
-## Problema 1: "Empty Response" em imports (Falha Critica)
+## Diagnostico
 
-O que acontece hoje:
-- Arquivos menores que 100KB vao para analise "direta" (sem chunking)
-- A analise direta chama `callOpenAI()` sem nenhum timeout interno
-- Se a OpenAI demora mais que ~150s (limite do Edge Runtime), a funcao e encerrada abruptamente pelo runtime, resultando em "Empty response"
-- Mesmo arquivos que usam chunking podem falhar se a analise total ultrapassa o limite
+Existem **12 arquivos** com erro "Empty response from function". A causa raiz e dupla:
 
-**Causa raiz**: A analise direta nao tem protecao de timeout. O `abortController` so e usado no path de chunking.
+1. **`analyze-call` morre pelo Edge Runtime** (~150s) antes de responder, resultando em corpo vazio (nao retorna 408)
+2. **`import-and-analyze` so faz retry em status 408**, mas quando o runtime mata a funcao, o status pode ser 200 com corpo vazio -- nao e retentado
 
-### Correcao
+O fix anterior (adicionar `withTimeout` na analise direta) ajuda para novas chamadas, mas:
+- Nao resolve os 12 arquivos ja com erro
+- Nao cobre o cenario onde o runtime mata a funcao antes do `withTimeout` agir (ex: a propria rede retorna vazio)
 
-1. **Envolver a analise direta com `withTimeout`** para que, se a OpenAI demorar demais, a funcao retorne um erro controlado (408) em vez de morrer silenciosamente
-2. **Reduzir `MAX_SIZE_FOR_DIRECT` de 100KB para 60KB** - Forcando mais arquivos a usar o path de chunking que ja tem protecao de timeout
-3. **Adicionar `signal: abortSignal` nas chamadas fetch para OpenAI** no `callOpenAI` - Permitindo cancelamento gracioso quando o timeout dispara
-4. **Envolver o bloco de analise direta em `withTimeout`** usando `ANALYSIS_TIMEOUT` como limite
+## Solucao em 3 partes
 
-### Mudancas no codigo (`analyze-call/index.ts`)
+### Parte 1: Retry em "Empty response" no `import-and-analyze`
 
-```text
-Linha 27: MAX_SIZE_FOR_DIRECT = 60000 (era 100000)
-Linha 1500: callOpenAI recebe abortSignal opcional
-Linha 1514: fetch passa signal: abortSignal
-Linhas 2084-2090: Envolver callOpenAI + parse com withTimeout e fallback
-```
+Atualmente so faz retry para `status === 408`. Precisa tambem fazer retry quando `analyzeParseError === "Empty response from function"`.
 
-Se a analise direta expirar, o sistema:
-1. Loga o timeout
-2. Retorna resposta 408 com mensagem clara
-3. O `process-user-files` trata o 408 como retryable e tenta novamente
+**Arquivo**: `supabase/functions/import-and-analyze/index.ts` (linhas 546-552)
 
----
-
-## Problema 4: Metadados de analise parcial nao salvos
-
-**Causa raiz**: Na linha 2230, o codigo usa `data.__metadata` para buscar os metadados, mas o campo correto e `data.analysis_metadata` (definido nas linhas 1494 e 2093). Resultado: o campo **sempre** cai no fallback padrao que diz `is_partial_analysis: false`.
-
-### Correcao
-
-Alterar a linha 2230 de:
+Alterar de:
 ```typescript
-analysis_metadata: data.__metadata || { ... }
+// Retry only for timeouts (408)
+if (analyzeResponse.status === 408 && retryCount < MAX_RETRIES_ON_TIMEOUT) {
 ```
 
 Para:
 ```typescript
-analysis_metadata: data.analysis_metadata || { ... }
+// Retry for timeouts (408) AND empty responses (runtime killed the function)
+const isRetryable = analyzeResponse.status === 408 || analyzeParseError === "Empty response from function";
+if (isRetryable && retryCount < MAX_RETRIES_ON_TIMEOUT) {
 ```
 
-Isso garante que:
-- Analises parciais (chunked com timeout) serao corretamente marcadas como `is_partial_analysis: true`
-- Sinteses de emergencia serao marcadas como `is_emergency_synthesis: true`
-- O alerta visual no `CallDetailDialog` finalmente aparecera para calls com analise incompleta
+### Parte 2: Adicionar `AbortSignal` com timeout na chamada fetch do `import-and-analyze`
 
----
+O `import-and-analyze` chama `analyze-call` sem timeout proprio. Se `analyze-call` morrer, o fetch fica pendurado ate o Edge Runtime matar `import-and-analyze` tambem.
+
+**Arquivo**: `supabase/functions/import-and-analyze/index.ts` (linhas 522-535)
+
+Adicionar `AbortController` com timeout de 120s:
+```typescript
+const analyzeController = new AbortController();
+const analyzeTimeout = setTimeout(() => analyzeController.abort(), 120000);
+
+analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
+  method: "POST",
+  signal: analyzeController.signal,
+  headers: { ... },
+  body: JSON.stringify({ ... }),
+});
+
+clearTimeout(analyzeTimeout);
+```
+
+E tratar `AbortError` como retryable no catch.
+
+### Parte 3: Resetar os 12 arquivos com erro para "pending"
+
+Os arquivos ja marcados como `error` com "Empty response" precisam ser resetados para `pending` para serem reprocessados automaticamente.
+
+**Migracao SQL**:
+```sql
+UPDATE imported_files 
+SET status = 'pending', 
+    error_message = NULL, 
+    started_processing_at = NULL,
+    retry_count = 0
+WHERE status = 'error' 
+  AND error_message LIKE '%Empty response from function%';
+```
+
+Tambem resetar o arquivo com erro "No chunks analyzed before timeout":
+```sql
+UPDATE imported_files 
+SET status = 'pending', 
+    error_message = NULL, 
+    started_processing_at = NULL,
+    retry_count = 0
+WHERE status = 'error' 
+  AND error_message LIKE '%No chunks analyzed before timeout%';
+```
 
 ## Resumo das alteracoes
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `supabase/functions/analyze-call/index.ts` linha 27 | `MAX_SIZE_FOR_DIRECT = 60000` |
-| `supabase/functions/analyze-call/index.ts` linha 1500 | `callOpenAI` recebe `abortSignal?` |
-| `supabase/functions/analyze-call/index.ts` linha 1514 | Adicionar `signal` ao fetch |
-| `supabase/functions/analyze-call/index.ts` linhas 2084-2090 | Proteger analise direta com `withTimeout` |
-| `supabase/functions/analyze-call/index.ts` linha 2230 | `data.analysis_metadata` (corrigir bug `__metadata`) |
+| `import-and-analyze/index.ts` linhas 546-552 | Retry tambem em "Empty response" |
+| `import-and-analyze/index.ts` linhas 519-535 | `AbortController` com 120s timeout no fetch |
+| `import-and-analyze/index.ts` linhas 554-556 | Tratar `AbortError` como retryable |
+| Migration SQL | Resetar 13 arquivos com erro para "pending" |
 
-## Detalhes Tecnicos
+## Resultado esperado
 
-### Analise direta com timeout (linhas 2084-2101)
-
-```typescript
-// Analise direta COM protecao de timeout
-const directTimeout = ANALYSIS_TIMEOUT - (Date.now() - startTime);
-const masterResponse = await withTimeout(
-  callOpenAI(MASTER_PROMPT, transcription, abortController.signal),
-  directTimeout,
-  null
-);
-
-if (!masterResponse) {
-  console.log("Direct analysis timed out, returning 408");
-  clearTimeout(timeoutId);
-  return new Response(
-    JSON.stringify({ error: "Analysis timeout on direct mode" }),
-    { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
-```
-
-### callOpenAI com signal (linha 1500)
-
-```typescript
-async function callOpenAI(
-  systemPrompt: string,
-  transcription: string,
-  abortSignal?: AbortSignal
-): Promise<string> {
-  // ... existing code ...
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    signal: abortSignal, // <-- NOVO
-    headers: { ... },
-    body: JSON.stringify({ ... }),
-  });
-}
-```
-
-### Necessidade de variavel startTime no serve()
-
-Adicionar `const startTime = Date.now()` no inicio do handler para calcular o timeout restante na analise direta.
+- Novas importacoes: se `analyze-call` morrer, `import-and-analyze` faz ate 2 retries automaticos
+- Se o fetch pendurar, o `AbortController` corta em 120s e tenta novamente
+- Os 13 arquivos existentes com erro voltam para a fila e serao reprocessados
+- Combinado com o fix anterior (timeout na analise direta do `analyze-call`), a taxa de sucesso deve subir significativamente
