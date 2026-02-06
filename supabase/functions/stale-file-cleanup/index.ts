@@ -118,13 +118,47 @@ serve(async (req) => {
       }
     }
 
-    console.log("Cleanup completed:", results);
+    // 5. Auto-retry: Reset retryable errors (max 5 attempts)
+    const retryablePatterns = [
+      '%Empty response%',
+      '%Timeout%',
+      '%AbortError%',
+      '%No chunks analyzed%',
+      '%timeout%',
+      '%TIMEOUT%',
+      '%Fetch timeout%'
+    ];
+
+    let autoRetried = 0;
+
+    for (const pattern of retryablePatterns) {
+      const { data: retryFiles, error: retryError } = await supabase
+        .from("imported_files")
+        .update({
+          status: "pending",
+          error_message: null,
+          started_processing_at: null
+        })
+        .eq("status", "error")
+        .like("error_message", pattern)
+        .lt("retry_count", 5)
+        .select("id");
+
+      if (retryError) {
+        console.error(`Error retrying pattern ${pattern}:`, retryError);
+      } else if (retryFiles?.length) {
+        autoRetried += retryFiles.length;
+        console.log(`Auto-retried ${retryFiles.length} files matching pattern: ${pattern}`);
+      }
+    }
+
+    console.log("Cleanup completed:", { ...results, autoRetried });
 
     return new Response(
       JSON.stringify({
         success: true,
-        results,
-        message: `Cleanup: ${results.staleFilesReset} arquivos resetados, ${results.orphanedSessionsFixed + results.staleSessionsReset} sessões corrigidas`
+        results: { ...results, autoRetried },
+        message: `Cleanup: ${results.staleFilesReset} arquivos resetados, ${results.orphanedSessionsFixed + results.staleSessionsReset} sessões corrigidas, ${autoRetried} arquivos para auto-retry`
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
