@@ -19,15 +19,8 @@ interface MentoriaExtraDialogProps {
 }
 
 const MENTORIA_OPTIONS = [
-  'Mentoria Comercial',
-  'Mentoria de Marketing',
-  'Mentoria de Mindset',
-  'Mentoria de Vendas',
-  'Mentoria de Liderança',
-  'Mentoria Especial',
-  'Mentoria de Grupo',
-  'Mentoria Individual',
-  'Outro',
+  'Mentoria Cleiton',
+  'Mentoria Julia',
 ];
 
 export default function MentoriaExtraDialog({
@@ -37,7 +30,6 @@ export default function MentoriaExtraDialog({
   onActivityAdded,
 }: MentoriaExtraDialogProps) {
   const [selectedMentoria, setSelectedMentoria] = useState('');
-  const [customMentoria, setCustomMentoria] = useState('');
   const [activityDate, setActivityDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   
@@ -50,20 +42,17 @@ export default function MentoriaExtraDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const activityName = selectedMentoria === 'Outro' ? customMentoria : selectedMentoria;
-    
-    if (!activityName.trim()) return;
+    if (!selectedMentoria.trim()) return;
     
     await createActivity.mutateAsync({
       client_id: client.id,
       activity_type: 'mentoria',
-      activity_name: activityName,
+      activity_name: selectedMentoria,
       activity_date: activityDate,
       notes: notes.trim() || null,
     });
     
     setSelectedMentoria('');
-    setCustomMentoria('');
     setNotes('');
     onActivityAdded?.();
   };
@@ -99,17 +88,6 @@ export default function MentoriaExtraDialog({
             </Select>
           </div>
           
-          {selectedMentoria === 'Outro' && (
-            <div className="space-y-2">
-              <Label>Nome da Mentoria</Label>
-              <Input
-                value={customMentoria}
-                onChange={(e) => setCustomMentoria(e.target.value)}
-                placeholder="Digite o nome da mentoria..."
-              />
-            </div>
-          )}
-          
           <div className="space-y-2">
             <Label>Data de Participação</Label>
             <Input
@@ -132,7 +110,7 @@ export default function MentoriaExtraDialog({
           <Button 
             type="submit" 
             className="w-full" 
-            disabled={createActivity.isPending || !selectedMentoria || (selectedMentoria === 'Outro' && !customMentoria)}
+            disabled={createActivity.isPending || !selectedMentoria}
           >
             {createActivity.isPending ? (
               <>
