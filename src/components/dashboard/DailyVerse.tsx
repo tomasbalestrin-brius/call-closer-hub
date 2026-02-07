@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen } from 'lucide-react';
@@ -11,34 +11,25 @@ interface Verse {
   category: string;
 }
 
-// Simple hash function to generate a consistent number from a string
 function hashCode(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = hash & hash;
   }
   return Math.abs(hash);
 }
 
 export default function DailyVerse() {
   const { user } = useAuth();
-  const [verse, setVerse] = useState<Verse | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchDailyVerse();
-    }
-  }, [user]);
+  const { data: verse, isLoading: loading } = useQuery({
+    queryKey: ['daily-verse', user?.id],
+    queryFn: async (): Promise<Verse | null> => {
+      if (!user) return null;
 
-  const fetchDailyVerse = async () => {
-    if (!user) return;
-
-    try {
-      // Generate a unique verse index based on user ID + current date
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
       const hashInput = `${user.id}${today}`;
       const hash = hashCode(hashInput);
       const verseIndex = (hash % 365) + 1;
@@ -50,16 +41,11 @@ export default function DailyVerse() {
         .single();
 
       if (error) throw error;
-
-      if (data) {
-        setVerse(data);
-      }
-    } catch (error) {
-      console.error('Error fetching daily verse:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data;
+    },
+    staleTime: 24 * 60 * 60 * 1000, // 24h
+    enabled: !!user,
+  });
 
   if (loading) {
     return (

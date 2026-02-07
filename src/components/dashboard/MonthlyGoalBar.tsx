@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useMonthlySales } from '@/hooks/useMonthlySales';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Flag } from 'lucide-react';
@@ -11,23 +11,14 @@ export default function MonthlyGoalBar() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const { data: salesData } = useMonthlySales();
-  const [goalValue, setGoalValue] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
 
   const currentValue = salesData?.totalSale ?? 0;
 
-  useEffect(() => {
-    if (user) {
-      setGoalValue(null);
-      setLoading(true);
-      fetchGoal();
-    }
-  }, [user, isAdmin]);
+  const { data: goalValue = null } = useQuery({
+    queryKey: ['monthly-goal', user?.id, isAdmin],
+    queryFn: async () => {
+      if (!user) return null;
 
-  const fetchGoal = async () => {
-    if (!user) return;
-
-    try {
       const now = new Date();
       let query = supabase
         .from('monthly_goals')
@@ -36,24 +27,21 @@ export default function MonthlyGoalBar() {
         .eq('year', now.getFullYear());
 
       if (isAdmin) {
-        // Sum all closers' goals
         const { data, error } = await query;
         if (error) throw error;
         if (data && data.length > 0) {
-          const total = data.reduce((acc, g) => acc + Number(g.goal_value), 0);
-          setGoalValue(total);
+          return data.reduce((acc, g) => acc + Number(g.goal_value), 0);
         }
+        return null;
       } else {
         const { data, error } = await query.eq('closer_id', user.id).maybeSingle();
         if (error) throw error;
-        if (data) setGoalValue(Number(data.goal_value));
+        return data ? Number(data.goal_value) : null;
       }
-    } catch (error) {
-      console.error('Error fetching monthly goal:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    staleTime: 60_000,
+    enabled: !!user,
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
