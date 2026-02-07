@@ -1,128 +1,169 @@
 
-# Logs de Erros + Auto-limpeza de "Call Muito Curta"
 
-## O que sera feito
+# Otimizacao de Carregamento e Performance do Sistema
 
-### 1. Nova aba "Logs de Erros" ao lado de Observabilidade
+## Problemas identificados
 
-Adicionar uma nova aba no painel Admin que mostra os erros recentes de importacao, buscando da tabela `system_logs` (ja existente) e da tabela `imported_files` (erros ativos). Permite ao admin ver rapidamente quais arquivos falharam, de qual usuario, e o motivo.
+1. **Sem code splitting**: Todas as 14 paginas sao importadas estaticamente no App.tsx, carregando o bundle inteiro no primeiro acesso
+2. **useAuth() duplicado**: Chamado independentemente em MainLayout, Sidebar, Dashboard, DashboardHeader, DailyVerse, QuotaProgressBar, MonthlyGoalBar -- cada um cria uma nova subscription do Supabase Auth
+3. **useUserRole() duplicado**: Chamado separadamente em Sidebar e em cada pagina via useUserPermissions, fazendo query duplicada na tabela user_roles
+4. **Queries duplicadas no Dashboard**: QuotaProgressBar e MonthlyGoalBar fazem queries separadas na tabela clients com filtros quase identicos (sold_at do mes atual)
+5. **Dashboard sem React Query**: Usa useEffect manual, sem cache, sem deduplicacao -- toda troca de filtro refaz todas as queries do zero
+6. **N+1 na pagina Clients**: Busca TODAS as calls para descobrir a ultima data de cada cliente, em vez de usar uma query otimizada
 
-### 2. Auto-limpeza de erros "Call muito curta"
+## Solucao
 
-No `import-and-analyze`, quando um arquivo for rejeitado por ser curto demais:
-- Registrar o evento na tabela `system_logs` com o nome do arquivo, usuario, e tamanho
-- Deletar o registro da tabela `imported_files` (em vez de deixar como `error`)
+### 1. Code Splitting com React.lazy
 
-Assim, o erro fica apenas como registro historico nos logs, sem poluir os contadores de erro do painel de importacao.
+Converter todas as rotas (exceto Index/Auth que sao as mais acessadas) para lazy loading com React.lazy + Suspense. Isso reduz o bundle inicial significativamente.
 
----
+**Arquivo**: `src/App.tsx`
 
-## Alteracoes tecnicas
-
-### Arquivo 1: `supabase/functions/import-and-analyze/index.ts` (linhas 309-329)
-
-Apos marcar o erro de "call muito curta", adicionar:
-1. Chamar `log_event` RPC para registrar o erro no `system_logs` com metadata contendo `file_name` e `content_length`
-2. Deletar o registro de `imported_files` em vez de deixar como `error`
-
+Trocar imports estaticos por dinamicos:
 ```typescript
-// Antes: marca como error e retorna
-// Depois: loga no system_logs + deleta o imported_file
+const Calls = lazy(() => import('./pages/Calls'));
+const Clients = lazy(() => import('./pages/Clients'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Portfolio = lazy(() => import('./pages/Portfolio'));
+const IntensivoCRM = lazy(() => import('./pages/IntensivoCRM'));
+// ... demais paginas
+```
 
-await supabase.rpc('log_event', {
-  p_level: 'warn',
-  p_service: 'import-and-analyze',
-  p_user_id: userId,
-  p_operation: 'quality_rejection',
-  p_metadata: {
-    file_name: fileName,
-    drive_file_id: fileId,
-    content_length: content.length,
-    minimum_length: MIN_CONTENT_LENGTH,
-    reason: 'call_muito_curta'
-  },
-  p_error_message: errorMsg
+Envolver Routes com `<Suspense fallback={<LoadingSpinner />}>`.
+
+### 2. AuthProvider com Context (eliminar duplicacao)
+
+Criar um `AuthProvider` que centraliza a subscription do Supabase Auth e expoe user/session via Context. Todos os componentes usam o mesmo estado, sem criar novas subscriptions.
+
+**Novo arquivo**: `src/contexts/AuthContext.tsx`
+
+Move a logica do useAuth para um Provider com createContext. O hook useAuth passa a consumir o context em vez de criar novas subscriptions.
+
+**Arquivo modificado**: `src/hooks/useAuth.ts`
+
+Refatorar para usar o Context:
+```typescript
+export function useAuth() {
+  return useContext(AuthContext);
+}
+```
+
+### 3. UserRoleProvider com Context (eliminar duplicacao)
+
+Mesmo padrao: criar um Provider que faz a query de role UMA vez e compartilha via Context.
+
+**Novo arquivo**: `src/contexts/UserRoleContext.tsx`
+
+O hook useUserRole passa a consumir o context. useUserPermissions continua funcionando sem mudanca.
+
+### 4. Unificar queries do Dashboard com React Query
+
+Converter as queries manuais (useEffect + useState) do Dashboard para React Query, obtendo:
+- Cache automatico (navegar para outra pagina e voltar = instantaneo)
+- Deduplicacao (mesma query nao roda 2x ao mesmo tempo)
+- staleTime de 30 segundos (evita re-fetch desnecessario)
+
+**Arquivo modificado**: `src/pages/Dashboard.tsx`
+
+Substituir fetchDashboardData por useQuery:
+```typescript
+const { data: stats, isLoading } = useQuery({
+  queryKey: ['dashboard-stats', user?.id, dateRange, selectedFunnel],
+  queryFn: () => fetchDashboardData(),
+  staleTime: 30_000,
+  enabled: !!user,
 });
-
-// Deletar o registro para nao poluir contadores
-await supabase
-  .from("imported_files")
-  .delete()
-  .eq("id", importRecordId);
 ```
 
-### Arquivo 2: `src/components/admin/ErrorLogsPanel.tsx` (novo componente)
+### 5. Unificar QuotaProgressBar e MonthlyGoalBar
 
-Componente que exibe:
-- Lista de erros recentes do `system_logs` (level = 'error' ou 'warn')
-- Filtro por servico e nivel
-- Para cada erro: timestamp, servico, usuario, mensagem, e metadata (nome do arquivo)
-- Secao separada para "Calls rejeitadas" (operation = 'quality_rejection') com nome do arquivo e tamanho
+Ambos consultam `clients` com `is_sold = true` e `sold_at` do mes atual. Criar um hook compartilhado `useMonthlySales` com React Query que faz UMA query e retorna os dados para ambos.
 
-### Arquivo 3: `src/pages/Admin.tsx` (linhas 441-444)
-
-Adicionar nova aba apos "Observabilidade":
+**Novo arquivo**: `src/hooks/useMonthlySales.ts`
 
 ```typescript
-<TabsTrigger value="error-logs" className="flex items-center gap-2">
-  <AlertTriangle className="w-4 h-4" />
-  Logs de Erros
-</TabsTrigger>
+export function useMonthlySales() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['monthly-sales', user?.id],
+    queryFn: async () => {
+      // Uma unica query retornando entry_value e sale_value
+      const { data } = await supabase
+        .from('clients')
+        .select('entry_value, sale_value')
+        .eq('closer_id', user.id)
+        .eq('is_sold', true)
+        .gte('sold_at', monthStart)
+        .lte('sold_at', monthEnd);
+      return {
+        totalEntry: sum of entry_value,
+        totalSale: sum of sale_value,
+      };
+    },
+    staleTime: 60_000,
+  });
+}
 ```
 
-E o conteudo correspondente:
+**Arquivos modificados**: `QuotaProgressBar.tsx` e `MonthlyGoalBar.tsx` passam a usar `useMonthlySales()`.
 
+### 6. Corrigir N+1 na pagina Clients
+
+Em vez de buscar todas as calls e filtrar no JS, usar uma subquery ou RPC que retorna apenas o `max(call_date)` por client_id.
+
+**Arquivo modificado**: `src/pages/Clients.tsx`
+
+Substituir a logica de fetch de lastCallDate:
 ```typescript
-<TabsContent value="error-logs">
-  <ErrorLogsPanel />
-</TabsContent>
+// Antes: busca TODAS as calls e filtra no JS
+// Depois: query otimizada
+const { data: lastCalls } = await supabase
+  .from('calls')
+  .select('client_id, call_date')
+  .in('client_id', clientIds)
+  .order('call_date', { ascending: false });
+
+// Manter apenas a primeira ocorrencia por client_id (ja ordenado desc)
+const lastCallDates: Record<string, string> = {};
+lastCalls?.forEach(call => {
+  if (!lastCallDates[call.client_id]) {
+    lastCallDates[call.client_id] = call.call_date;
+  }
+});
 ```
 
-### Arquivo 4: Migracao SQL
+Isso ja e o que o codigo faz, mas vamos adicionar `.limit()` proporcional e converter para React Query com cache.
 
-Resetar os 4 registros existentes de "call muito curta":
-1. Inserir logs no `system_logs` para cada um (preservar historico)
-2. Deletar os registros de `imported_files`
+### 7. Componente LoadingSpinner reutilizavel
 
-```sql
--- Registrar no system_logs antes de deletar
-INSERT INTO system_logs (level, service, user_id, operation, error_message, metadata)
-SELECT 
-  'warn', 
-  'import-and-analyze', 
-  user_id, 
-  'quality_rejection',
-  error_message,
-  jsonb_build_object(
-    'file_name', file_name,
-    'reason', 'call_muito_curta',
-    'migrated', true
-  )
-FROM imported_files
-WHERE error_message LIKE '%Call muito curta%';
+Criar um componente de loading consistente para o Suspense fallback e estados de carregamento.
 
--- Deletar registros de erro
-DELETE FROM imported_files
-WHERE error_message LIKE '%Call muito curta%';
-```
-
-### Tambem aplicar para conteudo invalido/corrompido
-
-O mesmo tratamento sera aplicado ao erro de "Conteudo invalido ou corrompido" (linhas 336-355 do import-and-analyze): logar + deletar.
+**Novo arquivo**: `src/components/LoadingSpinner.tsx`
 
 ---
 
-## Resumo
+## Resumo de arquivos
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `supabase/functions/import-and-analyze/index.ts` | Logar + deletar imported_file para calls curtas e conteudo corrompido |
-| `src/components/admin/ErrorLogsPanel.tsx` | Novo componente com lista de erros do system_logs |
-| `src/pages/Admin.tsx` | Nova aba "Logs de Erros" ao lado de Observabilidade |
-| Migracao SQL | Migrar 4 erros existentes para system_logs e deletar de imported_files |
+| Arquivo | Acao |
+|---------|------|
+| `src/App.tsx` | Code splitting com React.lazy + Suspense |
+| `src/contexts/AuthContext.tsx` | Novo - AuthProvider centralizado |
+| `src/contexts/UserRoleContext.tsx` | Novo - UserRoleProvider centralizado |
+| `src/hooks/useAuth.ts` | Refatorar para usar Context |
+| `src/hooks/useUserRole.ts` | Refatorar para usar Context |
+| `src/hooks/useMonthlySales.ts` | Novo - hook compartilhado para QuotaProgressBar + MonthlyGoalBar |
+| `src/components/dashboard/QuotaProgressBar.tsx` | Usar useMonthlySales |
+| `src/components/dashboard/MonthlyGoalBar.tsx` | Usar useMonthlySales |
+| `src/pages/Dashboard.tsx` | Converter para React Query |
+| `src/pages/Clients.tsx` | Otimizar query de lastCallDate |
+| `src/components/LoadingSpinner.tsx` | Novo - componente de loading |
+| `src/main.tsx` | Envolver App com AuthProvider + UserRoleProvider |
 
-## Resultado
+## Impacto esperado
 
-- Erros de "call curta" nao aparecem mais como erro no painel de importacao
-- Historico completo de rejeicoes fica nos logs (com nome do arquivo)
-- Nova aba permite ao admin ver todos os erros e rejeicoes em um so lugar
+- **Bundle inicial**: reducao de ~40-50% (code splitting)
+- **Queries no Dashboard**: de ~10 queries independentes para ~4 queries com cache
+- **Auth subscriptions**: de 7+ simultaneas para 1 unica
+- **Navegacao entre paginas**: instantanea com cache do React Query
+- **Re-renders**: reducao significativa com Context centralizado
+
