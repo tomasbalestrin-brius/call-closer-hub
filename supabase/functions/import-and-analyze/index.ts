@@ -309,13 +309,27 @@ serve(async (req) => {
     if (content.length < MIN_CONTENT_LENGTH) {
       const errorMsg = `Call muito curta (${content.length} caracteres). Mínimo: ${MIN_CONTENT_LENGTH} caracteres (~5 minutos de conversa)`;
       console.warn(`⚠️ ${errorMsg}`);
+
+      // Log no system_logs para histórico
+      await supabase.rpc('log_event', {
+        p_level: 'warning',
+        p_service: 'import-and-analyze',
+        p_user_id: userId,
+        p_operation: 'quality_rejection',
+        p_metadata: {
+          file_name: fileName,
+          drive_file_id: fileId,
+          content_length: content.length,
+          minimum_length: MIN_CONTENT_LENGTH,
+          reason: 'call_muito_curta'
+        },
+        p_error_message: errorMsg
+      });
+
+      // Deletar o registro para não poluir contadores de erro
       await supabase
         .from("imported_files")
-        .update({
-          status: "error",
-          error_message: errorMsg,
-          imported_at: new Date().toISOString()
-        })
+        .delete()
         .eq("id", importRecordId);
 
       return new Response(
@@ -336,13 +350,26 @@ serve(async (req) => {
     if (alphaRatio < 0.6) {
       const errorMsg = `Conteúdo inválido ou corrompido (apenas ${Math.round(alphaRatio * 100)}% de caracteres alfabéticos)`;
       console.warn(`⚠️ ${errorMsg}`);
+
+      // Log no system_logs para histórico
+      await supabase.rpc('log_event', {
+        p_level: 'warning',
+        p_service: 'import-and-analyze',
+        p_user_id: userId,
+        p_operation: 'quality_rejection',
+        p_metadata: {
+          file_name: fileName,
+          drive_file_id: fileId,
+          alpha_ratio: Math.round(alphaRatio * 100),
+          reason: 'conteudo_invalido'
+        },
+        p_error_message: errorMsg
+      });
+
+      // Deletar o registro para não poluir contadores de erro
       await supabase
         .from("imported_files")
-        .update({
-          status: "error",
-          error_message: errorMsg,
-          imported_at: new Date().toISOString()
-        })
+        .delete()
         .eq("id", importRecordId);
 
       return new Response(
