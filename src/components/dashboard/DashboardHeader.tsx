@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Badge } from '@/components/ui/badge';
 
 export type CloserLevel = 
@@ -24,6 +25,7 @@ const LEVEL_CONFIG: Record<CloserLevel, { label: string; color: string }> = {
 
 export default function DashboardHeader() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [closerLevel, setCloserLevel] = useState<CloserLevel>('assessor');
   const [displayName, setDisplayName] = useState('');
 
@@ -76,6 +78,11 @@ export default function DashboardHeader() {
         <Badge className={`${levelConfig.color} text-white`}>
           {levelConfig.label}
         </Badge>
+        {isAdmin && (
+          <Badge variant="outline" className="border-primary text-primary">
+            Visão Geral
+          </Badge>
+        )}
       </div>
       <p className="text-muted-foreground text-sm">
         Confira seu desempenho e acompanhe suas metas

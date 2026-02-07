@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useMonthlySales } from '@/hooks/useMonthlySales';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -8,6 +9,7 @@ import { Flag } from 'lucide-react';
 
 export default function MonthlyGoalBar() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const { data: salesData } = useMonthlySales();
   const [goalValue, setGoalValue] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,16 +27,25 @@ export default function MonthlyGoalBar() {
 
     try {
       const now = new Date();
-      const { data, error } = await supabase
+      let query = supabase
         .from('monthly_goals')
         .select('goal_value')
-        .eq('closer_id', user.id)
         .eq('month', now.getMonth() + 1)
-        .eq('year', now.getFullYear())
-        .maybeSingle();
+        .eq('year', now.getFullYear());
 
-      if (error) throw error;
-      if (data) setGoalValue(Number(data.goal_value));
+      if (isAdmin) {
+        // Sum all closers' goals
+        const { data, error } = await query;
+        if (error) throw error;
+        if (data && data.length > 0) {
+          const total = data.reduce((acc, g) => acc + Number(g.goal_value), 0);
+          setGoalValue(total);
+        }
+      } else {
+        const { data, error } = await query.eq('closer_id', user.id).maybeSingle();
+        if (error) throw error;
+        if (data) setGoalValue(Number(data.goal_value));
+      }
     } catch (error) {
       console.error('Error fetching monthly goal:', error);
     } finally {

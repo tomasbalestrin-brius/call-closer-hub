@@ -1,16 +1,37 @@
 import { useMonthlySales } from '@/hooks/useMonthlySales';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Target } from 'lucide-react';
 
-const QUOTA_VALUE = 80000;
+const QUOTA_VALUE_PER_CLOSER = 80000;
 
 export default function QuotaProgressBar() {
   const { data, isLoading } = useMonthlySales();
+  const { isAdmin } = useUserRole();
+
+  // Count closers for admin quota calculation
+  const { data: closerCount = 1 } = useQuery({
+    queryKey: ['closer-count'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('role', 'closer');
+      if (error) throw error;
+      return data?.length || 1;
+    },
+    staleTime: 300_000,
+    enabled: isAdmin,
+  });
+
+  const quotaValue = isAdmin ? QUOTA_VALUE_PER_CLOSER * closerCount : QUOTA_VALUE_PER_CLOSER;
   const currentValue = data?.totalEntry ?? 0;
 
-  const percentage = Math.min((currentValue / QUOTA_VALUE) * 100, 100);
-  const remaining = Math.max(QUOTA_VALUE - currentValue, 0);
+  const percentage = Math.min((currentValue / quotaValue) * 100, 100);
+  const remaining = Math.max(quotaValue - currentValue, 0);
 
   const getProgressColor = () => {
     if (percentage >= 100) return 'bg-emerald-500';
@@ -37,7 +58,7 @@ export default function QuotaProgressBar() {
       <CardContent className="space-y-3">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">
-            {formatCurrency(currentValue)} de {formatCurrency(QUOTA_VALUE)}
+            {formatCurrency(currentValue)} de {formatCurrency(quotaValue)}
           </span>
           <span className="font-semibold">{Math.round(percentage)}%</span>
         </div>
