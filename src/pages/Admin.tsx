@@ -23,7 +23,8 @@ import {
   Trash2,
   FileText,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
@@ -95,6 +96,7 @@ export default function Admin() {
     full_name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   useEffect(() => {
     if (isAdmin || isLeader) {
@@ -670,8 +672,53 @@ export default function Admin() {
               <TabsContent value="squads">
                 <SquadManagement />
               </TabsContent>
-              <TabsContent value="imports">
+              <TabsContent value="imports" className="space-y-6">
                 <ImportStatusPanel />
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg font-display flex items-center gap-2">
+                      <RefreshCw className="w-5 h-5" />
+                      Reanalisar Calls Incompletas
+                    </CardTitle>
+                    <CardDescription>
+                      Reanalisa todas as calls que tiveram timeout na análise original (nota geral &gt; 0 mas etapas zeradas)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      onClick={async () => {
+                        setIsReanalyzing(true);
+                        try {
+                          const { data, error } = await supabase.functions.invoke('batch-reanalyze', {
+                            body: { reanalyzeAll: true }
+                          });
+                          if (error) throw error;
+                          if (data?.error) throw new Error(data.error);
+                          toast.success(`Reanálise iniciada para ${data?.calls?.length || 0} calls. O processamento ocorre em segundo plano.`);
+                        } catch (err) {
+                          console.error('Batch reanalyze error:', err);
+                          toast.error(err instanceof Error ? err.message : 'Erro ao iniciar reanálise');
+                        } finally {
+                          setIsReanalyzing(false);
+                        }
+                      }}
+                      disabled={isReanalyzing}
+                      variant="outline"
+                    >
+                      {isReanalyzing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Iniciando...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          Reanalisar Todas
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
               </TabsContent>
               <TabsContent value="metrics">
                 <SystemMetricsDashboard />
