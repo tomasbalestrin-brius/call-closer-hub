@@ -1,41 +1,79 @@
 
 
-# Links Clicaveis no Card do Cliente (WhatsApp + Instagram)
+# Otimizar Performance da Pagina Squad View
 
-## O que muda
+## Problemas Identificados
 
-### 1. Telefone vira link do WhatsApp
-No card do cliente, o numero de telefone sera clicavel e abrira diretamente o WhatsApp Web/App para iniciar conversa.
+### 1. CRITICO: Busca de transcricoes completas desnecessariamente
+A query `select=*` na tabela `calls` traz o campo `transcription` (100.000+ caracteres por call) apenas para listar cards. Isso e o principal causador da lentidao - transferir megabytes de texto que nao sao exibidos na lista.
 
-### 2. Novo campo: Instagram
-Adicionar o campo `instagram` na base de dados e exibi-lo no card do cliente como link clicavel que abre o perfil no Instagram.
+### 2. Queries sequenciais no carregamento
+`fetchSquadMembers` faz 3 queries sequenciais (squads -> members -> profiles + roles). `fetchCloserData` faz mais 3 queries sequenciais (calls -> monthly_goals -> repitch clients). Total: 6 queries em cascata.
+
+### 3. Sem cache (React Query nao utilizado)
+A pagina usa `useState` + `useEffect` manual em vez de React Query, que ja esta instalado e configurado no projeto. Isso significa zero cache, zero deduplicacao, e re-fetch completo a cada interacao.
+
+### 4. Bug adicional: INSERT em `clients` retornando 403
+Os logs de rede mostram erro RLS na insercao de clientes (`new row violates row-level security policy for table "clients"`). Isso indica que admins tambem nao podem criar clientes em nome de closers - mesmo problema corrigido para `profiles`.
 
 ---
 
-## Detalhes tecnicos
+## Solucao
 
-### Parte 1 - Migration: Adicionar coluna `instagram` na tabela `clients`
+### Parte 1 - Selecionar apenas colunas necessarias na query de calls
 
-```sql
-ALTER TABLE public.clients ADD COLUMN instagram text;
+No `fetchCloserData`, trocar:
+```
+.select('*')
+```
+por:
+```
+.select('id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at')
 ```
 
-### Parte 2 - Atualizar o tipo `Client` (automatico)
+Isso exclui o campo `transcription` da listagem, reduzindo o payload de megabytes para kilobytes.
 
-O arquivo `types.ts` do banco e gerado automaticamente. Porem, o tipo manual em `src/types/index.ts` precisa receber o campo `instagram: string | null`.
+### Parte 2 - Paralelizar queries em fetchCloserData
 
-### Parte 3 - Atualizar `ClientCard.tsx`
+Trocar as 3 queries sequenciais por `Promise.all`:
+```typescript
+const [callsResult, goalResult, repitchResult] = await Promise.all([
+  supabase.from('calls').select('...colunas...').eq('closer_id', closerId)...,
+  supabase.from('monthly_goals').select('goal_value').eq('closer_id', closerId)...,
+  supabase.from('clients').select('id').eq('closer_id', closerId).eq('status', 'repitch')
+]);
+```
 
-- **Telefone**: Trocar o `<span>` do telefone por um `<a href="https://wa.me/NUMERO">` que abre o WhatsApp. Adicionar `onClick stopPropagation` para nao navegar ao detalhe do cliente.
-- **Instagram**: Adicionar uma nova linha com icone do Instagram (usar icone generico do Lucide, como `AtSign`) e um link `<a href="https://instagram.com/USUARIO">` clicavel. Tambem com `stopPropagation`.
+### Parte 3 - Paralelizar queries em fetchSquadMembers
 
-### Parte 4 - Atualizar formularios de criacao/edicao
+Apos obter os `userIds`, buscar `profiles` e `roles` em paralelo:
+```typescript
+const [profilesResult, rolesResult] = await Promise.all([
+  supabase.from('profiles').select('user_id, full_name').in('user_id', userIds),
+  supabase.from('user_roles').select('user_id, role').in('user_id', userIds)
+]);
+```
 
-- `NewClientDialog.tsx` - Adicionar campo "Instagram (@)" no formulario
-- `ClientEditDialog.tsx` - Adicionar campo "Instagram (@)" no formulario de edicao
+### Parte 4 - Corrigir RLS para INSERT de clientes por admin
 
-### Resultado
+Adicionar migration para permitir que admins criem clientes:
+```sql
+CREATE POLICY "Admins can insert clients"
+ON public.clients
+FOR INSERT
+TO authenticated
+WITH CHECK (has_role(auth.uid(), 'admin'::user_role));
+```
 
-- Telefone no card do cliente abre WhatsApp direto ao clicar
-- Instagram no card do cliente abre o perfil no Instagram ao clicar
-- Ambos os campos podem ser preenchidos na criacao e edicao do cliente
+---
+
+## Impacto esperado
+
+- **Payload de calls**: Reducao de ~95% (de MBs para KBs ao excluir transcricoes)
+- **Tempo de carregamento**: Reducao de ~50% com paralelizacao de queries
+- **Bug de criacao**: Admins poderao criar clientes em nome de closers
+
+## Arquivos modificados
+
+- `src/pages/SquadView.tsx` (otimizar queries)
+- Nova migration SQL (RLS para INSERT em clients)
