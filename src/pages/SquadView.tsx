@@ -70,11 +70,14 @@ export default function SquadView() {
   });
   const [reanalyzingCalls, setReanalyzingCalls] = useState(false);
 
+  const [hasFetchedMembers, setHasFetchedMembers] = useState(false);
+
   useEffect(() => {
-    if (!authLoading && !roleLoading && user && (isAdmin || isLeader)) {
+    if (!authLoading && !roleLoading && user && (isAdmin || isLeader) && !hasFetchedMembers) {
+      setHasFetchedMembers(true);
       fetchSquadMembers();
     }
-  }, [user, authLoading, roleLoading, isAdmin, isLeader]);
+  }, [user, authLoading, roleLoading, isAdmin, isLeader, hasFetchedMembers]);
 
   useEffect(() => {
     if (selectedCloserId) {

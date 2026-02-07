@@ -262,7 +262,7 @@ export default function ClientDetail() {
       // Fetch client - Admin/Leader can see any client, regular user only their own
       let query = supabase
         .from('clients')
-        .select('*')
+        .select('id, closer_id, name, email, phone, company, niche, status, source, revenue, has_partner, main_difficulty, main_pain, notes, negotiation_notes, sale_notes, entry_value, sale_value, followup_date, contract_validity, is_sold, sold_at, is_from_indication, indication_source_id, is_super_hot, product_offered, sdr_name, funnel_source, status_changed_at, created_at, updated_at, instagram, data_completed_at, name_normalized')
         .eq('id', id);
       
       // Only filter by closer_id for regular closers
@@ -278,7 +278,7 @@ export default function ClientDetail() {
       // Fetch calls for this client
       const { data: callsData, error: callsError } = await supabase
         .from('calls')
-        .select('*')
+        .select('id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at, notes, observation, company_name, consciousness_level, decision_reason, lead_classification, closer_classification, has_partner, next_contact_date, analysis_quality_score, analysis_metadata, deleted_at, deleted_by, source_file_id, google_doc_id, content_hash, transcription')
         .eq('client_id', id)
         .order('call_date', { ascending: false });
 

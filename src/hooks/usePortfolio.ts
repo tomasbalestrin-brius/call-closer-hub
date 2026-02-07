@@ -114,7 +114,7 @@ export function usePortfolioStudents() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('portfolio_students')
-        .select('*')
+        .select('id, client_id, closer_id, name, phone, email, niche, notes, current_ticket, entry_date, created_at, updated_at')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -132,7 +132,7 @@ export function useTicketUpgrades() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('ticket_upgrades')
-        .select('*')
+        .select('id, student_id, from_ticket, to_ticket, upgrade_date, sale_value, entry_value, notes, created_at')
         .order('upgrade_date', { ascending: false });
       
       if (error) throw error;
@@ -150,7 +150,7 @@ export function useStudentActivities() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('student_activities')
-        .select('*')
+        .select('id, student_id, activity_type, activity_name, activity_date, notes, created_at')
         .order('activity_date', { ascending: false });
       
       if (error) throw error;
@@ -168,7 +168,7 @@ export function useStudentIndications() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('indications')
-        .select('*')
+        .select('id, student_id, client_id, indicated_by, indicated_name, indicated_phone, indication_type, status, notes, created_at, updated_at')
         .not('student_id', 'is', null);
       
       if (error) throw error;
