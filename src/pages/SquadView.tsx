@@ -117,18 +117,13 @@ export default function SquadView() {
 
       if (error) throw error;
 
-      // Fetch profiles and roles for those members
+      // Fetch profiles and roles for those members in parallel
       const userIds = [...new Set(members?.map(m => m.user_id) || [])];
       
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('user_id, full_name')
-        .in('user_id', userIds);
-
-      const { data: roles } = await supabase
-        .from('user_roles')
-        .select('user_id, role')
-        .in('user_id', userIds);
+      const [{ data: profiles }, { data: roles }] = await Promise.all([
+        supabase.from('profiles').select('user_id, full_name').in('user_id', userIds),
+        supabase.from('user_roles').select('user_id, role').in('user_id', userIds)
+      ]);
 
       const enrichedMembers: SquadMember[] = userIds
         .filter(uid => uid !== user!.id) // Exclude self
@@ -161,35 +156,36 @@ export default function SquadView() {
       const fromDate = format(dateRange.from, 'yyyy-MM-dd');
       const toDate = format(dateRange.to, 'yyyy-MM-dd');
 
-      // Fetch calls
-      const { data: calls, error: callsError } = await supabase
-        .from('calls')
-        .select('*')
-        .eq('closer_id', closerId)
-        .gte('call_date', fromDate)
-        .lte('call_date', toDate)
-        .order('call_date', { ascending: false });
-
-      if (callsError) throw callsError;
-
-      // Fetch monthly goal
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
-      
-      const { data: goalData } = await supabase
-        .from('monthly_goals')
-        .select('goal_value')
-        .eq('closer_id', closerId)
-        .eq('month', currentMonth)
-        .eq('year', currentYear)
-        .maybeSingle();
 
-      // Fetch clients in "repitch" status for this closer
-      const { data: repitchClients } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('closer_id', closerId)
-        .eq('status', 'repitch');
+      // Fetch calls, goal, and repitch clients in parallel
+      const [callsResult, goalResult, repitchResult] = await Promise.all([
+        supabase
+          .from('calls')
+          .select('id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at, notes, observation, company_name, consciousness_level, decision_reason, lead_classification, closer_classification, has_partner, next_contact_date, analysis_quality_score, analysis_metadata, deleted_at, deleted_by, source_file_id, google_doc_id, content_hash')
+          .eq('closer_id', closerId)
+          .gte('call_date', fromDate)
+          .lte('call_date', toDate)
+          .order('call_date', { ascending: false }),
+        supabase
+          .from('monthly_goals')
+          .select('goal_value')
+          .eq('closer_id', closerId)
+          .eq('month', currentMonth)
+          .eq('year', currentYear)
+          .maybeSingle(),
+        supabase
+          .from('clients')
+          .select('id')
+          .eq('closer_id', closerId)
+          .eq('status', 'repitch')
+      ]);
+
+      const { data: calls, error: callsError } = callsResult;
+      if (callsError) throw callsError;
+      const { data: goalData } = goalResult;
+      const { data: repitchClients } = repitchResult;
       
       const repitchClientIds = new Set(repitchClients?.map(c => c.id) || []);
 
@@ -221,7 +217,7 @@ export default function SquadView() {
         monthlyGoal: goalData?.goal_value || 0
       });
 
-      setCloserCalls(calls as Call[] || []);
+      setCloserCalls((calls as unknown as Call[]) || []);
     } catch (error) {
       console.error('Error fetching closer data:', error);
       toast.error('Erro ao carregar dados do closer');
