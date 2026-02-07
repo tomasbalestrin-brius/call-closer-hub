@@ -22,7 +22,8 @@ import {
   Key,
   Trash2,
   FileText,
-  Activity
+  Activity,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
@@ -34,6 +35,7 @@ import { SetMonthlyGoalDialog } from '@/components/admin/SetMonthlyGoalDialog';
 import { ResetPasswordDialog } from '@/components/admin/ResetPasswordDialog';
 import { ImportStatusPanel } from '@/components/admin/ImportStatusPanel';
 import SystemMetricsDashboard from '@/components/admin/SystemMetricsDashboard';
+import { ErrorLogsPanel } from '@/components/admin/ErrorLogsPanel';
 import { Navigate } from 'react-router-dom';
 import { UserRole } from '@/types';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
@@ -442,6 +444,10 @@ export default function Admin() {
                   <Activity className="w-4 h-4" />
                   Observabilidade
                 </TabsTrigger>
+                <TabsTrigger value="error-logs" className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  Logs de Erros
+                </TabsTrigger>
               </>
             )}
           </TabsList>
@@ -669,6 +675,9 @@ export default function Admin() {
               </TabsContent>
               <TabsContent value="metrics">
                 <SystemMetricsDashboard />
+              </TabsContent>
+              <TabsContent value="error-logs">
+                <ErrorLogsPanel />
               </TabsContent>
             </>
           )}
