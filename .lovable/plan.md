@@ -1,124 +1,128 @@
 
-# Auto-Recovery: Retry Automatico de Arquivos com Erro
+# Logs de Erros + Auto-limpeza de "Call Muito Curta"
 
-## O que muda
+## O que sera feito
 
-Hoje, se um arquivo falha todas as tentativas, ele fica como `error` para sempre. Com esta mudanca, o sistema automaticamente tenta novamente arquivos com erro -- sem intervencao humana.
+### 1. Nova aba "Logs de Erros" ao lado de Observabilidade
 
-## Estrategia em 2 partes
+Adicionar uma nova aba no painel Admin que mostra os erros recentes de importacao, buscando da tabela `system_logs` (ja existente) e da tabela `imported_files` (erros ativos). Permite ao admin ver rapidamente quais arquivos falharam, de qual usuario, e o motivo.
 
-### Parte 1: Cron Job de auto-recovery via `stale-file-cleanup`
+### 2. Auto-limpeza de erros "Call muito curta"
 
-O `stale-file-cleanup` ja existe e faz limpeza de arquivos presos. Vamos expandi-lo para tambem **resetar arquivos com erro retryable** (Empty response, Timeout, AbortError, No chunks) automaticamente, ate um maximo de 5 tentativas.
+No `import-and-analyze`, quando um arquivo for rejeitado por ser curto demais:
+- Registrar o evento na tabela `system_logs` com o nome do arquivo, usuario, e tamanho
+- Deletar o registro da tabela `imported_files` (em vez de deixar como `error`)
 
-Arquivos com erros permanentes (call muito curta, export falhou) NAO serao retentados.
+Assim, o erro fica apenas como registro historico nos logs, sem poluir os contadores de erro do painel de importacao.
 
-**Arquivo**: `supabase/functions/stale-file-cleanup/index.ts`
+---
 
-Adicionar ao final da funcao:
+## Alteracoes tecnicas
+
+### Arquivo 1: `supabase/functions/import-and-analyze/index.ts` (linhas 309-329)
+
+Apos marcar o erro de "call muito curta", adicionar:
+1. Chamar `log_event` RPC para registrar o erro no `system_logs` com metadata contendo `file_name` e `content_length`
+2. Deletar o registro de `imported_files` em vez de deixar como `error`
+
 ```typescript
-// 5. Auto-retry: Reset retryable errors (max 5 attempts)
-const retryablePatterns = [
-  '%Empty response%',
-  '%Timeout%', 
-  '%AbortError%',
-  '%No chunks analyzed%',
-  '%timeout%',
-  '%TIMEOUT%'
-];
+// Antes: marca como error e retorna
+// Depois: loga no system_logs + deleta o imported_file
 
-// Only retry files with retry_count < 5
-for (const pattern of retryablePatterns) {
-  const { data: retryFiles } = await supabase
-    .from("imported_files")
-    .update({ 
-      status: "pending", 
-      error_message: null,
-      started_processing_at: null
-    })
-    .eq("status", "error")
-    .like("error_message", pattern)
-    .lt("retry_count", 5)
-    .select("id");
+await supabase.rpc('log_event', {
+  p_level: 'warn',
+  p_service: 'import-and-analyze',
+  p_user_id: userId,
+  p_operation: 'quality_rejection',
+  p_metadata: {
+    file_name: fileName,
+    drive_file_id: fileId,
+    content_length: content.length,
+    minimum_length: MIN_CONTENT_LENGTH,
+    reason: 'call_muito_curta'
+  },
+  p_error_message: errorMsg
+});
 
-  if (retryFiles?.length) {
-    results.autoRetried += retryFiles.length;
-  }
-}
+// Deletar o registro para nao poluir contadores
+await supabase
+  .from("imported_files")
+  .delete()
+  .eq("id", importRecordId);
 ```
 
-### Parte 2: Agendar execucao automatica com pg_cron
+### Arquivo 2: `src/components/admin/ErrorLogsPanel.tsx` (novo componente)
 
-Criar uma migration SQL que configura o `stale-file-cleanup` para rodar **a cada 10 minutos** automaticamente via `pg_cron` + `pg_net`.
+Componente que exibe:
+- Lista de erros recentes do `system_logs` (level = 'error' ou 'warn')
+- Filtro por servico e nivel
+- Para cada erro: timestamp, servico, usuario, mensagem, e metadata (nome do arquivo)
+- Secao separada para "Calls rejeitadas" (operation = 'quality_rejection') com nome do arquivo e tamanho
+
+### Arquivo 3: `src/pages/Admin.tsx` (linhas 441-444)
+
+Adicionar nova aba apos "Observabilidade":
+
+```typescript
+<TabsTrigger value="error-logs" className="flex items-center gap-2">
+  <AlertTriangle className="w-4 h-4" />
+  Logs de Erros
+</TabsTrigger>
+```
+
+E o conteudo correspondente:
+
+```typescript
+<TabsContent value="error-logs">
+  <ErrorLogsPanel />
+</TabsContent>
+```
+
+### Arquivo 4: Migracao SQL
+
+Resetar os 4 registros existentes de "call muito curta":
+1. Inserir logs no `system_logs` para cada um (preservar historico)
+2. Deletar os registros de `imported_files`
 
 ```sql
--- Agendar cleanup a cada 10 minutos
-SELECT cron.schedule(
-  'auto-recovery-cleanup',
-  '*/10 * * * *',
-  $$
-  SELECT net.http_post(
-    url := current_setting('app.settings.service_url') || '/functions/v1/stale-file-cleanup',
-    headers := jsonb_build_object(
-      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key'),
-      'Content-Type', 'application/json'
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-);
+-- Registrar no system_logs antes de deletar
+INSERT INTO system_logs (level, service, user_id, operation, error_message, metadata)
+SELECT 
+  'warn', 
+  'import-and-analyze', 
+  user_id, 
+  'quality_rejection',
+  error_message,
+  jsonb_build_object(
+    'file_name', file_name,
+    'reason', 'call_muito_curta',
+    'migrated', true
+  )
+FROM imported_files
+WHERE error_message LIKE '%Call muito curta%';
+
+-- Deletar registros de erro
+DELETE FROM imported_files
+WHERE error_message LIKE '%Call muito curta%';
 ```
 
-**Alternativa sem pg_cron**: Se `pg_cron` nao estiver disponivel, adicionar um timer no frontend que chama `stale-file-cleanup` a cada 10 minutos enquanto a aba Admin estiver aberta.
+### Tambem aplicar para conteudo invalido/corrompido
 
-## Resultado esperado
+O mesmo tratamento sera aplicado ao erro de "Conteudo invalido ou corrompido" (linhas 336-355 do import-and-analyze): logar + deletar.
 
-```text
-Arquivo falha tentativa 1 → retry automatico em ~10 min
-Arquivo falha tentativa 2 → retry automatico em ~10 min  
-Arquivo falha tentativa 3 → retry automatico em ~10 min
-Arquivo falha tentativa 4 → retry automatico em ~10 min
-Arquivo falha tentativa 5 → marcado como erro PERMANENTE (nao tenta mais)
-```
+---
 
-- Probabilidade de erro permanente apos 5 tentativas: **<1%** (baseado no fato de que a maioria dos erros eram timeouts transientes)
-- Tempo maximo ate correcao automatica: **~50 minutos** (5 tentativas x 10 min intervalo)
-- Zero intervencao manual necessaria
-
-## Resumo das alteracoes
+## Resumo
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `supabase/functions/stale-file-cleanup/index.ts` | Adicionar logica de auto-retry para erros retryable com retry_count < 5 |
-| Migration SQL | Agendar `stale-file-cleanup` via pg_cron a cada 10 minutos (ou fallback frontend) |
-| `src/components/admin/ImportStatusPanel.tsx` | Adicionar indicador visual de "auto-retry ativo" e contagem de retries pendentes |
+| `supabase/functions/import-and-analyze/index.ts` | Logar + deletar imported_file para calls curtas e conteudo corrompido |
+| `src/components/admin/ErrorLogsPanel.tsx` | Novo componente com lista de erros do system_logs |
+| `src/pages/Admin.tsx` | Nova aba "Logs de Erros" ao lado de Observabilidade |
+| Migracao SQL | Migrar 4 erros existentes para system_logs e deletar de imported_files |
 
-## Detalhes Tecnicos
+## Resultado
 
-### Erros retryable vs permanentes
-
-**Retryable** (serao retentados automaticamente):
-- "Empty response from function"
-- "Timeout" / "408"
-- "AbortError"
-- "No chunks analyzed before timeout"
-- "Fetch timeout"
-
-**Permanentes** (NAO serao retentados):
-- "Call muito curta"
-- "Failed to export document" 
-- "Duplicate content hash"
-- Qualquer erro com retry_count >= 5
-
-### Fallback frontend (se pg_cron nao disponivel)
-
-Adicionar no `ImportStatusPanel.tsx` um `useEffect` com `setInterval` de 10 minutos que chama `stale-file-cleanup`. Isso garante auto-recovery enquanto algum admin estiver com a pagina aberta.
-
-```typescript
-useEffect(() => {
-  const interval = setInterval(async () => {
-    await supabase.functions.invoke('stale-file-cleanup');
-  }, 600000); // 10 minutos
-  return () => clearInterval(interval);
-}, []);
-```
+- Erros de "call curta" nao aparecem mais como erro no painel de importacao
+- Historico completo de rejeicoes fica nos logs (com nome do arquivo)
+- Nova aba permite ao admin ver todos os erros e rejeicoes em um so lugar
