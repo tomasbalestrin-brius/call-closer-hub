@@ -1328,17 +1328,86 @@ function buildPartialAnalysisFromChunks(chunks: ChunkAnalysis[], totalChunksExpe
     }
   }
   
-  // Calculate average score from identified stages
+  // Build analise_por_etapa from chunks' etapas_identificadas
   const todasEtapas = chunks.flatMap(c => c.etapas_identificadas || []);
-  const notaMedia = todasEtapas.length > 0 
-    ? Math.round(todasEtapas.reduce((sum: number, e) => sum + (e.nota || 0), 0) / todasEtapas.length * 10) / 10
-    : 5;
+  const etapasMap: Record<string, { nota: number; pontos_fortes: string[]; pontos_fracos: string[]; evidencias: string[]; aconteceu: string }> = {};
+  
+  for (const etapa of todasEtapas) {
+    const nome = etapa.nome_etapa;
+    if (!nome) continue;
+    if (!etapasMap[nome]) {
+      etapasMap[nome] = { nota: 0, pontos_fortes: [], pontos_fracos: [], evidencias: [], aconteceu: 'nao' };
+    }
+    const entry = etapasMap[nome];
+    // Keep highest score
+    if ((etapa.nota || 0) > entry.nota) entry.nota = etapa.nota || 0;
+    // Mark as happened
+    if (etapa.aconteceu === 'sim') entry.aconteceu = 'sim';
+    else if (etapa.aconteceu === 'parcial' && entry.aconteceu !== 'sim') entry.aconteceu = 'parcial';
+    // Combine arrays (deduplicated)
+    if (etapa.pontos_fortes?.length) entry.pontos_fortes.push(...etapa.pontos_fortes);
+    if (etapa.pontos_fracos?.length) entry.pontos_fracos.push(...etapa.pontos_fracos);
+    if (etapa.evidencias?.length) entry.evidencias.push(...etapa.evidencias);
+  }
+  
+  // Build the full analise_por_etapa with all 12 stages
+  const ALL_STAGES = ['conexao', 'abertura', 'mapeamento_empresa', 'mapeamento_problema', 'consultoria', 'problematizacao', 'solucao_imaginada', 'transicao', 'pitch', 'perguntas_compromisso', 'fechamento', 'objecoes_negociacao'];
+  const analisePorEtapa: Record<string, unknown> = {};
+  
+  for (const stage of ALL_STAGES) {
+    const data = etapasMap[stage];
+    if (data) {
+      analisePorEtapa[stage] = {
+        aconteceu: data.aconteceu,
+        nota: data.nota,
+        funcao_cumprida: 'Análise parcial (síntese de emergência)',
+        evidencias: [...new Set(data.evidencias)].slice(0, 5),
+        ponto_forte: [...new Set(data.pontos_fortes)].slice(0, 3),
+        ponto_fraco: [...new Set(data.pontos_fracos)].slice(0, 3),
+        erro_de_execucao: null,
+        impacto_no_lead: null,
+        como_corrigir: [],
+        frase_melhor: { antes: '', depois: '' },
+        perguntas_de_aprofundamento: [],
+        seeds_prova_social: { usadas: [], faltaram: [] },
+        risco_principal_da_etapa: null,
+        motivo_ausencia: null,
+        contexto_ausencia: null,
+        excluir_da_media: false
+      };
+    } else {
+      analisePorEtapa[stage] = {
+        aconteceu: 'nao',
+        nota: 0,
+        funcao_cumprida: null,
+        evidencias: [],
+        ponto_forte: [],
+        ponto_fraco: [],
+        erro_de_execucao: null,
+        impacto_no_lead: null,
+        como_corrigir: [],
+        frase_melhor: { antes: '', depois: '' },
+        perguntas_de_aprofundamento: [],
+        seeds_prova_social: { usadas: [], faltaram: [] },
+        risco_principal_da_etapa: null,
+        motivo_ausencia: 'Etapa não identificada nos chunks analisados (síntese de emergência)',
+        contexto_ausencia: null,
+        excluir_da_media: true
+      };
+    }
+  }
+  
+  // Calculate score from consolidated stages (only stages that happened)
+  const etapasComNota = Object.values(etapasMap).filter(e => e.aconteceu !== 'nao');
+  const notaMedia = etapasComNota.length > 0 
+    ? Math.round(etapasComNota.reduce((sum, e) => sum + e.nota, 0) / etapasComNota.length * 10) / 10
+    : (todasEtapas.length > 0 ? Math.round(todasEtapas.reduce((sum: number, e) => sum + (e.nota || 0), 0) / todasEtapas.length * 10) / 10 : 5);
   
   // Collect observations (deduplicated)
   const pontosFortes = [...new Set(chunks.flatMap(c => c.observacoes?.pontos_fortes_gerais || []))];
   const pontosFracos = [...new Set(chunks.flatMap(c => c.observacoes?.pontos_fracos_gerais || []))];
   
-  console.log(`📊 Synthetic analysis: nota=${notaMedia}, fortes=${pontosFortes.length}, fracos=${pontosFracos.length}`);
+  console.log(`📊 Synthetic analysis: nota=${notaMedia}, etapas=${Object.keys(etapasMap).length}/${ALL_STAGES.length}, fortes=${pontosFortes.length}, fracos=${pontosFracos.length}`);
   
   return {
     framework_selecionado: identificacao.produto_ofertado || 'Não identificado',
@@ -1352,7 +1421,7 @@ function buildPartialAnalysisFromChunks(chunks: ChunkAnalysis[], totalChunksExpe
     },
     dados_extraidos: dadosExtraidos as AnalysisData['dados_extraidos'],
     nota_geral: notaMedia,
-    justificativa_nota_geral: ['Nota calculada automaticamente pela média das etapas (síntese de emergência - merge expirou)'],
+    justificativa_nota_geral: ['Nota calculada a partir das etapas consolidadas dos chunks (síntese de emergência)'],
     maiores_acertos: pontosFortes.slice(0, 3).map(p => ({
       acerto: p,
       evidencia: 'Extraído de análise parcial',
@@ -1370,7 +1439,7 @@ function buildPartialAnalysisFromChunks(chunks: ChunkAnalysis[], totalChunksExpe
     sinais_da_perda: [],
     se_vendeu: { porque_comprou: [], gatilhos_que_mais_pesaram: [] },
     checklist_erros_recorrentes: {},
-    analise_por_etapa: {},
+    analise_por_etapa: analisePorEtapa,
     plano_de_acao_direto: {
       ajuste_numero_1: {
         diagnostico: 'Análise de emergência - recomenda-se reanálise completa',

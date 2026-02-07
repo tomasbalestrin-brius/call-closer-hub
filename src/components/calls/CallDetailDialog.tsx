@@ -18,7 +18,7 @@ import {
 
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Phone, ExternalLink, UserPlus, Merge, Trash2, AlertTriangle } from 'lucide-react';
+import { Phone, ExternalLink, UserPlus, Merge, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Call, CallStatus, TechnicalAnalysis } from '@/types';
@@ -55,6 +55,7 @@ export default function CallDetailDialog({
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   if (!call) return null;
 
@@ -127,6 +128,25 @@ export default function CallDetailDialog({
     }
   };
 
+  const handleReanalyze = async () => {
+    setReanalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reanalyze-call', {
+        body: { callId: call.id },
+      });
+
+      if (error) throw error;
+
+      toast.success('Call reanalisada com sucesso!');
+      onCallUpdated?.();
+    } catch (error) {
+      console.error('Erro ao reanalisar call:', error);
+      toast.error('Erro ao reanalisar call');
+    } finally {
+      setReanalyzing(false);
+    }
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -171,10 +191,22 @@ export default function CallDetailDialog({
             <Alert variant="destructive" className="mb-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Análise Parcial (Timeout)</AlertTitle>
-              <AlertDescription>
-                Esta call foi muito longa e a análise foi interrompida por timeout.
-                Apenas {call.analysis_metadata.chunks_analyzed} de {call.analysis_metadata.chunks_total} chunks
-                foram analisados. Os dados podem estar incompletos.
+              <AlertDescription className="flex items-center justify-between">
+                <span>
+                  Esta call foi muito longa e a análise foi interrompida por timeout.
+                  Apenas {call.analysis_metadata.chunks_analyzed} de {call.analysis_metadata.chunks_total} chunks
+                  foram analisados. Os dados podem estar incompletos.
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReanalyze}
+                  disabled={reanalyzing}
+                  className="ml-4 shrink-0"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${reanalyzing ? 'animate-spin' : ''}`} />
+                  {reanalyzing ? 'Reanalisando...' : 'Reanalisar'}
+                </Button>
               </AlertDescription>
             </Alert>
           )}

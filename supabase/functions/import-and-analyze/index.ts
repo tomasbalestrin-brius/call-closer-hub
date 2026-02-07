@@ -776,6 +776,52 @@ serve(async (req) => {
       });
 
     console.log(`Import complete: ${fileName} -> Call ${callRecord.id}`);
+
+    // ========== AUTO-REANALYSIS FOR EMERGENCY SYNTHESIS ==========
+    const analysisMetadata = (analysis as { analysis_metadata?: { is_emergency_synthesis?: boolean } }).analysis_metadata;
+    if (analysisMetadata?.is_emergency_synthesis) {
+      console.log(`🔄 Emergency synthesis detected for call ${callRecord.id}, scheduling background re-analysis...`);
+      
+      const reanalyzeTask = async () => {
+        try {
+          console.log(`🔄 Starting background re-analysis for call ${callRecord.id}...`);
+          const reanalyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/reanalyze-call`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({ callId: callRecord.id }),
+          });
+          
+          if (reanalyzeResponse.ok) {
+            console.log(`✅ Background re-analysis completed successfully for call ${callRecord.id}`);
+            // Notify user about the improved analysis
+            await supabase.from("notifications").insert({
+              user_id: userId,
+              title: "Análise atualizada",
+              message: `A call de ${clientName} foi reanalisada automaticamente com sucesso.`,
+              type: "info",
+            });
+          } else {
+            const errText = await reanalyzeResponse.text();
+            console.error(`❌ Background re-analysis failed for call ${callRecord.id}: ${errText}`);
+          }
+        } catch (err) {
+          console.error(`❌ Background re-analysis error for call ${callRecord.id}:`, err);
+        }
+      };
+      
+      // Use EdgeRuntime.waitUntil to run in background without blocking the response
+      // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(reanalyzeTask());
+      } else {
+        // Fallback: fire and forget (don't await)
+        reanalyzeTask().catch(e => console.error('Reanalyze fire-and-forget error:', e));
+      }
+    }
     
     // Increment rate limit counter after successful analysis
     await supabase.rpc('increment_rate_limit', {
