@@ -1,31 +1,41 @@
 
 
-# Simplificar Dialog de Mentoria Extra
+# Links Clicaveis no Card do Cliente (WhatsApp + Instagram)
 
 ## O que muda
 
-No arquivo `src/components/clients/MentoriaExtraDialog.tsx`, as opcoes do dropdown serao reduzidas de 9 opcoes para apenas 2:
+### 1. Telefone vira link do WhatsApp
+No card do cliente, o numero de telefone sera clicavel e abrira diretamente o WhatsApp Web/App para iniciar conversa.
 
-**Antes (atual):**
-- Mentoria Comercial, Marketing, Mindset, Vendas, Lideranca, Especial, Grupo, Individual, Outro
+### 2. Novo campo: Instagram
+Adicionar o campo `instagram` na base de dados e exibi-lo no card do cliente como link clicavel que abre o perfil no Instagram.
 
-**Depois:**
-- Mentoria Cleiton
-- Mentoria Julia
-
-## Campos do formulario
-
-1. **Selecione a Mentoria** (dropdown) - apenas "Mentoria Cleiton" ou "Mentoria Julia"
-2. **Data de Participacao** - campo de data (mantido)
-3. **Observacoes** - campo de texto opcional (mantido)
-
-O campo "Outro" com input customizado sera removido, pois nao e mais necessario.
+---
 
 ## Detalhes tecnicos
 
-**Arquivo**: `src/components/clients/MentoriaExtraDialog.tsx`
+### Parte 1 - Migration: Adicionar coluna `instagram` na tabela `clients`
 
-- Alterar o array `MENTORIA_OPTIONS` para conter apenas `['Mentoria Cleiton', 'Mentoria Julia']`
-- Remover o bloco condicional `selectedMentoria === 'Outro'` e o estado `customMentoria`
-- Simplificar a logica de submit removendo a verificacao de "Outro"
+```sql
+ALTER TABLE public.clients ADD COLUMN instagram text;
+```
 
+### Parte 2 - Atualizar o tipo `Client` (automatico)
+
+O arquivo `types.ts` do banco e gerado automaticamente. Porem, o tipo manual em `src/types/index.ts` precisa receber o campo `instagram: string | null`.
+
+### Parte 3 - Atualizar `ClientCard.tsx`
+
+- **Telefone**: Trocar o `<span>` do telefone por um `<a href="https://wa.me/NUMERO">` que abre o WhatsApp. Adicionar `onClick stopPropagation` para nao navegar ao detalhe do cliente.
+- **Instagram**: Adicionar uma nova linha com icone do Instagram (usar icone generico do Lucide, como `AtSign`) e um link `<a href="https://instagram.com/USUARIO">` clicavel. Tambem com `stopPropagation`.
+
+### Parte 4 - Atualizar formularios de criacao/edicao
+
+- `NewClientDialog.tsx` - Adicionar campo "Instagram (@)" no formulario
+- `ClientEditDialog.tsx` - Adicionar campo "Instagram (@)" no formulario de edicao
+
+### Resultado
+
+- Telefone no card do cliente abre WhatsApp direto ao clicar
+- Instagram no card do cliente abre o perfil no Instagram ao clicar
+- Ambos os campos podem ser preenchidos na criacao e edicao do cliente
