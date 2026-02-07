@@ -18,9 +18,11 @@ export default function MonthlyGoalBar() {
 
   useEffect(() => {
     if (user) {
+      setGoalValue(null);
+      setLoading(true);
       fetchGoal();
     }
-  }, [user]);
+  }, [user, isAdmin]);
 
   const fetchGoal = async () => {
     if (!user) return;
