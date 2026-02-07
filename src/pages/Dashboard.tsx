@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
@@ -14,47 +15,30 @@ import { DashboardStats, FUNNEL_SOURCES } from '@/types';
 import { DateRange } from 'react-day-picker';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
+const emptyStats: DashboardStats = {
+  totalCalls: 0,
+  averageScore: 0,
+  totalSales: 0,
+  totalSaleValue: 0,
+  totalEntryValue: 0,
+  conversionRate: 0,
+  offersByProduct: { elitePremium: 0, implementacaoComercial: 0, mentoriaJulia: 0, implementacaoIA: 0 },
+  salesByProduct: { elitePremium: 0, implementacaoComercial: 0, mentoriaJulia: 0, implementacaoIA: 0 },
+};
+
 export default function Dashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<DashboardStats>({
-    totalCalls: 0,
-    averageScore: 0,
-    totalSales: 0,
-    totalSaleValue: 0,
-    totalEntryValue: 0,
-    conversionRate: 0,
-    offersByProduct: {
-      elitePremium: 0,
-      implementacaoComercial: 0,
-      mentoriaJulia: 0,
-      implementacaoIA: 0,
-    },
-    salesByProduct: {
-      elitePremium: 0,
-      implementacaoComercial: 0,
-      mentoriaJulia: 0,
-      implementacaoIA: 0,
-    },
-  });
-  const [loading, setLoading] = useState(true);
   const [selectedFunnel, setSelectedFunnel] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
   });
 
-  useEffect(() => {
-    if (user) {
-      fetchDashboardData();
-    }
-  }, [user, dateRange, selectedFunnel]);
+  const { data: stats = emptyStats, isLoading: loading } = useQuery({
+    queryKey: ['dashboard-stats', user?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), selectedFunnel],
+    queryFn: async (): Promise<DashboardStats> => {
+      if (!user) return emptyStats;
 
-  const fetchDashboardData = async () => {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      
       // First get client IDs if funnel filter is active
       let clientIdsForFunnel: string[] | null = null;
       if (selectedFunnel) {
@@ -65,7 +49,7 @@ export default function Dashboard() {
           .eq('funnel_source', selectedFunnel);
         clientIdsForFunnel = filteredClients?.map(c => c.id) || [];
       }
-      
+
       // Build calls query with date filter
       let callsQuery = supabase
         .from('calls')
@@ -78,24 +62,9 @@ export default function Dashboard() {
       if (dateRange?.to) {
         callsQuery = callsQuery.lte('call_date', format(dateRange.to, 'yyyy-MM-dd'));
       }
-      
-      // Filter calls by client_id if funnel is selected
+
       if (clientIdsForFunnel !== null) {
-        if (clientIdsForFunnel.length === 0) {
-          // No clients match funnel - return empty stats
-          setStats({
-            totalCalls: 0,
-            averageScore: 0,
-            totalSales: 0,
-            totalSaleValue: 0,
-            totalEntryValue: 0,
-            conversionRate: 0,
-            offersByProduct: { elitePremium: 0, implementacaoComercial: 0, mentoriaJulia: 0, implementacaoIA: 0 },
-            salesByProduct: { elitePremium: 0, implementacaoComercial: 0, mentoriaJulia: 0, implementacaoIA: 0 },
-          });
-          setLoading(false);
-          return;
-        }
+        if (clientIdsForFunnel.length === 0) return emptyStats;
         callsQuery = callsQuery.in('client_id', clientIdsForFunnel);
       }
 
@@ -112,13 +81,11 @@ export default function Dashboard() {
       if (dateRange?.to) {
         clientsQuery = clientsQuery.lte('sold_at', format(dateRange.to, 'yyyy-MM-dd') + 'T23:59:59');
       }
-      
-      // Filter clients by funnel if selected
       if (selectedFunnel) {
         clientsQuery = clientsQuery.eq('funnel_source', selectedFunnel);
       }
 
-      // Query for all clients with product_offered (for offers count)
+      // Query for all clients with product_offered
       let allClientsQuery = supabase
         .from('clients')
         .select('id, product_offered')
@@ -131,12 +98,10 @@ export default function Dashboard() {
       if (dateRange?.to) {
         allClientsQuery = allClientsQuery.lte('created_at', format(dateRange.to, 'yyyy-MM-dd') + 'T23:59:59');
       }
-      
       if (selectedFunnel) {
         allClientsQuery = allClientsQuery.eq('funnel_source', selectedFunnel);
       }
 
-      // Also fetch clients in "repitch" status to exclude from average
       const repitchClientsQuery = supabase
         .from('clients')
         .select('id')
@@ -159,57 +124,35 @@ export default function Dashboard() {
       const allClientsWithProduct = allClientsResult.data || [];
       const repitchClientIds = new Set(repitchClientsResult.data?.map(c => c.id) || []);
 
-      // Calculate call-based stats
       const totalCalls = calls.length;
-      
-      // Filter out calls from clients in "repitch" status for average calculation
-      const callsForAverage = calls.filter(c => 
-        c.score !== null && 
+      const callsForAverage = calls.filter(c =>
+        c.score !== null &&
         (!c.client_id || !repitchClientIds.has(c.client_id))
       );
-      const averageScore = callsForAverage.length 
-        ? callsForAverage.reduce((acc, c) => acc + (c.score || 0), 0) / callsForAverage.length 
+      const averageScore = callsForAverage.length
+        ? callsForAverage.reduce((acc, c) => acc + (c.score || 0), 0) / callsForAverage.length
         : 0;
 
-      // Calculate sales from clients (manual sales)
       const totalSales = soldClients.length;
       const totalSaleValue = soldClients.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
       const totalEntryValue = soldClients.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
       const conversionRate = totalCalls > 0 ? (totalSales / totalCalls) * 100 : 0;
 
-      // Count offers by product from clients.product_offered (exact match)
       const offersByProduct = {
-        elitePremium: allClientsWithProduct.filter(c => 
-          c.product_offered === 'Mentoria Elite Premium'
-        ).length,
-        implementacaoComercial: allClientsWithProduct.filter(c => 
-          c.product_offered === 'Implementacao Comercial'
-        ).length,
-        mentoriaJulia: allClientsWithProduct.filter(c => 
-          c.product_offered === 'Mentoria Premium'
-        ).length,
-        implementacaoIA: allClientsWithProduct.filter(c => 
-          c.product_offered === 'Implementacao de IA'
-        ).length,
+        elitePremium: allClientsWithProduct.filter(c => c.product_offered === 'Mentoria Elite Premium').length,
+        implementacaoComercial: allClientsWithProduct.filter(c => c.product_offered === 'Implementacao Comercial').length,
+        mentoriaJulia: allClientsWithProduct.filter(c => c.product_offered === 'Mentoria Premium').length,
+        implementacaoIA: allClientsWithProduct.filter(c => c.product_offered === 'Implementacao de IA').length,
       };
 
-      // Count sales by product from sold clients
       const salesByProduct = {
-        elitePremium: soldClients.filter(c => 
-          c.product_offered === 'Mentoria Elite Premium'
-        ).length,
-        implementacaoComercial: soldClients.filter(c => 
-          c.product_offered === 'Implementacao Comercial'
-        ).length,
-        mentoriaJulia: soldClients.filter(c => 
-          c.product_offered === 'Mentoria Premium'
-        ).length,
-        implementacaoIA: soldClients.filter(c => 
-          c.product_offered === 'Implementacao de IA'
-        ).length,
+        elitePremium: soldClients.filter(c => c.product_offered === 'Mentoria Elite Premium').length,
+        implementacaoComercial: soldClients.filter(c => c.product_offered === 'Implementacao Comercial').length,
+        mentoriaJulia: soldClients.filter(c => c.product_offered === 'Mentoria Premium').length,
+        implementacaoIA: soldClients.filter(c => c.product_offered === 'Implementacao de IA').length,
       };
 
-      setStats({
+      return {
         totalCalls,
         averageScore: Math.round(averageScore * 10) / 10,
         totalSales,
@@ -218,14 +161,11 @@ export default function Dashboard() {
         conversionRate: Math.round(conversionRate),
         offersByProduct,
         salesByProduct,
-      });
-
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      };
+    },
+    staleTime: 30_000,
+    enabled: !!user,
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -257,9 +197,9 @@ export default function Dashboard() {
                 ))}
               </SelectContent>
             </Select>
-            <DateRangePicker 
-              dateRange={dateRange} 
-              onDateRangeChange={setDateRange} 
+            <DateRangePicker
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
             />
           </div>
         </div>
@@ -275,42 +215,12 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <StatsCard
-            title="Total de Calls"
-            value={stats.totalCalls}
-            icon={Phone}
-            variant="default"
-          />
-          <StatsCard
-            title="Vendas Fechadas"
-            value={stats.totalSales}
-            icon={Target}
-            variant="success"
-          />
-          <StatsCard
-            title="Taxa de Conversão"
-            value={`${stats.conversionRate}%`}
-            icon={TrendingUp}
-            variant="default"
-          />
-          <StatsCard
-            title="Valor Total Vendido"
-            value={formatCurrency(stats.totalSaleValue)}
-            icon={DollarSign}
-            variant="accent"
-          />
-          <StatsCard
-            title="Total de Entradas"
-            value={formatCurrency(stats.totalEntryValue)}
-            icon={Wallet}
-            variant="success"
-          />
-          <StatsCard
-            title="Nota Média de Calls"
-            value={stats.averageScore ? `${stats.averageScore}/10` : '-'}
-            icon={Star}
-            variant="warning"
-          />
+          <StatsCard title="Total de Calls" value={stats.totalCalls} icon={Phone} variant="default" />
+          <StatsCard title="Vendas Fechadas" value={stats.totalSales} icon={Target} variant="success" />
+          <StatsCard title="Taxa de Conversão" value={`${stats.conversionRate}%`} icon={TrendingUp} variant="default" />
+          <StatsCard title="Valor Total Vendido" value={formatCurrency(stats.totalSaleValue)} icon={DollarSign} variant="accent" />
+          <StatsCard title="Total de Entradas" value={formatCurrency(stats.totalEntryValue)} icon={Wallet} variant="success" />
+          <StatsCard title="Nota Média de Calls" value={stats.averageScore ? `${stats.averageScore}/10` : '-'} icon={Star} variant="warning" />
         </div>
 
         {/* Offers by Product */}
@@ -347,7 +257,6 @@ export default function Dashboard() {
             />
           </div>
         </div>
-
       </div>
     </MainLayout>
   );

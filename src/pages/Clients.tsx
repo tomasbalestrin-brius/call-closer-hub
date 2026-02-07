@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
@@ -116,11 +116,14 @@ export default function Clients() {
       let lastCallDates: Record<string, string> = {};
       
       if (clientIds.length > 0) {
+        // Only fetch the most recent call per client using a limited ordered query
         const { data: callsData } = await supabase
           .from('calls')
           .select('client_id, call_date')
           .in('client_id', clientIds)
-          .order('call_date', { ascending: false });
+          .is('deleted_at', null)
+          .order('call_date', { ascending: false })
+          .limit(clientIds.length * 3);
         
         // Get the most recent call date for each client
         if (callsData) {
