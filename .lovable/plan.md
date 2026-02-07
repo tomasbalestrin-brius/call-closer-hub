@@ -1,79 +1,139 @@
 
 
-# Otimizar Performance da Pagina Squad View
+# Plano de Otimizacao Completa de Performance
 
-## Problemas Identificados
+## Resumo das Mudancas
 
-### 1. CRITICO: Busca de transcricoes completas desnecessariamente
-A query `select=*` na tabela `calls` traz o campo `transcription` (100.000+ caracteres por call) apenas para listar cards. Isso e o principal causador da lentidao - transferir megabytes de texto que nao sao exibidos na lista.
-
-### 2. Queries sequenciais no carregamento
-`fetchSquadMembers` faz 3 queries sequenciais (squads -> members -> profiles + roles). `fetchCloserData` faz mais 3 queries sequenciais (calls -> monthly_goals -> repitch clients). Total: 6 queries em cascata.
-
-### 3. Sem cache (React Query nao utilizado)
-A pagina usa `useState` + `useEffect` manual em vez de React Query, que ja esta instalado e configurado no projeto. Isso significa zero cache, zero deduplicacao, e re-fetch completo a cada interacao.
-
-### 4. Bug adicional: INSERT em `clients` retornando 403
-Os logs de rede mostram erro RLS na insercao de clientes (`new row violates row-level security policy for table "clients"`). Isso indica que admins tambem nao podem criar clientes em nome de closers - mesmo problema corrigido para `profiles`.
+Organizadas em 4 etapas para aplicar de forma incremental.
 
 ---
 
-## Solucao
+## Etapa 1 - Eliminar payloads pesados (maior impacto)
 
-### Parte 1 - Selecionar apenas colunas necessarias na query de calls
+### 1.1 Dashboard - Selecionar apenas colunas necessarias
 
-No `fetchCloserData`, trocar:
-```
-.select('*')
-```
-por:
-```
-.select('id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at')
-```
+**Arquivo**: `src/pages/Dashboard.tsx`
 
-Isso exclui o campo `transcription` da listagem, reduzindo o payload de megabytes para kilobytes.
+Trocar os 3 `select('*')` por selects especificos:
 
-### Parte 2 - Paralelizar queries em fetchCloserData
+- `calls`: `select('id, score, status, client_id, call_date, sale_value, entry_value, product')`
+- `clients` (vendidos): `select('id, sale_value, entry_value, product_offered, funnel_source, sold_at')`
+- `clients` (ofertas): `select('id, product_offered')` - ja otimizado
 
-Trocar as 3 queries sequenciais por `Promise.all`:
-```typescript
-const [callsResult, goalResult, repitchResult] = await Promise.all([
-  supabase.from('calls').select('...colunas...').eq('closer_id', closerId)...,
-  supabase.from('monthly_goals').select('goal_value').eq('closer_id', closerId)...,
-  supabase.from('clients').select('id').eq('closer_id', closerId).eq('status', 'repitch')
-]);
-```
+### 1.2 Calls - Selecionar apenas colunas necessarias
 
-### Parte 3 - Paralelizar queries em fetchSquadMembers
+**Arquivo**: `src/pages/Calls.tsx`
 
-Apos obter os `userIds`, buscar `profiles` e `roles` em paralelo:
-```typescript
-const [profilesResult, rolesResult] = await Promise.all([
-  supabase.from('profiles').select('user_id, full_name').in('user_id', userIds),
-  supabase.from('user_roles').select('user_id, role').in('user_id', userIds)
-]);
-```
+Trocar `select('*')` por select com todas as colunas exceto `transcription` (mesmo padrao da correcao do SquadView).
 
-### Parte 4 - Corrigir RLS para INSERT de clientes por admin
+### 1.3 Clients - Selecionar apenas colunas necessarias
 
-Adicionar migration para permitir que admins criem clientes:
-```sql
-CREATE POLICY "Admins can insert clients"
-ON public.clients
-FOR INSERT
-TO authenticated
-WITH CHECK (has_role(auth.uid(), 'admin'::user_role));
-```
+**Arquivo**: `src/pages/Clients.tsx`
+
+Trocar `select('*')` por select com todas as colunas necessarias para o Kanban (excluir campos grandes como `notes` se nao exibidos).
+
+### 1.4 Portfolio - Selecionar apenas colunas necessarias
+
+**Arquivo**: `src/hooks/usePortfolio.ts`
+
+- `useAllClients`: trocar `select('*')` por `select('id, is_sold, sale_value, closer_id')`
+- `useAllClientActivities`: trocar `select('*')` por `select('id, client_id, activity_type')`
+- `useAllIndications`: trocar `select('*')` por `select('id, client_id, indication_type, status')`
 
 ---
 
-## Impacto esperado
+## Etapa 2 - Cache global e React Query
 
-- **Payload de calls**: Reducao de ~95% (de MBs para KBs ao excluir transcricoes)
-- **Tempo de carregamento**: Reducao de ~50% com paralelizacao de queries
-- **Bug de criacao**: Admins poderao criar clientes em nome de closers
+### 2.1 Configurar QueryClient com staleTime global
 
-## Arquivos modificados
+**Arquivo**: `src/App.tsx`
 
-- `src/pages/SquadView.tsx` (otimizar queries)
-- Nova migration SQL (RLS para INSERT em clients)
+```
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,       // 30s antes de re-fetch
+      gcTime: 5 * 60 * 1000,   // 5min no cache
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+```
+
+Isso evita re-fetches automaticos toda vez que o usuario troca de aba do navegador e volta.
+
+### 2.2 Migrar Calls para React Query
+
+**Arquivo**: `src/pages/Calls.tsx`
+
+Trocar o `useState` + `useEffect` + `fetchCalls` manual por `useQuery` com queryKey baseada nos filtros. Beneficios:
+- Cache automatico
+- Dados mantidos ao voltar para a pagina
+- Loading state e error state gerenciados
+
+### 2.3 Migrar Clients para React Query
+
+**Arquivo**: `src/pages/Clients.tsx`
+
+Mesmo padrao do Calls. Trocar `fetchClients` manual por `useQuery`.
+
+---
+
+## Etapa 3 - Paralelizar queries restantes
+
+### 3.1 Calls/Clients: fetchClosers para Leaders
+
+**Arquivos**: `src/pages/Calls.tsx`, `src/pages/Clients.tsx`
+
+Na funcao `fetchClosers` para leaders, as 2 queries (squad_members, depois profiles) podem ser parcialmente paralelizadas.
+
+### 3.2 Clients: buscar clientes e last calls em paralelo
+
+**Arquivo**: `src/pages/Clients.tsx`
+
+Atualmente a query de `calls` (lastCallDate) so roda APOS os clientes carregarem. Essas queries podem rodar em paralelo se passarmos o `closer_id` em vez de depender dos `clientIds`.
+
+---
+
+## Etapa 4 - Paginacao e carregamento em etapas
+
+### 4.1 Limitar calls e clients por pagina
+
+Adicionar `.limit(50)` nas queries de Calls e Clients com um botao "Carregar mais" ou scroll infinito. Isso evita buscar centenas de registros de uma vez.
+
+### 4.2 Lazy load do Dashboard via Index
+
+**Arquivo**: `src/pages/Index.tsx`
+
+Trocar a importacao direta de Dashboard por lazy:
+
+```
+const Dashboard = lazy(() => import('./Dashboard'));
+```
+
+Ou tornar o proprio Index lazy-loaded em App.tsx (ja e a rota principal, entao precisa ficar fora do lazy).
+
+---
+
+## Impacto Estimado
+
+| Etapa | Reducao de Payload | Reducao de Tempo |
+|-------|-------------------|-----------------|
+| Etapa 1 - Selects otimizados | ~90-95% menos dados | ~50-70% mais rapido |
+| Etapa 2 - Cache global | N/A | Navegacao instantanea entre paginas |
+| Etapa 3 - Paralelizacao | N/A | ~30-40% mais rapido no load inicial |
+| Etapa 4 - Paginacao | Proporcional ao volume | Escalavel com crescimento |
+
+## Arquivos Modificados
+
+- `src/App.tsx` (cache global)
+- `src/pages/Dashboard.tsx` (selects otimizados)
+- `src/pages/Calls.tsx` (selects + React Query)
+- `src/pages/Clients.tsx` (selects + React Query + paralelo)
+- `src/hooks/usePortfolio.ts` (selects otimizados)
+- `src/pages/Index.tsx` (lazy load)
+
+## Sugestao de Implementacao
+
+Recomendo implementar por etapa. A Etapa 1 (selects) ja traz o maior ganho com menor risco. Depois a Etapa 2 (cache) para experiencia de navegacao. Etapas 3 e 4 sao incrementais.
+
