@@ -573,6 +573,7 @@ export type Database = {
           id: string
           incomplete_notification_sent: boolean | null
           indication_source_id: string | null
+          instagram: string | null
           is_from_indication: boolean | null
           is_sold: boolean | null
           is_super_hot: boolean | null
@@ -610,6 +611,7 @@ export type Database = {
           id?: string
           incomplete_notification_sent?: boolean | null
           indication_source_id?: string | null
+          instagram?: string | null
           is_from_indication?: boolean | null
           is_sold?: boolean | null
           is_super_hot?: boolean | null
@@ -647,6 +649,7 @@ export type Database = {
           id?: string
           incomplete_notification_sent?: boolean | null
           indication_source_id?: string | null
+          instagram?: string | null
           is_from_indication?: boolean | null
           is_sold?: boolean | null
           is_super_hot?: boolean | null

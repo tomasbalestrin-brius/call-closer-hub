@@ -150,6 +150,7 @@ export interface Client {
   // Indication source fields
   is_from_indication: boolean | null;
   indication_source_id: string | null;
+  instagram: string | null;
   created_at: string;
   updated_at: string;
 }

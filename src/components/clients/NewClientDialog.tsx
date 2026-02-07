@@ -32,6 +32,7 @@ interface NewClientFormData {
   mainPain: string;
   notes: string;
   followupDate: string;
+  instagram: string;
 }
 
 const initialFormData: NewClientFormData = {
@@ -48,6 +49,7 @@ const initialFormData: NewClientFormData = {
   mainPain: '',
   notes: '',
   followupDate: '',
+  instagram: '',
 };
 
 export default function NewClientDialog({ onClientCreated }: NewClientDialogProps) {
@@ -119,6 +121,7 @@ export default function NewClientDialog({ onClientCreated }: NewClientDialogProp
       main_pain: formData.mainPain.trim() || null,
       notes: formData.notes || null,
       followup_date: formData.followupDate || null,
+      instagram: formData.instagram.trim().replace(/^@/, '') || null,
     });
 
     setLoading(false);
@@ -215,6 +218,15 @@ export default function NewClientDialog({ onClientCreated }: NewClientDialogProp
                   value={formData.email}
                   onChange={(e) => updateField('email', e.target.value)}
                   placeholder="email@exemplo.com"
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="instagram">Instagram</Label>
+                <Input
+                  id="instagram"
+                  value={formData.instagram}
+                  onChange={(e) => updateField('instagram', e.target.value)}
+                  placeholder="@usuario"
                 />
               </div>
             </div>

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Client } from '@/types';
 import { useNavigate } from 'react-router-dom';
-import { Phone, DollarSign, Package, AlertTriangle, Flame, Calendar, Clock } from 'lucide-react';
+import { Phone, DollarSign, Package, AlertTriangle, Flame, Calendar, Clock, AtSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ClientCardMenu from './ClientCardMenu';
 import IndicationDialog from './IndicationDialog';
@@ -133,7 +133,19 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
             showAlert && !client.phone && "text-destructive"
           )}>
             <Phone className="w-4 h-4 shrink-0" />
-            <span className="truncate">{client.phone || '-'}</span>
+            {client.phone ? (
+              <a
+                href={`https://wa.me/${client.phone.replace(/\D/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate text-primary hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {client.phone}
+              </a>
+            ) : (
+              <span className="truncate">-</span>
+            )}
           </div>
           <div className={cn(
             "flex items-center gap-2",
@@ -149,6 +161,20 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
             <Package className="w-4 h-4 shrink-0" />
             <span className="truncate">{client.product_offered || '-'}</span>
           </div>
+          {client.instagram && (
+            <div className="flex items-center gap-2">
+              <AtSign className="w-4 h-4 shrink-0" />
+              <a
+                href={`https://instagram.com/${client.instagram.replace(/^@/, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate text-primary hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                @{client.instagram.replace(/^@/, '')}
+              </a>
+            </div>
+          )}
         </CardContent>
       </Card>
 

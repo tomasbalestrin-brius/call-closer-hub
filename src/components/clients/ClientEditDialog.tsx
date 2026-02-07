@@ -47,6 +47,7 @@ interface ClientEditFormData {
   sdrName: string;
   productOffered: string;
   followupDate: string;
+  instagram: string;
 }
 
 export default function ClientEditDialog({ client, onClientUpdated }: ClientEditDialogProps) {
@@ -70,6 +71,7 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
     sdrName: client.sdr_name || '',
     productOffered: client.product_offered || '',
     followupDate: client.followup_date || '',
+    instagram: (client as any).instagram || '',
   }), [client]);
 
   const {
@@ -145,6 +147,7 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
           sdr_name: formData.sdrName || null,
           product_offered: formData.productOffered || null,
           followup_date: formData.followupDate || null,
+          instagram: formData.instagram.trim().replace(/^@/, '') || null,
         })
         .eq('id', client.id);
 
@@ -254,6 +257,15 @@ export default function ClientEditDialog({ client, onClientUpdated }: ClientEdit
                   value={formData.email}
                   onChange={(e) => updateField('email', e.target.value)}
                   placeholder="email@exemplo.com"
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="instagram">Instagram</Label>
+                <Input
+                  id="instagram"
+                  value={formData.instagram}
+                  onChange={(e) => updateField('instagram', e.target.value)}
+                  placeholder="@usuario"
                 />
               </div>
             </div>
