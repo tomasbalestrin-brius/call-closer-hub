@@ -245,28 +245,28 @@ export default function Dashboard() {
             <StatsCard
               title="Elite Premium"
               value={stats.offersByProduct.elitePremium}
-              subtitle={`${stats.totalCalls > 0 ? Math.round((stats.offersByProduct.elitePremium / stats.totalCalls) * 100) : 0}% das calls | ${stats.salesByProduct.elitePremium} vendas (${stats.offersByProduct.elitePremium > 0 ? Math.round((stats.salesByProduct.elitePremium / stats.offersByProduct.elitePremium) * 100) : 0}% conv.)`}
+              subtitle={`${stats.offersByProduct.elitePremium} calls | ${stats.salesByProduct.elitePremium} vendas | ${stats.offersByProduct.elitePremium > 0 ? Math.round((stats.salesByProduct.elitePremium / stats.offersByProduct.elitePremium) * 100) : 0}% conversão`}
               icon={Crown}
               variant="accent"
             />
             <StatsCard
               title="Implementação Comercial"
               value={stats.offersByProduct.implementacaoComercial}
-              subtitle={`${stats.totalCalls > 0 ? Math.round((stats.offersByProduct.implementacaoComercial / stats.totalCalls) * 100) : 0}% das calls | ${stats.salesByProduct.implementacaoComercial} vendas (${stats.offersByProduct.implementacaoComercial > 0 ? Math.round((stats.salesByProduct.implementacaoComercial / stats.offersByProduct.implementacaoComercial) * 100) : 0}% conv.)`}
+              subtitle={`${stats.offersByProduct.implementacaoComercial} calls | ${stats.salesByProduct.implementacaoComercial} vendas | ${stats.offersByProduct.implementacaoComercial > 0 ? Math.round((stats.salesByProduct.implementacaoComercial / stats.offersByProduct.implementacaoComercial) * 100) : 0}% conversão`}
               icon={Briefcase}
               variant="default"
             />
             <StatsCard
               title="Mentoria Premium Julia"
               value={stats.offersByProduct.mentoriaJulia}
-              subtitle={`${stats.totalCalls > 0 ? Math.round((stats.offersByProduct.mentoriaJulia / stats.totalCalls) * 100) : 0}% das calls | ${stats.salesByProduct.mentoriaJulia} vendas (${stats.offersByProduct.mentoriaJulia > 0 ? Math.round((stats.salesByProduct.mentoriaJulia / stats.offersByProduct.mentoriaJulia) * 100) : 0}% conv.)`}
+              subtitle={`${stats.offersByProduct.mentoriaJulia} calls | ${stats.salesByProduct.mentoriaJulia} vendas | ${stats.offersByProduct.mentoriaJulia > 0 ? Math.round((stats.salesByProduct.mentoriaJulia / stats.offersByProduct.mentoriaJulia) * 100) : 0}% conversão`}
               icon={GraduationCap}
               variant="success"
             />
             <StatsCard
               title="Implementação de IA"
               value={stats.offersByProduct.implementacaoIA}
-              subtitle={`${stats.totalCalls > 0 ? Math.round((stats.offersByProduct.implementacaoIA / stats.totalCalls) * 100) : 0}% das calls | ${stats.salesByProduct.implementacaoIA} vendas (${stats.offersByProduct.implementacaoIA > 0 ? Math.round((stats.salesByProduct.implementacaoIA / stats.offersByProduct.implementacaoIA) * 100) : 0}% conv.)`}
+              subtitle={`${stats.offersByProduct.implementacaoIA} calls | ${stats.salesByProduct.implementacaoIA} vendas | ${stats.offersByProduct.implementacaoIA > 0 ? Math.round((stats.salesByProduct.implementacaoIA / stats.offersByProduct.implementacaoIA) * 100) : 0}% conversão`}
               icon={Bot}
               variant="warning"
             />
