@@ -1,50 +1,13 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
+import { useMonthlySales } from '@/hooks/useMonthlySales';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Target } from 'lucide-react';
-import { startOfMonth, endOfMonth, format } from 'date-fns';
 
 const QUOTA_VALUE = 80000;
 
 export default function QuotaProgressBar() {
-  const { user } = useAuth();
-  const [currentValue, setCurrentValue] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (user) {
-      fetchQuotaProgress();
-    }
-  }, [user]);
-
-  const fetchQuotaProgress = async () => {
-    if (!user) return;
-
-    try {
-      const now = new Date();
-      const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
-      const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd') + 'T23:59:59';
-
-      const { data, error } = await supabase
-        .from('clients')
-        .select('entry_value')
-        .eq('closer_id', user.id)
-        .eq('is_sold', true)
-        .gte('sold_at', monthStart)
-        .lte('sold_at', monthEnd);
-
-      if (error) throw error;
-
-      const total = (data || []).reduce((acc, client) => acc + (Number(client.entry_value) || 0), 0);
-      setCurrentValue(total);
-    } catch (error) {
-      console.error('Error fetching quota progress:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isLoading } = useMonthlySales();
+  const currentValue = data?.totalEntry ?? 0;
 
   const percentage = Math.min((currentValue / QUOTA_VALUE) * 100, 100);
   const remaining = Math.max(QUOTA_VALUE - currentValue, 0);

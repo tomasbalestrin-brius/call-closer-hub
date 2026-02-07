@@ -1,65 +1,42 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useMonthlySales } from '@/hooks/useMonthlySales';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Flag } from 'lucide-react';
-import { startOfMonth, endOfMonth, format } from 'date-fns';
 
 export default function MonthlyGoalBar() {
   const { user } = useAuth();
-  const [currentValue, setCurrentValue] = useState(0);
+  const { data: salesData } = useMonthlySales();
   const [goalValue, setGoalValue] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const currentValue = salesData?.totalSale ?? 0;
+
   useEffect(() => {
     if (user) {
-      fetchMonthlyData();
+      fetchGoal();
     }
   }, [user]);
 
-  const fetchMonthlyData = async () => {
+  const fetchGoal = async () => {
     if (!user) return;
 
     try {
       const now = new Date();
-      const currentMonth = now.getMonth() + 1;
-      const currentYear = now.getFullYear();
-      const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
-      const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd') + 'T23:59:59';
+      const { data, error } = await supabase
+        .from('monthly_goals')
+        .select('goal_value')
+        .eq('closer_id', user.id)
+        .eq('month', now.getMonth() + 1)
+        .eq('year', now.getFullYear())
+        .maybeSingle();
 
-      // Fetch goal and sales in parallel
-      const [goalResult, salesResult] = await Promise.all([
-        supabase
-          .from('monthly_goals')
-          .select('goal_value')
-          .eq('closer_id', user.id)
-          .eq('month', currentMonth)
-          .eq('year', currentYear)
-          .maybeSingle(),
-        supabase
-          .from('clients')
-          .select('sale_value')
-          .eq('closer_id', user.id)
-          .eq('is_sold', true)
-          .gte('sold_at', monthStart)
-          .lte('sold_at', monthEnd)
-      ]);
-
-      if (goalResult.error) throw goalResult.error;
-      if (salesResult.error) throw salesResult.error;
-
-      if (goalResult.data) {
-        setGoalValue(Number(goalResult.data.goal_value));
-      }
-
-      const total = (salesResult.data || []).reduce(
-        (acc, client) => acc + (Number(client.sale_value) || 0), 
-        0
-      );
-      setCurrentValue(total);
+      if (error) throw error;
+      if (data) setGoalValue(Number(data.goal_value));
     } catch (error) {
-      console.error('Error fetching monthly data:', error);
+      console.error('Error fetching monthly goal:', error);
     } finally {
       setLoading(false);
     }
