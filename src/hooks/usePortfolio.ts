@@ -187,7 +187,7 @@ export function useAllClients() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('*');
+        .select('id, is_sold, sale_value, closer_id');
       
       if (error) throw error;
       return data;
@@ -205,7 +205,7 @@ export function useAllClientActivities() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('client_activities')
-        .select('*');
+        .select('id, client_id, activity_type');
       
       if (error) throw error;
       return data;
@@ -223,7 +223,7 @@ export function useAllIndications() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('indications')
-        .select('*');
+        .select('id, client_id, indication_type, status, student_id');
       
       if (error) throw error;
       return data;

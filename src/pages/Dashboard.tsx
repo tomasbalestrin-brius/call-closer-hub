@@ -58,7 +58,7 @@ export default function Dashboard() {
       // Build calls query with date filter
       let callsQuery = supabase
         .from('calls')
-        .select('*');
+        .select('id, score, status, client_id, call_date, sale_value, entry_value, product');
 
       if (!isAdmin) {
         callsQuery = callsQuery.eq('closer_id', user.id);
@@ -78,7 +78,7 @@ export default function Dashboard() {
       // Build clients query with date filter for sales
       let clientsQuery = supabase
         .from('clients')
-        .select('*')
+        .select('id, sale_value, entry_value, product_offered, funnel_source, sold_at, closer_id')
         .eq('is_sold', true);
 
       if (!isAdmin) {
