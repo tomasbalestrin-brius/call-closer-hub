@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
@@ -28,6 +29,7 @@ const emptyStats: DashboardStats = {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [selectedFunnel, setSelectedFunnel] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
@@ -35,27 +37,32 @@ export default function Dashboard() {
   });
 
   const { data: stats = emptyStats, isLoading: loading } = useQuery({
-    queryKey: ['dashboard-stats', user?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), selectedFunnel],
+    queryKey: ['dashboard-stats', user?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), selectedFunnel, isAdmin],
     queryFn: async (): Promise<DashboardStats> => {
       if (!user) return emptyStats;
 
       // First get client IDs if funnel filter is active
       let clientIdsForFunnel: string[] | null = null;
       if (selectedFunnel) {
-        const { data: filteredClients } = await supabase
+        let funnelQuery = supabase
           .from('clients')
           .select('id')
-          .eq('closer_id', user.id)
           .eq('funnel_source', selectedFunnel);
+        if (!isAdmin) {
+          funnelQuery = funnelQuery.eq('closer_id', user.id);
+        }
+        const { data: filteredClients } = await funnelQuery;
         clientIdsForFunnel = filteredClients?.map(c => c.id) || [];
       }
 
       // Build calls query with date filter
       let callsQuery = supabase
         .from('calls')
-        .select('*')
-        .eq('closer_id', user.id);
+        .select('*');
 
+      if (!isAdmin) {
+        callsQuery = callsQuery.eq('closer_id', user.id);
+      }
       if (dateRange?.from) {
         callsQuery = callsQuery.gte('call_date', format(dateRange.from, 'yyyy-MM-dd'));
       }
@@ -72,8 +79,11 @@ export default function Dashboard() {
       let clientsQuery = supabase
         .from('clients')
         .select('*')
-        .eq('closer_id', user.id)
         .eq('is_sold', true);
+
+      if (!isAdmin) {
+        clientsQuery = clientsQuery.eq('closer_id', user.id);
+      }
 
       if (dateRange?.from) {
         clientsQuery = clientsQuery.gte('sold_at', format(dateRange.from, 'yyyy-MM-dd'));
@@ -89,8 +99,11 @@ export default function Dashboard() {
       let allClientsQuery = supabase
         .from('clients')
         .select('id, product_offered')
-        .eq('closer_id', user.id)
         .not('product_offered', 'is', null);
+
+      if (!isAdmin) {
+        allClientsQuery = allClientsQuery.eq('closer_id', user.id);
+      }
 
       if (dateRange?.from) {
         allClientsQuery = allClientsQuery.gte('created_at', format(dateRange.from, 'yyyy-MM-dd'));
@@ -102,12 +115,14 @@ export default function Dashboard() {
         allClientsQuery = allClientsQuery.eq('funnel_source', selectedFunnel);
       }
 
-      const repitchClientsQuery = supabase
+      let repitchClientsQuery = supabase
         .from('clients')
         .select('id')
-        .eq('closer_id', user.id)
         .eq('status', 'repitch');
 
+      if (!isAdmin) {
+        repitchClientsQuery = repitchClientsQuery.eq('closer_id', user.id);
+      }
       const [callsResult, clientsResult, allClientsResult, repitchClientsResult] = await Promise.all([
         callsQuery,
         clientsQuery,
