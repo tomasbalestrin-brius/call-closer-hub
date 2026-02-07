@@ -1,31 +1,24 @@
 
-# Simplificar Cards de Ofertas por Produto
+# Corrigir Meta Mensal para Admin
 
-## O que sera feito
+## Problema
 
-Alterar o subtitle dos 4 cards de produto para mostrar apenas:
-- **Calls**: numero de ofertas (que ja e o valor principal do card)
-- **Vendas**: numero de vendas daquele produto
-- **Taxa de conversao**: vendas / ofertas em percentual
+O `useEffect` no `MonthlyGoalBar` tem `[user]` como dependencia, mas usa `isAdmin` dentro do `fetchGoal`. Quando o componente monta, `isAdmin` pode ainda ser `false` (carregando), entao a query roda com `.eq('closer_id', user.id)` -- o admin nao tem meta propria, retorna vazio, e mostra "Meta nao definida pelo lider".
 
-## Alteracao
+Como `isAdmin` nao esta na lista de dependencias, o `useEffect` nunca re-executa quando `isAdmin` muda para `true`.
 
-**Arquivo**: `src/pages/Dashboard.tsx` (linhas 244-272)
+## Solucao
 
-Trocar o subtitle complexo atual por um formato limpo:
+**Arquivo**: `src/components/dashboard/MonthlyGoalBar.tsx`
 
-```
-"X calls | Y vendas | Z% conversão"
-```
+1. Adicionar `isAdmin` como dependencia do `useEffect` (linha 23):
+   - De: `[user]`
+   - Para: `[user, isAdmin]`
 
-Onde:
-- X = `offersByProduct.{produto}` (ofertas/calls daquele produto)
-- Y = `salesByProduct.{produto}` (vendas daquele produto)  
-- Z = `(salesByProduct / offersByProduct) * 100`
+2. Resetar `goalValue` para `null` antes de cada fetch para evitar mostrar dados stale durante a troca de estado.
 
-Exemplo para Elite Premium:
-```typescript
-subtitle={`${stats.offersByProduct.elitePremium} calls | ${stats.salesByProduct.elitePremium} vendas | ${stats.offersByProduct.elitePremium > 0 ? Math.round((stats.salesByProduct.elitePremium / stats.offersByProduct.elitePremium) * 100) : 0}% conversão`}
-```
+Isso garante que quando `isAdmin` resolver para `true`, o fetch re-executa e busca a soma de todas as metas (R$1.200.000 no caso atual).
 
-Mesma logica para os outros 3 cards (Implementacao Comercial, Mentoria Premium Julia, Implementacao de IA).
+## Resultado
+
+O admin vera a barra de progresso com a meta total (soma de todos os closers) em vez de "Meta nao definida pelo lider".
