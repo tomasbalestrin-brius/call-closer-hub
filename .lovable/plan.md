@@ -1,42 +1,31 @@
 
-# Corrigir Persistencia de Cargos/Niveis
 
-## Problema Identificado
+# Simplificar Dialog de Mentoria Extra
 
-A atualizacao de **nivel do closer** (Assessor, Executivo, Pro, etc.) nao persiste porque falta uma **politica de UPDATE para admins** na tabela `profiles`.
+## O que muda
 
-Politicas atuais na tabela `profiles`:
-- Admin pode apenas **visualizar** (SELECT) todos os perfis
-- Usuarios podem atualizar **apenas o proprio** perfil
-- Lideres podem atualizar perfis dos **membros do squad**
+No arquivo `src/components/clients/MentoriaExtraDialog.tsx`, as opcoes do dropdown serao reduzidas de 9 opcoes para apenas 2:
 
-Quando o admin altera o nivel, o codigo atualiza o estado local (parece funcionar), mas o banco rejeita silenciosamente a escrita via RLS. Ao recarregar a pagina, o valor antigo retorna.
+**Antes (atual):**
+- Mentoria Comercial, Marketing, Mindset, Vendas, Lideranca, Especial, Grupo, Individual, Outro
 
-## Solucao
+**Depois:**
+- Mentoria Cleiton
+- Mentoria Julia
 
-### Parte 1 - Migration: Adicionar politica de UPDATE para admins
+## Campos do formulario
 
-Criar uma nova politica RLS na tabela `profiles`:
+1. **Selecione a Mentoria** (dropdown) - apenas "Mentoria Cleiton" ou "Mentoria Julia"
+2. **Data de Participacao** - campo de data (mantido)
+3. **Observacoes** - campo de texto opcional (mantido)
 
-```sql
-CREATE POLICY "Admins can update all profiles"
-ON public.profiles
-FOR UPDATE
-TO authenticated
-USING (has_role(auth.uid(), 'admin'::user_role))
-WITH CHECK (has_role(auth.uid(), 'admin'::user_role));
-```
+O campo "Outro" com input customizado sera removido, pois nao e mais necessario.
 
-Isso permite que admins atualizem qualquer perfil (nivel, status, telefone, etc.).
+## Detalhes tecnicos
 
-### Parte 2 - Validacao no codigo (Admin.tsx)
+**Arquivo**: `src/components/clients/MentoriaExtraDialog.tsx`
 
-Atualmente, `updateCloserLevel` e `onRoleChange` atualizam o estado local **antes** de confirmar o sucesso no banco. Ajustar para que:
-- O `updateCloserLevel` ja funciona corretamente (atualiza local so apos o update sem erro)
-- O `UserRoleSelect` tambem ja funciona corretamente (atualiza via `onRoleChange` callback so apos sucesso)
+- Alterar o array `MENTORIA_OPTIONS` para conter apenas `['Mentoria Cleiton', 'Mentoria Julia']`
+- Remover o bloco condicional `selectedMentoria === 'Outro'` e o estado `customMentoria`
+- Simplificar a logica de submit removendo a verificacao de "Outro"
 
-Na verdade, revisando o codigo, ambos ja atualizam o estado local **apos** sucesso. O problema e exclusivamente a falta da politica RLS. A migration resolve o problema.
-
-### Resultado
-
-Apos a migration, o admin podera atualizar niveis e os valores persistirao entre recarregamentos.
