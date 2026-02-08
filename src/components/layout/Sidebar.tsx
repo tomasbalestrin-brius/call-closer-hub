@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { 
@@ -18,6 +18,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import logo from '@/assets/logo-bethel-closer.png';
 
@@ -31,7 +33,6 @@ const baseNavigation = [
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
 
-// Itens específicos de operação de closer (admin não precisa ver)
 const closerOnlyItems = ['/calls', '/clients', '/intensivo-crm'];
 
 const getBaseNavigation = (isAdmin: boolean) => {
@@ -50,11 +51,49 @@ const adminNavigation = [
   { name: 'Admin', href: '/admin', icon: Shield },
 ];
 
+// Prefetch configs per route
+const prefetchConfigs: Record<string, (userId: string) => { queryKey: string[]; queryFn: () => Promise<any> }> = {
+  '/calls': (userId) => ({
+    queryKey: ['calls', userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('calls')
+        .select('id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at, company_name, notes, observation, deleted_at, deleted_by, next_contact_date, google_doc_id, source_file_id, content_hash, has_partner, consciousness_level, decision_reason, lead_classification, closer_classification, analysis_metadata, analysis_quality_score')
+        .eq('closer_id', userId)
+        .is('merged_with_call_id', null)
+        .order('call_date', { ascending: false });
+      return data || [];
+    },
+  }),
+  '/clients': (userId) => ({
+    queryKey: ['clients', userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('clients')
+        .select('id, closer_id, name, email, phone, company, niche, status, source, revenue, has_partner, main_difficulty, main_pain, notes, negotiation_notes, sale_notes, entry_value, sale_value, followup_date, contract_validity, is_sold, sold_at, is_from_indication, indication_source_id, is_super_hot, product_offered, sdr_name, funnel_source, status_changed_at, created_at, updated_at, instagram, data_completed_at, name_normalized')
+        .eq('closer_id', userId)
+        .order('created_at', { ascending: false });
+      return data || [];
+    },
+  }),
+  '/portfolio': (userId) => ({
+    queryKey: ['portfolio-students', userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('portfolio_students')
+        .select('id, client_id, closer_id, name, phone, email, niche, notes, current_ticket, entry_date, created_at, updated_at')
+        .order('created_at', { ascending: false });
+      return data || [];
+    },
+  }),
+};
+
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { isAdmin, isLeader } = useUserRole();
+  const queryClient = useQueryClient();
 
   const navigation = [
     ...getBaseNavigation(isAdmin),
@@ -70,6 +109,15 @@ export default function Sidebar() {
       toast.success('Até logo!');
     }
   };
+
+  const handlePrefetch = useCallback((href: string) => {
+    if (!user?.id) return;
+    const config = prefetchConfigs[href];
+    if (config) {
+      const { queryKey, queryFn } = config(user.id);
+      queryClient.prefetchQuery({ queryKey, queryFn, staleTime: 30_000 });
+    }
+  }, [user?.id, queryClient]);
 
   return (
     <aside
@@ -105,6 +153,7 @@ export default function Sidebar() {
               <NavLink
                 key={item.name}
                 to={item.href}
+                onMouseEnter={() => handlePrefetch(item.href)}
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive

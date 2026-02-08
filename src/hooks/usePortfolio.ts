@@ -17,53 +17,29 @@ export interface EnrichedStudentData {
 export function useStudentEnrichedData(students: PortfolioStudent[]) {
   const clientIds = students.map(s => s.client_id).filter(Boolean) as string[];
   
-  const { data: clients, isLoading: isLoadingClients } = useQuery({
-    queryKey: ['enriched-clients', clientIds],
+  const { data, isLoading } = useQuery({
+    queryKey: ['enriched-data', clientIds],
     queryFn: async () => {
-      if (clientIds.length === 0) return [];
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, revenue, product_offered, niche')
-        .in('id', clientIds);
-      if (error) throw error;
-      return data;
+      if (clientIds.length === 0) return { clients: [], activities: [], indications: [] };
+      const [clientsResult, activitiesResult, indicationsResult] = await Promise.all([
+        supabase.from('clients').select('id, revenue, product_offered, niche').in('id', clientIds),
+        supabase.from('client_activities').select('client_id, activity_type').in('client_id', clientIds).in('activity_type', ['intensivo', 'mentoria']),
+        supabase.from('indications').select('client_id').in('client_id', clientIds),
+      ]);
+      return {
+        clients: clientsResult.data || [],
+        activities: activitiesResult.data || [],
+        indications: indicationsResult.data || [],
+      };
     },
     enabled: clientIds.length > 0,
-  });
-
-  const { data: activities, isLoading: isLoadingActivities } = useQuery({
-    queryKey: ['enriched-activities', clientIds],
-    queryFn: async () => {
-      if (clientIds.length === 0) return [];
-      const { data, error } = await supabase
-        .from('client_activities')
-        .select('client_id, activity_type')
-        .in('client_id', clientIds)
-        .in('activity_type', ['intensivo', 'mentoria']);
-      if (error) throw error;
-      return data;
-    },
-    enabled: clientIds.length > 0,
-  });
-
-  const { data: indications, isLoading: isLoadingIndications } = useQuery({
-    queryKey: ['enriched-indications', clientIds],
-    queryFn: async () => {
-      if (clientIds.length === 0) return [];
-      const { data, error } = await supabase
-        .from('indications')
-        .select('client_id')
-        .in('client_id', clientIds);
-      if (error) throw error;
-      return data;
-    },
-    enabled: clientIds.length > 0,
+    staleTime: 120_000,
   });
 
   const enrichedDataMap = new Map<string, EnrichedStudentData>();
   
-  if (clients) {
-    clients.forEach(client => {
+  if (data?.clients) {
+    data.clients.forEach(client => {
       enrichedDataMap.set(client.id, {
         clientId: client.id,
         revenue: client.revenue,
@@ -76,34 +52,26 @@ export function useStudentEnrichedData(students: PortfolioStudent[]) {
     });
   }
 
-  if (activities) {
-    activities.forEach(activity => {
-      const data = enrichedDataMap.get(activity.client_id);
-      if (data) {
-        if (activity.activity_type === 'intensivo') {
-          data.hasIntensivo = true;
-        } else if (activity.activity_type === 'mentoria') {
-          data.hasMentoria = true;
-        }
+  if (data?.activities) {
+    data.activities.forEach(activity => {
+      const d = enrichedDataMap.get(activity.client_id);
+      if (d) {
+        if (activity.activity_type === 'intensivo') d.hasIntensivo = true;
+        else if (activity.activity_type === 'mentoria') d.hasMentoria = true;
       }
     });
   }
 
-  if (indications) {
-    indications.forEach(indication => {
+  if (data?.indications) {
+    data.indications.forEach(indication => {
       if (indication.client_id) {
-        const data = enrichedDataMap.get(indication.client_id);
-        if (data) {
-          data.indicationsCount += 1;
-        }
+        const d = enrichedDataMap.get(indication.client_id);
+        if (d) d.indicationsCount += 1;
       }
     });
   }
 
-  return {
-    enrichedDataMap,
-    isLoading: isLoadingClients || isLoadingActivities || isLoadingIndications,
-  };
+  return { enrichedDataMap, isLoading };
 }
 
 export function usePortfolioStudents() {
@@ -178,58 +146,46 @@ export function useStudentIndications() {
   });
 }
 
-// Hook para buscar TODOS os clientes do closer (para métricas do dashboard)
+// Consolidated hook for all portfolio metrics data (replaces 3 separate hooks)
+export function useAllPortfolioData() {
+  const { user } = useAuth();
+  
+  return useQuery({
+    queryKey: ['all-portfolio-data', user?.id],
+    queryFn: async () => {
+      const [clientsResult, activitiesResult, indicationsResult] = await Promise.all([
+        supabase.from('clients').select('id, is_sold, sale_value, closer_id'),
+        supabase.from('client_activities').select('id, client_id, activity_type'),
+        supabase.from('indications').select('id, client_id, indication_type, status, student_id'),
+      ]);
+      if (clientsResult.error) throw clientsResult.error;
+      if (activitiesResult.error) throw activitiesResult.error;
+      if (indicationsResult.error) throw indicationsResult.error;
+      return {
+        clients: clientsResult.data,
+        activities: activitiesResult.data,
+        indications: indicationsResult.data,
+      };
+    },
+    enabled: !!user,
+    staleTime: 120_000,
+  });
+}
+
+// Keep legacy hooks for backward compatibility
 export function useAllClients() {
-  const { user } = useAuth();
-  
-  return useQuery({
-    queryKey: ['all-clients', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, is_sold, sale_value, closer_id');
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user,
-  });
+  const { data } = useAllPortfolioData();
+  return { data: data?.clients };
 }
 
-// Hook para buscar atividades de TODOS os clientes (client_activities)
 export function useAllClientActivities() {
-  const { user } = useAuth();
-  
-  return useQuery({
-    queryKey: ['all-client-activities', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('client_activities')
-        .select('id, client_id, activity_type');
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user,
-  });
+  const { data } = useAllPortfolioData();
+  return { data: data?.activities };
 }
 
-// Hook para buscar TODAS as indicações
 export function useAllIndications() {
-  const { user } = useAuth();
-  
-  return useQuery({
-    queryKey: ['all-indications', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('indications')
-        .select('id, client_id, indication_type, status, student_id');
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user,
-  });
+  const { data } = useAllPortfolioData();
+  return { data: data?.indications };
 }
 
 // Métricas baseadas em TODOS os clientes (para o dashboard da carteira)

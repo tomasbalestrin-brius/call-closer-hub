@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Call, CallStatus, LeadClassification, CloserClassification } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -38,18 +38,18 @@ const closerClassificationConfig: Record<CloserClassification, { label: string; 
   elite: { label: 'Elite', className: 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white' },
 };
 
-export default function CallCard({ call, onClick, canDelete = false, onCallUpdated }: CallCardProps) {
+const formatCurrency = (value: number | null) => {
+  if (!value) return '-';
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+};
+
+const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCallUpdated }: CallCardProps) {
   const [showDialog, setShowDialog] = useState(false);
   const statusInfo = statusConfig[call.status];
   const formattedDate = format(new Date(call.call_date), "dd 'de' MMM", { locale: ptBR });
-  
-  const formatCurrency = (value: number | null) => {
-    if (!value) return '-';
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
 
   const handleClick = () => {
     if (onClick) {
@@ -70,6 +70,7 @@ export default function CallCard({ call, onClick, canDelete = false, onCallUpdat
           call.status === 'vendido' && 'border-l-4 border-l-success'
         )}
         onClick={handleClick}
+        style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
       >
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
@@ -165,4 +166,11 @@ export default function CallCard({ call, onClick, canDelete = false, onCallUpdat
       />
     </>
   );
-}
+}, (prev, next) => {
+  return prev.call.id === next.call.id 
+    && prev.call.status === next.call.status
+    && prev.call.updated_at === next.call.updated_at
+    && prev.canDelete === next.canDelete;
+});
+
+export default CallCard;

@@ -1,4 +1,3 @@
-import { useMonthlySales } from '@/hooks/useMonthlySales';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -6,13 +5,17 @@ import { Target } from 'lucide-react';
 
 const QUOTA_VALUE_PER_CLOSER = 80000;
 
-export default function QuotaProgressBar() {
-  const { data, isLoading } = useMonthlySales();
+interface QuotaProgressBarProps {
+  totalEntry?: number;
+  closerCount?: number;
+}
+
+export default function QuotaProgressBar({ totalEntry, closerCount }: QuotaProgressBarProps) {
   const { isAdmin } = useUserRole();
 
-  const closerCount = data?.closerCount ?? 1;
-  const quotaValue = isAdmin ? QUOTA_VALUE_PER_CLOSER * closerCount : QUOTA_VALUE_PER_CLOSER;
-  const currentValue = data?.totalEntry ?? 0;
+  const effectiveCloserCount = closerCount ?? 1;
+  const quotaValue = isAdmin ? QUOTA_VALUE_PER_CLOSER * effectiveCloserCount : QUOTA_VALUE_PER_CLOSER;
+  const currentValue = totalEntry ?? 0;
 
   const percentage = Math.min((currentValue / quotaValue) * 100, 100);
   const remaining = Math.max(quotaValue - currentValue, 0);
