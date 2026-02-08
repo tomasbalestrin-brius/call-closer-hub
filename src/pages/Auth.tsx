@@ -89,7 +89,7 @@ export default function Auth() {
       <div className="hidden lg:flex lg:w-1/2 gradient-primary items-center justify-center p-12">
         <div className="max-w-md text-primary-foreground animate-fade-in">
           <div className="flex items-center gap-3 mb-8">
-            <img src={logo} alt="Bethel Closer" className="w-14 h-14 object-contain" />
+            <img src={logo} alt="Bethel Closer" className="w-14 h-14 object-contain" fetchPriority="high" />
             <h1 className="text-3xl font-display font-bold">Bethel Closer</h1>
           </div>
           <h2 className="text-3xl font-display font-bold mb-4 leading-tight">
