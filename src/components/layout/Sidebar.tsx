@@ -21,7 +21,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import logo from '@/assets/logo-bethel-closer.png';
+const logo = "/logo-bethel-closer.png";
 
 const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },

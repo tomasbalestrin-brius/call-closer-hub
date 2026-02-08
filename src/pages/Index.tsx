@@ -1,14 +1,5 @@
-import { lazy, Suspense } from 'react';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import Dashboard from './Dashboard';
 
-const Dashboard = lazy(() => import('./Dashboard'));
-
-const Index = () => {
-  return (
-    <Suspense fallback={<LoadingSpinner />}>
-      <Dashboard />
-    </Suspense>
-  );
-};
+const Index = () => <Dashboard />;
 
 export default Index;

@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Mail, Lock, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import logo from '@/assets/logo-bethel-closer.png';
+const logo = "/logo-bethel-closer.png";
 
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string().min(6, 'A senha deve ter pelo menos 6 caracteres');
