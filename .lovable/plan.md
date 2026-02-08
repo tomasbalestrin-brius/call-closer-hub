@@ -1,22 +1,24 @@
 
+# Correcao de Texto na Tela de Login
 
-# Otimizacao Fase 4 - Dashboard Final
+Alteracao simples de duas frases no painel esquerdo da pagina de autenticacao (`src/pages/Auth.tsx`):
 
-## Problemas Corrigidos
+**Linha atual (h2):**
+"Transformando o empreendedorismo atraves da Educacao e Tecnologia."
 
-### 1. DashboardHeader sem React Query (MEDIO)
-Migrado de `useState/useEffect` manual para `useQuery` com `staleTime: 300_000` (5min). Perfil agora fica em cache e navegação de volta é instantânea.
+**Corrigido para:**
+"Profissionalizando o empreendedorismo atraves da Educacao e Tecnologia."
 
-### 2. StatsCard sem forwardRef (BAIXO)
-Adicionado `React.forwardRef` ao componente, eliminando o warning no console.
+---
 
-### 3. Dashboard com 4 queries separadas em clients (ALTO)
-Consolidado de 4 requests (calls + sold_clients + all_clients_with_product + repitch_clients) para 2 requests (calls + clients). Os subsets (sold, product, repitch) são derivados client-side a partir de uma única query.
+**Linha atual (p):**
+"E transformar cada empresa em Casa de Deus."
 
-## Impacto
+**Corrigido para:**
+"Transformando cada empresa em Casa de Deus."
 
-| Correção | Benefício |
-|----------|-----------|
-| DashboardHeader React Query | Cache de 5min, zero re-fetch |
-| StatsCard forwardRef | Console limpo |
-| Queries consolidadas | 50% menos requests no Dashboard (4→2) |
+---
+
+## Detalhes Tecnicos
+
+Arquivo: `src/pages/Auth.tsx`, linhas 96-100 aproximadamente. Apenas troca de texto estatico, sem impacto funcional.
