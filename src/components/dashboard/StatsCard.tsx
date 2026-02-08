@@ -1,3 +1,4 @@
+import React from 'react';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
 
@@ -27,16 +28,16 @@ const iconVariantStyles = {
   warning: 'bg-warning text-warning-foreground',
 };
 
-export default function StatsCard({ 
+const StatsCard = React.forwardRef<HTMLDivElement, StatsCardProps>(({ 
   title, 
   value, 
   subtitle, 
   icon: Icon, 
   trend,
   variant = 'default' 
-}: StatsCardProps) {
+}, ref) => {
   return (
-    <div className={cn(
+    <div ref={ref} className={cn(
       'rounded-xl border p-6 shadow-card transition-all hover:shadow-md animate-slide-up',
       variantStyles[variant]
     )}>
@@ -66,4 +67,8 @@ export default function StatsCard({
       </div>
     </div>
   );
-}
+});
+
+StatsCard.displayName = 'StatsCard';
+
+export default StatsCard;

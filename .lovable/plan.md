@@ -1,104 +1,22 @@
 
 
-# Otimizacao Fase 3 - Ultimos Gargalos
+# Otimizacao Fase 4 - Dashboard Final
 
-## Problemas Restantes
+## Problemas Corrigidos
 
-### 1. SquadView sem React Query (ALTO IMPACTO)
-A pagina SquadView ainda usa `useState/useEffect` manual para `fetchSquadMembers` e `fetchCloserData`. Ao navegar para outra pagina e voltar, tudo e recarregado do zero. Migrando para React Query, os dados ficam em cache por 30s e a navegacao de volta e instantanea.
+### 1. DashboardHeader sem React Query (MEDIO)
+Migrado de `useState/useEffect` manual para `useQuery` com `staleTime: 300_000` (5min). Perfil agora fica em cache e navegação de volta é instantânea.
 
-### 2. fetchClosers duplicado em Calls e Clients (MEDIO)
-Ambas as paginas `Calls.tsx` e `Clients.tsx` tem funcoes `fetchClosers` identicas usando `useEffect` manual. Isso deve ser extraido para um hook compartilhado com React Query, eliminando codigo duplicado e adicionando cache.
+### 2. StatsCard sem forwardRef (BAIXO)
+Adicionado `React.forwardRef` ao componente, eliminando o warning no console.
 
-### 3. UserRoleContext potencial re-fetch (BAIXO)
-O `useEffect` em `UserRoleContext` depende de `[user, authLoading]`. Se a referencia do objeto `user` mudar (mesmo sendo o mesmo usuario), o role e buscado novamente. Adicionar guard com `userId` para evitar.
+### 3. Dashboard com 4 queries separadas em clients (ALTO)
+Consolidado de 4 requests (calls + sold_clients + all_clients_with_product + repitch_clients) para 2 requests (calls + clients). Os subsets (sold, product, repitch) são derivados client-side a partir de uma única query.
 
----
+## Impacto
 
-## Solucao
-
-### Parte 1 - Migrar SquadView para React Query
-
-Trocar `fetchSquadMembers` por `useQuery`:
-
-```typescript
-const { data: squadMembers = [], isLoading: loadingMembers } = useQuery({
-  queryKey: ['squad-members', user?.id, isAdmin, isLeader],
-  queryFn: async () => { /* mesma logica */ },
-  enabled: !!user && !roleLoading && (isAdmin || isLeader),
-  staleTime: 60_000,
-});
-```
-
-Trocar `fetchCloserData` por `useQuery`:
-
-```typescript
-const { data: closerData, isLoading: loadingCalls } = useQuery({
-  queryKey: ['closer-data', selectedCloserId, dateRange.from, dateRange.to],
-  queryFn: async () => { /* retorna { stats, calls } */ },
-  enabled: !!selectedCloserId,
-});
-```
-
-Isso elimina os `useState` de `squadMembers`, `closerStats`, `closerCalls`, `loading`, `loadingCalls`, e os `useEffect` correspondentes. Tambem elimina o `hasFetchedMembers` guard que nao sera mais necessario.
-
-### Parte 2 - Criar hook useClosersList compartilhado
-
-Extrair a logica de `fetchClosers` para `src/hooks/useClosersList.ts`:
-
-```typescript
-export function useClosersList() {
-  const { user } = useAuth();
-  const { isAdmin, isLeader, loading } = useUserPermissions();
-
-  return useQuery({
-    queryKey: ['closers-list', user?.id, isAdmin, isLeader],
-    queryFn: async () => { /* busca closers conforme role */ },
-    enabled: !!user && !loading && (isAdmin || isLeader),
-    staleTime: 120_000, // 2min - lista de closers muda raramente
-  });
-}
-```
-
-Usar em `Calls.tsx` e `Clients.tsx`, removendo o `useState` de `closers` e o `useEffect` de `fetchClosers`.
-
-### Parte 3 - Estabilizar UserRoleContext
-
-Adicionar comparacao por `user.id` em vez de referencia do objeto `user`:
-
-```typescript
-const [lastFetchedUserId, setLastFetchedUserId] = useState<string | null>(null);
-
-useEffect(() => {
-  if (authLoading) return;
-  if (user && user.id !== lastFetchedUserId) {
-    setLastFetchedUserId(user.id);
-    fetchRole();
-  } else if (!user) {
-    setLastFetchedUserId(null);
-    setRole(null);
-    setIsAdmin(false);
-    setIsLeader(false);
-    setLoading(false);
-  }
-}, [user?.id, authLoading]);
-```
-
----
-
-## Impacto Esperado
-
-| Correcao | Beneficio |
+| Correção | Benefício |
 |----------|-----------|
-| SquadView React Query | Navegacao instantanea ao voltar, cache de 60s |
-| useClosersList hook | Elimina codigo duplicado, cache de 2min compartilhado entre Calls e Clients |
-| UserRoleContext guard | Elimina fetch extra de user_roles em troca de auth state |
-
-## Arquivos Modificados
-
-- `src/pages/SquadView.tsx` (migrar para React Query)
-- `src/hooks/useClosersList.ts` (novo hook compartilhado)
-- `src/pages/Calls.tsx` (usar useClosersList)
-- `src/pages/Clients.tsx` (usar useClosersList)
-- `src/contexts/UserRoleContext.tsx` (guard por user.id)
-
+| DashboardHeader React Query | Cache de 5min, zero re-fetch |
+| StatsCard forwardRef | Console limpo |
+| Queries consolidadas | 50% menos requests no Dashboard (4→2) |

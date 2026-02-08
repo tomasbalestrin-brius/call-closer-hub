@@ -75,69 +75,55 @@ export default function Dashboard() {
         callsQuery = callsQuery.in('client_id', clientIdsForFunnel);
       }
 
-      // Build clients query with date filter for sales
+      // Single clients query - fetch all needed fields, filter client-side
       let clientsQuery = supabase
         .from('clients')
-        .select('id, sale_value, entry_value, product_offered, funnel_source, sold_at, closer_id')
-        .eq('is_sold', true);
+        .select('id, sale_value, entry_value, product_offered, funnel_source, sold_at, closer_id, is_sold, status, created_at');
 
       if (!isAdmin) {
         clientsQuery = clientsQuery.eq('closer_id', user.id);
       }
 
+      // Apply date range broadly - get clients created or sold in range
       if (dateRange?.from) {
-        clientsQuery = clientsQuery.gte('sold_at', format(dateRange.from, 'yyyy-MM-dd'));
+        const fromDate = format(dateRange.from, 'yyyy-MM-dd');
+        clientsQuery = clientsQuery.or(`sold_at.gte.${fromDate},created_at.gte.${fromDate},status.eq.repitch`);
       }
-      if (dateRange?.to) {
-        clientsQuery = clientsQuery.lte('sold_at', format(dateRange.to, 'yyyy-MM-dd') + 'T23:59:59');
-      }
+
       if (selectedFunnel) {
         clientsQuery = clientsQuery.eq('funnel_source', selectedFunnel);
       }
 
-      // Query for all clients with product_offered
-      let allClientsQuery = supabase
-        .from('clients')
-        .select('id, product_offered')
-        .not('product_offered', 'is', null);
-
-      if (!isAdmin) {
-        allClientsQuery = allClientsQuery.eq('closer_id', user.id);
-      }
-
-      if (dateRange?.from) {
-        allClientsQuery = allClientsQuery.gte('created_at', format(dateRange.from, 'yyyy-MM-dd'));
-      }
-      if (dateRange?.to) {
-        allClientsQuery = allClientsQuery.lte('created_at', format(dateRange.to, 'yyyy-MM-dd') + 'T23:59:59');
-      }
-      if (selectedFunnel) {
-        allClientsQuery = allClientsQuery.eq('funnel_source', selectedFunnel);
-      }
-
-      let repitchClientsQuery = supabase
-        .from('clients')
-        .select('id')
-        .eq('status', 'repitch');
-
-      if (!isAdmin) {
-        repitchClientsQuery = repitchClientsQuery.eq('closer_id', user.id);
-      }
-      const [callsResult, clientsResult, allClientsResult, repitchClientsResult] = await Promise.all([
+      const [callsResult, clientsResult] = await Promise.all([
         callsQuery,
         clientsQuery,
-        allClientsQuery,
-        repitchClientsQuery
       ]);
 
       if (callsResult.error) throw callsResult.error;
       if (clientsResult.error) throw clientsResult.error;
-      if (allClientsResult.error) throw allClientsResult.error;
 
       const calls = callsResult.data || [];
-      const soldClients = clientsResult.data || [];
-      const allClientsWithProduct = allClientsResult.data || [];
-      const repitchClientIds = new Set(repitchClientsResult.data?.map(c => c.id) || []);
+      const allClients = clientsResult.data || [];
+
+      // Derive subsets client-side from single query
+      const repitchClientIds = new Set(allClients.filter(c => c.status === 'repitch').map(c => c.id));
+
+      const fromDate = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null;
+      const toDate = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') + 'T23:59:59' : null;
+
+      const soldClients = allClients.filter(c => {
+        if (!c.is_sold || !c.sold_at) return false;
+        if (fromDate && c.sold_at < fromDate) return false;
+        if (toDate && c.sold_at > toDate) return false;
+        return true;
+      });
+
+      const allClientsWithProduct = allClients.filter(c => {
+        if (!c.product_offered) return false;
+        if (fromDate && (!c.created_at || c.created_at < fromDate)) return false;
+        if (toDate && (!c.created_at || c.created_at > toDate)) return false;
+        return true;
+      });
 
       const totalCalls = calls.length;
       const callsForAverage = calls.filter(c =>

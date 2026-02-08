@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 
 export type CloserLevel = 
@@ -26,35 +26,25 @@ const LEVEL_CONFIG: Record<CloserLevel, { label: string; color: string }> = {
 export default function DashboardHeader() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
-  const [closerLevel, setCloserLevel] = useState<CloserLevel>('assessor');
-  const [displayName, setDisplayName] = useState('');
 
-  useEffect(() => {
-    if (user) {
-      fetchProfile();
-    }
-  }, [user]);
-
-  const fetchProfile = async () => {
-    if (!user) return;
-
-    try {
+  const { data: profile } = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('full_name, closer_level')
-        .eq('user_id', user.id)
+        .eq('user_id', user!.id)
         .single();
 
       if (error) throw error;
+      return data;
+    },
+    staleTime: 300_000,
+    enabled: !!user,
+  });
 
-      if (data) {
-        setDisplayName(data.full_name);
-        setCloserLevel((data.closer_level as CloserLevel) || 'assessor');
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    }
-  };
+  const displayName = profile?.full_name || '';
+  const closerLevel = (profile?.closer_level as CloserLevel) || 'assessor';
 
   const getGreeting = () => {
     const hour = new Date().getHours();
