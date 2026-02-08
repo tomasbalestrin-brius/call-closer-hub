@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -22,8 +23,6 @@ import {
   Target, 
   DollarSign,
   Calendar,
-  FileText,
-  Eye,
   ChevronRight,
   RefreshCw,
   AlertTriangle
@@ -54,15 +53,10 @@ export default function SquadView() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, isLeader, loading: roleLoading } = useUserRole();
+  const queryClient = useQueryClient();
   
-  const [squadMembers, setSquadMembers] = useState<SquadMember[]>([]);
   const [selectedCloserId, setSelectedCloserId] = useState<string>('');
-  const [selectedCloser, setSelectedCloser] = useState<SquadMember | null>(null);
-  const [closerStats, setCloserStats] = useState<CloserStats | null>(null);
-  const [closerCalls, setCloserCalls] = useState<Call[]>([]);
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingCalls, setLoadingCalls] = useState(false);
   const [showGoalDialog, setShowGoalDialog] = useState(false);
   const [dateRange, setDateRange] = useState({
     from: startOfMonth(new Date()),
@@ -70,28 +64,12 @@ export default function SquadView() {
   });
   const [reanalyzingCalls, setReanalyzingCalls] = useState(false);
 
-  const [hasFetchedMembers, setHasFetchedMembers] = useState(false);
+  // React Query: fetch squad members
+  const { data: squadMembers = [], isLoading: loadingMembers } = useQuery<SquadMember[]>({
+    queryKey: ['squad-members', user?.id, isAdmin, isLeader],
+    queryFn: async () => {
+      if (!user) return [];
 
-  useEffect(() => {
-    if (!authLoading && !roleLoading && user && (isAdmin || isLeader) && !hasFetchedMembers) {
-      setHasFetchedMembers(true);
-      fetchSquadMembers();
-    }
-  }, [user, authLoading, roleLoading, isAdmin, isLeader, hasFetchedMembers]);
-
-  useEffect(() => {
-    if (selectedCloserId) {
-      const closer = squadMembers.find(m => m.user_id === selectedCloserId);
-      setSelectedCloser(closer || null);
-      fetchCloserData(selectedCloserId);
-    }
-  }, [selectedCloserId, dateRange]);
-
-  const fetchSquadMembers = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch squads where user is a member (for leaders) or all squads (for admins)
       let squadIds: string[] = [];
       
       if (isAdmin) {
@@ -103,16 +81,12 @@ export default function SquadView() {
         const { data: mySquads } = await supabase
           .from('squad_members')
           .select('squad_id')
-          .eq('user_id', user!.id);
+          .eq('user_id', user.id);
         squadIds = mySquads?.map(s => s.squad_id) || [];
       }
 
-      if (squadIds.length === 0) {
-        setSquadMembers([]);
-        return;
-      }
+      if (squadIds.length === 0) return [];
 
-      // Fetch all members from those squads
       const { data: members, error } = await supabase
         .from('squad_members')
         .select('id, user_id, squad_id')
@@ -120,7 +94,6 @@ export default function SquadView() {
 
       if (error) throw error;
 
-      // Fetch profiles and roles for those members in parallel
       const userIds = [...new Set(members?.map(m => m.user_id) || [])];
       
       const [{ data: profiles }, { data: roles }] = await Promise.all([
@@ -128,8 +101,8 @@ export default function SquadView() {
         supabase.from('user_roles').select('user_id, role').in('user_id', userIds)
       ]);
 
-      const enrichedMembers: SquadMember[] = userIds
-        .filter(uid => uid !== user!.id) // Exclude self
+      return userIds
+        .filter(uid => uid !== user.id)
         .map(uid => {
           const profile = profiles?.find(p => p.user_id === uid);
           const role = roles?.find(r => r.user_id === uid);
@@ -141,47 +114,42 @@ export default function SquadView() {
             role: role?.role || 'closer'
           };
         })
-        .filter(m => m.role === 'closer'); // Only show closers
+        .filter(m => m.role === 'closer');
+    },
+    enabled: !!user && !roleLoading && (isAdmin || isLeader),
+    staleTime: 60_000,
+  });
 
-      setSquadMembers(enrichedMembers);
-    } catch (error) {
-      console.error('Error fetching squad members:', error);
-      toast.error('Erro ao carregar membros do time');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const selectedCloser = squadMembers.find(m => m.user_id === selectedCloserId) || null;
 
-  const fetchCloserData = async (closerId: string) => {
-    try {
-      setLoadingCalls(true);
-      
+  // React Query: fetch closer data (stats + calls)
+  const { data: closerData, isLoading: loadingCalls } = useQuery<{ stats: CloserStats; calls: Call[] }>({
+    queryKey: ['closer-data', selectedCloserId, dateRange.from.toISOString(), dateRange.to.toISOString()],
+    queryFn: async () => {
       const fromDate = format(dateRange.from, 'yyyy-MM-dd');
       const toDate = format(dateRange.to, 'yyyy-MM-dd');
-
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
 
-      // Fetch calls, goal, and repitch clients in parallel
       const [callsResult, goalResult, repitchResult] = await Promise.all([
         supabase
           .from('calls')
           .select('id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at, notes, observation, company_name, consciousness_level, decision_reason, lead_classification, closer_classification, has_partner, next_contact_date, analysis_quality_score, analysis_metadata, deleted_at, deleted_by, source_file_id, google_doc_id, content_hash')
-          .eq('closer_id', closerId)
+          .eq('closer_id', selectedCloserId)
           .gte('call_date', fromDate)
           .lte('call_date', toDate)
           .order('call_date', { ascending: false }),
         supabase
           .from('monthly_goals')
           .select('goal_value')
-          .eq('closer_id', closerId)
+          .eq('closer_id', selectedCloserId)
           .eq('month', currentMonth)
           .eq('year', currentYear)
           .maybeSingle(),
         supabase
           .from('clients')
           .select('id')
-          .eq('closer_id', closerId)
+          .eq('closer_id', selectedCloserId)
           .eq('status', 'repitch')
       ]);
 
@@ -191,14 +159,11 @@ export default function SquadView() {
       const { data: repitchClients } = repitchResult;
       
       const repitchClientIds = new Set(repitchClients?.map(c => c.id) || []);
-
-      // Calculate stats
       const totalCalls = calls?.length || 0;
       const sales = calls?.filter(c => c.status === 'vendido') || [];
       const totalSales = sales.length;
       const conversionRate = totalCalls > 0 ? (totalSales / totalCalls) * 100 : 0;
       
-      // Filter out calls from clients in "repitch" status for average
       const callsForAverage = calls?.filter(c => 
         c.score && 
         (!c.client_id || !repitchClientIds.has(c.client_id))
@@ -210,23 +175,28 @@ export default function SquadView() {
       const totalSaleValue = sales.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
       const totalEntryValue = sales.reduce((acc, c) => acc + (Number(c.entry_value) || 0), 0);
 
-      setCloserStats({
-        totalCalls,
-        totalSales,
-        conversionRate,
-        avgScore,
-        totalSaleValue,
-        totalEntryValue,
-        monthlyGoal: goalData?.goal_value || 0
-      });
+      return {
+        stats: {
+          totalCalls,
+          totalSales,
+          conversionRate,
+          avgScore,
+          totalSaleValue,
+          totalEntryValue,
+          monthlyGoal: goalData?.goal_value || 0
+        },
+        calls: (calls as unknown as Call[]) || []
+      };
+    },
+    enabled: !!selectedCloserId,
+    staleTime: 30_000,
+  });
 
-      setCloserCalls((calls as unknown as Call[]) || []);
-    } catch (error) {
-      console.error('Error fetching closer data:', error);
-      toast.error('Erro ao carregar dados do closer');
-    } finally {
-      setLoadingCalls(false);
-    }
+  const closerStats = closerData?.stats || null;
+  const closerCalls = closerData?.calls || [];
+
+  const invalidateCloserData = () => {
+    queryClient.invalidateQueries({ queryKey: ['closer-data', selectedCloserId] });
   };
 
   const formatCurrency = (value: number) => {
@@ -250,28 +220,23 @@ export default function SquadView() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  // Verifica se uma call tem mapeamentos incompletos
   const isCallIncomplete = (call: Call): boolean => {
     const techAnalysis = call.technical_analysis as TechnicalAnalysis | undefined;
     if (!techAnalysis) return false;
     
     const analiseEtapas = techAnalysis.analise_por_etapa as Record<string, unknown> | undefined;
     
-    // Verifica mapeamento_empresa
     const mapeamentoEmpresa = analiseEtapas?.mapeamento_empresa || techAnalysis?.mapeamento_empresa || techAnalysis?.mapeamento_negocio;
     const empresaVazia = !mapeamentoEmpresa || (typeof mapeamentoEmpresa === 'object' && Object.keys(mapeamentoEmpresa as object).length === 0);
     
-    // Verifica mapeamento_problema
     const mapeamentoProblema = analiseEtapas?.mapeamento_problema || techAnalysis?.mapeamento_problema || techAnalysis?.mapeamento_problemas;
     const problemaVazio = !mapeamentoProblema || (typeof mapeamentoProblema === 'object' && Object.keys(mapeamentoProblema as object).length === 0);
     
     return empresaVazia || problemaVazio;
   };
 
-  // Conta calls incompletas
   const incompleteCallsCount = closerCalls.filter(isCallIncomplete).length;
 
-  // Reanalisar calls com mapeamentos vazios
   const handleReanalyzeIncomplete = async () => {
     const callsToReanalyze = closerCalls.filter(isCallIncomplete);
     
@@ -291,7 +256,6 @@ export default function SquadView() {
         const { error } = await supabase.functions.invoke('reanalyze-call', {
           body: { callId: call.id }
         });
-
         if (error) {
           console.error(`Erro ao reanalisar call ${call.id}:`, error);
           errorCount++;
@@ -312,10 +276,7 @@ export default function SquadView() {
       toast.warning(`${successCount} calls reanalisadas, ${errorCount} com erro`);
     }
 
-    // Recarregar dados
-    if (selectedCloserId) {
-      fetchCloserData(selectedCloserId);
-    }
+    invalidateCloserData();
   };
 
   if (authLoading || roleLoading) {
@@ -368,7 +329,7 @@ export default function SquadView() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {loadingMembers ? (
               <Skeleton className="h-10 w-full max-w-md" />
             ) : squadMembers.length === 0 ? (
               <p className="text-muted-foreground">Nenhum closer encontrado no seu time.</p>
@@ -401,36 +362,12 @@ export default function SquadView() {
           <>
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <StatsCard
-                title="Total de Calls"
-                value={closerStats.totalCalls}
-                icon={Phone}
-              />
-              <StatsCard
-                title="Vendas"
-                value={closerStats.totalSales}
-                icon={TrendingUp}
-              />
-              <StatsCard
-                title="Conversão"
-                value={`${closerStats.conversionRate.toFixed(1)}%`}
-                icon={Target}
-              />
-              <StatsCard
-                title="Nota Média"
-                value={closerStats.avgScore.toFixed(1)}
-                icon={Star}
-              />
-              <StatsCard
-                title="Valor Total"
-                value={formatCurrency(closerStats.totalSaleValue)}
-                icon={DollarSign}
-              />
-              <StatsCard
-                title="Valor Entrada"
-                value={formatCurrency(closerStats.totalEntryValue)}
-                icon={DollarSign}
-              />
+              <StatsCard title="Total de Calls" value={closerStats.totalCalls} icon={Phone} />
+              <StatsCard title="Vendas" value={closerStats.totalSales} icon={TrendingUp} />
+              <StatsCard title="Conversão" value={`${closerStats.conversionRate.toFixed(1)}%`} icon={Target} />
+              <StatsCard title="Nota Média" value={closerStats.avgScore.toFixed(1)} icon={Star} />
+              <StatsCard title="Valor Total" value={formatCurrency(closerStats.totalSaleValue)} icon={DollarSign} />
+              <StatsCard title="Valor Entrada" value={formatCurrency(closerStats.totalEntryValue)} icon={DollarSign} />
             </div>
 
             {/* Monthly Goal */}
@@ -551,11 +488,7 @@ export default function SquadView() {
                             canDelete={true}
                             targetCloserId={selectedCloserId}
                             onViewDetails={() => setSelectedCall(call)}
-                            onCallUpdated={() => {
-                              if (selectedCloserId) {
-                                fetchCloserData(selectedCloserId);
-                              }
-                            }}
+                            onCallUpdated={invalidateCloserData}
                           />
                           <ChevronRight className="w-4 h-4 text-muted-foreground" />
                         </div>
@@ -575,9 +508,7 @@ export default function SquadView() {
           onOpenChange={() => setSelectedCall(null)}
           onCallUpdated={() => {
             setSelectedCall(null);
-            if (selectedCloserId) {
-              fetchCloserData(selectedCloserId);
-            }
+            invalidateCloserData();
           }}
           canDelete={true}
           targetCloserId={selectedCloserId}
@@ -587,11 +518,7 @@ export default function SquadView() {
         <SetMonthlyGoalDialog
           open={showGoalDialog}
           onOpenChange={setShowGoalDialog}
-          onSuccess={() => {
-            if (selectedCloserId) {
-              fetchCloserData(selectedCloserId);
-            }
-          }}
+          onSuccess={invalidateCloserData}
           closers={selectedCloser ? [{
             id: '',
             user_id: selectedCloser.user_id,
