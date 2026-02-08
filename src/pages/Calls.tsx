@@ -50,11 +50,12 @@ export default function Calls() {
   const [merging, setMerging] = useState(false);
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState<string | null>(null);
+  const [limit, setLimit] = useState(50);
 
   const targetCloserId = selectedCloserId || user?.id;
 
   const { data: calls = [], isLoading: loading } = useQuery({
-    queryKey: ['calls', targetCloserId, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+    queryKey: ['calls', targetCloserId, dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), limit],
     queryFn: async () => {
       if (!user) return [];
 
@@ -63,7 +64,8 @@ export default function Calls() {
         .select(CALLS_SELECT)
         .eq('closer_id', targetCloserId!)
         .is('merged_with_call_id', null)
-        .order('call_date', { ascending: false });
+        .order('call_date', { ascending: false })
+        .limit(limit);
 
       if (dateRange?.from) {
         query = query.gte('call_date', format(dateRange.from, 'yyyy-MM-dd'));
@@ -77,6 +79,7 @@ export default function Calls() {
       return (data || []) as unknown as Call[];
     },
     enabled: !!user && !permissionsLoading && !!targetCloserId,
+    placeholderData: (prev) => prev,
   });
 
   const invalidateCalls = () => {
@@ -215,16 +218,25 @@ export default function Calls() {
         {loading ? (
           <div className="text-muted-foreground">Carregando...</div>
         ) : filteredCalls.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCalls.map((call) => (
-              <div key={call.id} className="relative">
-                {(canDeleteCalls || isAdmin || isLeader) && (
-                  <input type="checkbox" checked={selectedCalls.includes(call.id)} onChange={() => toggleCallSelection(call.id)} className="absolute top-4 right-12 z-10 w-4 h-4 accent-primary" />
-                )}
-                <CallCard call={call} canDelete={canDeleteCalls} onCallUpdated={invalidateCalls} />
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredCalls.map((call) => (
+                <div key={call.id} className="relative">
+                  {(canDeleteCalls || isAdmin || isLeader) && (
+                    <input type="checkbox" checked={selectedCalls.includes(call.id)} onChange={() => toggleCallSelection(call.id)} className="absolute top-4 right-12 z-10 w-4 h-4 accent-primary" />
+                  )}
+                  <CallCard call={call} canDelete={canDeleteCalls} onCallUpdated={invalidateCalls} />
+                </div>
+              ))}
+            </div>
+            {calls.length >= limit && (
+              <div className="flex justify-center pt-4">
+                <Button variant="outline" onClick={() => setLimit(prev => prev + 50)}>
+                  Carregar mais
+                </Button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-12 bg-card rounded-xl border">
             <Phone className="w-12 h-12 mx-auto text-muted-foreground mb-4" />

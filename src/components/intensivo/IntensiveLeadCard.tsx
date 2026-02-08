@@ -22,6 +22,7 @@ export function IntensiveLeadCard({ lead, onClick, onDragStart, isDragging }: In
 
   return (
     <Card
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
       className={cn(
         'p-3 cursor-pointer hover:shadow-md transition-all group',
         isDragging && 'opacity-50 scale-95'
