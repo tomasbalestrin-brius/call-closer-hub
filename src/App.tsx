@@ -43,14 +43,6 @@ function CacheWarmer() {
   useEffect(() => {
     if (!user?.id) return;
     qc.prefetchQuery({
-      queryKey: ['user-role', user.id],
-      queryFn: async () => {
-        const { data } = await supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
-        return data;
-      },
-      staleTime: 300_000,
-    });
-    qc.prefetchQuery({
       queryKey: ['daily-verse'],
       queryFn: async () => {
         const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
