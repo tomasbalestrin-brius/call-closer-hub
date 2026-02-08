@@ -1,10 +1,12 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -33,9 +35,39 @@ const queryClient = new QueryClient({
   },
 });
 
+// Cache warming component - prefetches critical data after auth
+function CacheWarmer() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    if (!user?.id) return;
+    qc.prefetchQuery({
+      queryKey: ['user-role', user.id],
+      queryFn: async () => {
+        const { data } = await supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
+        return data;
+      },
+      staleTime: 300_000,
+    });
+    qc.prefetchQuery({
+      queryKey: ['daily-verse'],
+      queryFn: async () => {
+        const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+        const { data } = await supabase.from('daily_verses').select('verse_text, reference, category').eq('day_of_year', dayOfYear).maybeSingle();
+        return data;
+      },
+      staleTime: 3600_000,
+    });
+  }, [user?.id, qc]);
+
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <CacheWarmer />
       <Toaster />
       <Sonner />
       <BrowserRouter>
