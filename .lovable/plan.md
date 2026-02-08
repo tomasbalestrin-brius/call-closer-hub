@@ -1,81 +1,53 @@
 
-# Fases Pendentes de Performance Excepcional (7, 10, 11)
 
-## Fase 7: CSS Virtualization nos Cards
+# Otimizacao de Performance de Carregamento
 
-Adicionar `content-visibility: auto` e `contain-intrinsic-size` nos componentes de card para que o browser pule a renderizacao de cards fora da viewport.
+## Resumo
 
-**Arquivos**:
-- `src/components/calls/CallCard.tsx` - adicionar style no Card raiz
-- `src/components/clients/ClientCard.tsx` - adicionar style no Card raiz
-- `src/components/portfolio/StudentCard.tsx` - adicionar style no Card raiz
-- `src/components/intensivo/IntensiveLeadCard.tsx` - adicionar style no Card raiz
-
-Cada Card recebe: `style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}`
+Tres ajustes cirurgicos para eliminar redundancias que impactam o tempo de carregamento inicial da aplicacao, sem alterar design ou funcionalidade.
 
 ---
 
-## Fase 10: Paginacao no Calls
+## 1. Remover double lazy-load do Dashboard
 
-Atualmente `Calls.tsx` busca TODAS as calls sem limite. Com uso prolongado isso fica pesado.
+**Problema:** `App.tsx` carrega `Index.tsx` via lazy, que por sua vez faz outro `lazy()` para carregar `Dashboard.tsx`. Isso cria uma cadeia desnecessaria: JS parse -> Index.tsx -> novo chunk request -> Dashboard.tsx.
 
-**Mudancas em `src/pages/Calls.tsx`**:
-- Adicionar estado `pageSize = 50` e `page = 0`
-- Adicionar `.range(page * pageSize, (page + 1) * pageSize - 1)` na query
-- Adicionar botao "Carregar mais" no final da lista que incrementa o range
-- Usar `keepPreviousData: true` no useQuery para transicao suave
+**Solucao:** Importar `Dashboard` diretamente no `Index.tsx` em vez de usar `lazy()` novamente, ja que `Index.tsx` ja e lazy-loaded pelo `App.tsx`.
 
----
-
-## Fase 11: Otimizacao do Kanban (CRM Clients)
-
-Atualmente `Clients.tsx` faz 2 queries sequenciais: primeiro busca clientes, depois busca calls para extrair `lastCallDate`. Isso e ineficiente.
-
-**Mudancas em `src/pages/Clients.tsx`**:
-- Usar `Promise.all` para disparar ambas as queries em paralelo (clientes + calls) em vez de sequencialmente
-- Limitar a query de calls a apenas `client_id, call_date` com `limit` otimizado
+**Arquivo:** `src/pages/Index.tsx`
+- Remover `lazy` e `Suspense` imports
+- Importar `Dashboard` com import estatico
+- Renderizar `<Dashboard />` diretamente
 
 ---
 
-## Detalhes Tecnicos
+## 2. Remover query duplicada no CacheWarmer
 
-### Fase 7 - Exemplo de mudanca por card:
-```tsx
-<Card 
-  className={cn("cursor-pointer ...")}
-  style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
->
-```
-Zero dependencias, nativo do browser. Reduz trabalho de rendering em 60-80% para listas longas.
+**Problema:** O componente `CacheWarmer` em `App.tsx` faz `prefetchQuery` para `['user-role', user.id]`, mas o `UserRoleContext` ja faz exatamente essa mesma query (`user_roles` com `eq('user_id', user.id)`). Isso gera uma requisicao duplicada ao banco na inicializacao.
 
-### Fase 10 - Paginacao incremental:
-```tsx
-const [limit, setLimit] = useState(50);
+**Solucao:** Remover o prefetch de `user-role` do `CacheWarmer`, mantendo apenas o prefetch de `daily-verse` que nao e duplicado.
 
-// Na query:
-.order('call_date', { ascending: false })
-.limit(limit);
+**Arquivo:** `src/App.tsx`
+- Remover o bloco `prefetchQuery` de `user-role`
+- Manter o prefetch de `daily-verse`
 
-// No JSX:
-{calls.length >= limit && (
-  <Button onClick={() => setLimit(prev => prev + 50)}>
-    Carregar mais
-  </Button>
-)}
-```
+---
 
-### Fase 11 - Queries paralelas:
-```tsx
-const [clientsResult, callsResult] = await Promise.all([
-  supabase.from('clients').select(CLIENTS_SELECT).eq('closer_id', targetCloserId),
-  supabase.from('calls').select('client_id, call_date').eq('closer_id', targetCloserId).is('deleted_at', null).order('call_date', { ascending: false })
-]);
-```
+## 3. Unificar caminho da imagem do logo
 
-### Arquivos modificados:
-- `src/components/calls/CallCard.tsx`
-- `src/components/clients/ClientCard.tsx`
-- `src/components/portfolio/StudentCard.tsx`
-- `src/components/intensivo/IntensiveLeadCard.tsx`
-- `src/pages/Calls.tsx`
-- `src/pages/Clients.tsx`
+**Problema:** O Sidebar e Auth importam o logo via `import logo from '@/assets/logo-bethel-closer.png'`, o que inclui a imagem no bundle JS (base64 ou hash separado). A mesma imagem ja existe em `/public/logo-bethel-closer.png` e e pre-carregada pelo HTML.
+
+**Solucao:** Usar o caminho publico `/logo-bethel-closer.png` diretamente, evitando que o bundler processe a imagem novamente.
+
+**Arquivos:**
+- `src/components/layout/Sidebar.tsx` - Remover `import logo` e usar `"/logo-bethel-closer.png"` no `src`
+- `src/pages/Auth.tsx` - Mesmo ajuste
+
+---
+
+## Impacto Esperado
+
+- Elimina 1 request extra na cadeia de carregamento (double lazy)
+- Elimina 1 query duplicada ao banco de dados no login
+- Reduz o tamanho do bundle JS removendo a imagem do pipeline de assets
+
