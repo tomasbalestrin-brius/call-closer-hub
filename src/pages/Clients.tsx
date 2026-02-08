@@ -42,38 +42,35 @@ export default function Clients() {
     queryFn: async (): Promise<ClientWithLastCall[]> => {
       if (!user || !targetCloserId) return [];
 
-      // Fetch clients
-      const { data: clientsData, error: clientsError } = await supabase
-        .from('clients')
-        .select(CLIENTS_SELECT)
-        .eq('closer_id', targetCloserId)
-        .order('created_at', { ascending: false });
-
-      if (clientsError) throw clientsError;
-
-      // Fetch last call date for each client
-      const clientIds = (clientsData || []).map(c => c.id);
-      let lastCallDates: Record<string, string> = {};
-      
-      if (clientIds.length > 0) {
-        const { data: callsData } = await supabase
+      // Fetch clients and calls in parallel
+      const [clientsResult, callsResult] = await Promise.all([
+        supabase
+          .from('clients')
+          .select(CLIENTS_SELECT)
+          .eq('closer_id', targetCloserId)
+          .order('created_at', { ascending: false }),
+        supabase
           .from('calls')
           .select('client_id, call_date')
-          .in('client_id', clientIds)
+          .eq('closer_id', targetCloserId)
           .is('deleted_at', null)
-          .order('call_date', { ascending: false })
-          .limit(clientIds.length * 3);
-        
-        if (callsData) {
-          callsData.forEach(call => {
-            if (call.client_id && !lastCallDates[call.client_id]) {
-              lastCallDates[call.client_id] = call.call_date;
-            }
-          });
-        }
+          .order('call_date', { ascending: false }),
+      ]);
+
+      if (clientsResult.error) throw clientsResult.error;
+
+      const clientsData = clientsResult.data || [];
+      const lastCallDates: Record<string, string> = {};
+      
+      if (callsResult.data) {
+        callsResult.data.forEach(call => {
+          if (call.client_id && !lastCallDates[call.client_id]) {
+            lastCallDates[call.client_id] = call.call_date;
+          }
+        });
       }
 
-      return (clientsData || []).map(client => ({
+      return clientsData.map(client => ({
         ...client,
         lastCallDate: lastCallDates[client.id] || null,
       })) as ClientWithLastCall[];

@@ -36,6 +36,7 @@ const StudentCard = memo(function StudentCard({ student, enrichedData, isLoading
   
   return (
     <Card 
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
       className={cn(
         "cursor-pointer hover:border-primary/50 transition-colors",
         isFromCRM && "border-l-4 border-l-primary"
