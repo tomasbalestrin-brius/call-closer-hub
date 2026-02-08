@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { useClosersList } from '@/hooks/useClosersList';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import ClientKanban from '@/components/clients/ClientKanban';
@@ -24,60 +25,15 @@ interface ClientWithLastCall extends Client {
   lastCallDate?: string | null;
 }
 
-interface CloserProfile {
-  user_id: string;
-  full_name: string;
-}
-
 const CLIENTS_SELECT = 'id, closer_id, name, email, phone, company, niche, status, source, revenue, has_partner, main_difficulty, main_pain, notes, negotiation_notes, sale_notes, entry_value, sale_value, followup_date, contract_validity, is_sold, sold_at, is_from_indication, indication_source_id, is_super_hot, product_offered, sdr_name, funnel_source, status_changed_at, created_at, updated_at, instagram, data_completed_at, name_normalized';
 
 export default function Clients() {
   const { user } = useAuth();
   const { isAdmin, isLeader, loading: permissionsLoading } = useUserPermissions();
   const queryClient = useQueryClient();
+  const { data: closers = [] } = useClosersList();
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Closer filter for admin/leader
-  const [closers, setClosers] = useState<CloserProfile[]>([]);
   const [selectedCloserId, setSelectedCloserId] = useState<string | null>(null);
-
-  // Fetch closers list for admin/leader
-  useEffect(() => {
-    if (user && (isAdmin || isLeader) && !permissionsLoading) {
-      fetchClosers();
-    }
-  }, [user, isAdmin, isLeader, permissionsLoading]);
-
-  const fetchClosers = async () => {
-    if (!user) return;
-    try {
-      if (isAdmin) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('user_id, full_name')
-          .order('full_name');
-        if (error) throw error;
-        setClosers((data || []).filter(p => p.user_id !== user.id));
-      } else if (isLeader) {
-        const { data: squadMembers, error } = await supabase
-          .from('squad_members')
-          .select(`user_id, squads!inner(created_by)`)
-          .eq('squads.created_by', user.id);
-        if (error) throw error;
-        const memberIds = (squadMembers || []).map(m => m.user_id).filter(id => id !== user.id);
-        if (memberIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('user_id, full_name')
-            .in('user_id', memberIds)
-            .order('full_name');
-          setClosers(profiles || []);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching closers:', error);
-    }
-  };
 
   const targetCloserId = selectedCloserId || user?.id;
 

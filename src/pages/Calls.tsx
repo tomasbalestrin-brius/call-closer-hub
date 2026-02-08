@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { useClosersList } from '@/hooks/useClosersList';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import CallCard from '@/components/calls/CallCard';
@@ -35,65 +36,20 @@ import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
-interface CloserProfile {
-  user_id: string;
-  full_name: string;
-}
-
 const CALLS_SELECT = 'id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at, company_name, notes, observation, deleted_at, deleted_by, next_contact_date, google_doc_id, source_file_id, content_hash, has_partner, consciousness_level, decision_reason, lead_classification, closer_classification, analysis_metadata, analysis_quality_score';
 
 export default function Calls() {
   const { user } = useAuth();
   const { canDeleteCalls, isAdmin, isLeader, loading: permissionsLoading } = useUserPermissions();
   const queryClient = useQueryClient();
+  const { data: closers = [] } = useClosersList();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<CallStatus | 'all'>('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedCalls, setSelectedCalls] = useState<string[]>([]);
   const [merging, setMerging] = useState(false);
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
-  
-  // Closer filter for admin/leader
-  const [closers, setClosers] = useState<CloserProfile[]>([]);
   const [selectedCloserId, setSelectedCloserId] = useState<string | null>(null);
-
-  // Fetch closers list for admin/leader
-  useEffect(() => {
-    if (user && (isAdmin || isLeader) && !permissionsLoading) {
-      fetchClosers();
-    }
-  }, [user, isAdmin, isLeader, permissionsLoading]);
-
-  const fetchClosers = async () => {
-    if (!user) return;
-    try {
-      if (isAdmin) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('user_id, full_name')
-          .order('full_name');
-        if (error) throw error;
-        setClosers((data || []).filter(p => p.user_id !== user.id));
-      } else if (isLeader) {
-        const { data: squadMembers, error } = await supabase
-          .from('squad_members')
-          .select(`user_id, squads!inner(created_by)`)
-          .eq('squads.created_by', user.id);
-        if (error) throw error;
-        const memberIds = (squadMembers || []).map(m => m.user_id).filter(id => id !== user.id);
-        if (memberIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('user_id, full_name')
-            .in('user_id', memberIds)
-            .order('full_name');
-          setClosers(profiles || []);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching closers:', error);
-    }
-  };
 
   const targetCloserId = selectedCloserId || user?.id;
 

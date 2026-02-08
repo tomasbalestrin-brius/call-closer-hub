@@ -18,19 +18,22 @@ export function UserRoleProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLeader, setIsLeader] = useState(false);
+  const [lastFetchedUserId, setLastFetchedUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
 
-    if (user) {
+    if (user && user.id !== lastFetchedUserId) {
+      setLastFetchedUserId(user.id);
       fetchRole();
-    } else {
+    } else if (!user) {
+      setLastFetchedUserId(null);
       setRole(null);
       setIsAdmin(false);
       setIsLeader(false);
       setLoading(false);
     }
-  }, [user, authLoading]);
+  }, [user?.id, authLoading]);
 
   const fetchRole = async () => {
     if (!user) return;
