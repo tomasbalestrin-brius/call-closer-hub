@@ -1,7 +1,5 @@
 import { useMonthlySales } from '@/hooks/useMonthlySales';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Target } from 'lucide-react';
@@ -12,21 +10,7 @@ export default function QuotaProgressBar() {
   const { data, isLoading } = useMonthlySales();
   const { isAdmin } = useUserRole();
 
-  // Count closers for admin quota calculation
-  const { data: closerCount = 1 } = useQuery({
-    queryKey: ['closer-count'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('role', 'closer');
-      if (error) throw error;
-      return data?.length || 1;
-    },
-    staleTime: 300_000,
-    enabled: isAdmin,
-  });
-
+  const closerCount = data?.closerCount ?? 1;
   const quotaValue = isAdmin ? QUOTA_VALUE_PER_CLOSER * closerCount : QUOTA_VALUE_PER_CLOSER;
   const currentValue = data?.totalEntry ?? 0;
 
