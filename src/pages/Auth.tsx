@@ -93,10 +93,10 @@ export default function Auth() {
             <h1 className="text-3xl font-display font-bold">Bethel Closer</h1>
           </div>
           <h2 className="text-3xl font-display font-bold mb-4 leading-tight">
-            Transformando o empreendedorismo através da Educação e Tecnologia.
+            Profissionalizando o empreendedorismo através da Educação e Tecnologia.
           </h2>
           <p className="text-xl opacity-90 mb-6">
-            E transformar cada empresa em Casa de Deus.
+            Transformando cada empresa em Casa de Deus.
           </p>
           <div className="mt-8 p-4 border border-white/20 rounded-lg bg-white/5">
             <p className="text-sm opacity-70 mb-1">Valor do dia</p>
