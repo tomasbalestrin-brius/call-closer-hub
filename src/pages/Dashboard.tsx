@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useDashboardData } from '@/hooks/useDashboardData';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
@@ -30,6 +31,7 @@ const emptyStats: DashboardStats = {
 export default function Dashboard() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { data: consolidatedData } = useDashboardData();
   const [selectedFunnel, setSelectedFunnel] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
@@ -210,8 +212,14 @@ export default function Dashboard() {
 
         {/* Progress Bars */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <QuotaProgressBar />
-          <MonthlyGoalBar />
+          <QuotaProgressBar 
+            totalEntry={consolidatedData?.monthlySales.totalEntry} 
+            closerCount={consolidatedData?.monthlySales.closerCount} 
+          />
+          <MonthlyGoalBar 
+            totalSale={consolidatedData?.monthlySales.totalSale}
+            goalValue={consolidatedData?.monthlyGoal}
+          />
         </div>
 
         {/* Stats Grid */}

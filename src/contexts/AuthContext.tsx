@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface AuthContextType {
   user: User | null;
@@ -17,6 +18,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Cache warming: prefetch critical data after auth
+  const warmCache = useCallback((userId: string) => {
+    queryClient.prefetchQuery({
+      queryKey: ['user-role', userId],
+      queryFn: async () => {
+        const { data } = await supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle();
+        return data;
+      },
+      staleTime: 300_000,
+    });
+    queryClient.prefetchQuery({
+      queryKey: ['daily-verse'],
+      queryFn: async () => {
+        const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+        const { data } = await supabase.from('daily_verses').select('verse_text, reference, category').eq('day_of_year', dayOfYear).maybeSingle();
+        return data;
+      },
+      staleTime: 3600_000,
+    });
+  }, [queryClient]);
 
   useEffect(() => {
     let initialized = false;
@@ -27,6 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        // Warm cache on sign in
+        if (session?.user?.id && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+          warmCache(session.user.id);
+        }
       }
     );
 

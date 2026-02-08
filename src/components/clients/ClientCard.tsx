@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo, useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Client } from '@/types';
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +8,6 @@ import ClientCardMenu from './ClientCardMenu';
 import IndicationDialog from './IndicationDialog';
 import { formatDistanceToNow, format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useState } from 'react';
 
 interface ClientCardProps {
   client: Client;
@@ -17,7 +16,7 @@ interface ClientCardProps {
   onUpdate?: () => void;
 }
 
-export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: ClientCardProps) {
+const ClientCardInner = memo(function ClientCard({ client, lastCallDate, onClick, onUpdate }: ClientCardProps) {
   const navigate = useNavigate();
   const [indicationDialogOpen, setIndicationDialogOpen] = useState(false);
 
@@ -58,6 +57,7 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
   return (
     <>
       <Card 
+        style={{ contentVisibility: 'auto', containIntrinsicSize: '0 220px' }}
         className={cn(
           "cursor-pointer transition-all animate-slide-up relative",
           isOverdueRepitch
@@ -186,4 +186,12 @@ export default function ClientCard({ client, lastCallDate, onClick, onUpdate }: 
       />
     </>
   );
-}
+}, (prev, next) => {
+  return prev.client.id === next.client.id
+    && prev.client.status === next.client.status
+    && prev.client.updated_at === next.client.updated_at
+    && prev.client.is_super_hot === next.client.is_super_hot
+    && prev.lastCallDate === next.lastCallDate;
+});
+
+export default ClientCardInner;

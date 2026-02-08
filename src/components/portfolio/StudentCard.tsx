@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { User, Phone, Mail, Link as LinkIcon, Flame, Users, GraduationCap, DollarSign, Target, ShoppingBag, Loader2 } from 'lucide-react';
@@ -29,7 +30,7 @@ const formatCurrency = (value: number | null | undefined) => {
   }).format(value);
 };
 
-export default function StudentCard({ student, enrichedData, isLoadingEnriched, onClick }: StudentCardProps) {
+const StudentCard = memo(function StudentCard({ student, enrichedData, isLoadingEnriched, onClick }: StudentCardProps) {
   const isFromCRM = !!student.client_id;
   const niche = enrichedData?.niche || student.niche;
   
@@ -148,4 +149,12 @@ export default function StudentCard({ student, enrichedData, isLoadingEnriched, 
       </CardContent>
     </Card>
   );
-}
+}, (prev, next) => {
+  return prev.student.id === next.student.id
+    && prev.student.current_ticket === next.student.current_ticket
+    && prev.student.updated_at === next.student.updated_at
+    && prev.isLoadingEnriched === next.isLoadingEnriched
+    && prev.enrichedData === next.enrichedData;
+});
+
+export default StudentCard;
