@@ -1,68 +1,81 @@
 
 
-# Melhoria no Drag-and-Drop dos Kanbans
+# Fix: Drag-and-Drop no CRM Calls
 
-## Problema Atual
+## Problemas Identificados
 
-O drag-and-drop nos Kanbans (CRM Calls e Intensivo) usa a API nativa do HTML5 que tem limitacoes:
-- No CRM Calls (`ClientKanban`): nao ha feedback visual de qual coluna esta sendo sobrevoada
-- No Intensivo (`IntensiveKanban`): o `handleDragLeave` reseta o highlight prematuramente ao passar sobre cards filhos dentro da coluna (event bubbling)
-- Em ambos: se o usuario soltar o card fora de qualquer coluna, o estado `draggedClient`/`draggedLead` pode ficar preso
+1. **`setData()` ausente no `dragstart`**: Alguns navegadores exigem que `e.dataTransfer.setData()` seja chamado para iniciar o drag corretamente. Sem isso, o drag pode falhar silenciosamente.
+
+2. **Conflito click vs drag**: O `ClientCard` tem `onClick` que navega para `/clients/${client.id}`. Quando o drag e muito curto ou cancelado, o `click` dispara e leva o usuario para outra pagina, dando a impressao de que o drag nao funciona. No `IntensiveKanban`, o `onClick` abre um dialog (permanece na mesma pagina), entao esse problema nao aparece la.
 
 ## Solucao
 
-### 1. ClientKanban - Adicionar feedback visual e `onDragEnd`
+### Arquivo: `src/components/clients/ClientKanban.tsx`
 
-- Adicionar estado `dragOverColumn` para destacar a coluna alvo (igual ao IntensiveKanban)
-- Adicionar handler `onDragEnd` no elemento draggable para limpar estado quando o drag e cancelado (soltar fora, pressionar ESC)
-- Adicionar `onDragLeave` na coluna para remover highlight
+1. Adicionar `e.dataTransfer.setData('text/plain', client.id)` no `handleDragStart` para garantir compatibilidade com todos os navegadores
+2. Usar um `useRef` para rastrear se um drag esta em progresso
+3. No wrapper draggable, interceptar o `onClick` e prevenir a navegacao se um drag acabou de ocorrer
 
-### 2. IntensiveKanban - Corrigir bug do `onDragLeave`
+### Arquivo: `src/components/intensivo/IntensiveKanban.tsx`
 
-- O `onDragLeave` dispara ao entrar em elementos filhos dentro da coluna (cards, textos), removendo o highlight incorretamente
-- Corrigir verificando `e.currentTarget.contains(e.relatedTarget)` para ignorar transicoes internas
-- Adicionar `onDragEnd` no card para limpar estado em caso de cancelamento
-
-### 3. Ambos os Kanbans - Garantir drag livre
-
-- Adicionar `onDragEnd` nos elementos draggable para resetar todo o estado (draggedItem, dragOverColumn, stopScroll)
-- Isso garante que ao soltar em qualquer lugar ou cancelar, o sistema volta ao estado limpo
+1. Adicionar `e.dataTransfer.setData('text/plain', lead.id)` no `handleDragStart` para consistencia
 
 ## Detalhes Tecnicos
 
-### Arquivos modificados:
+### Logica do flag de drag (ClientKanban):
 
-**`src/components/clients/ClientKanban.tsx`**
-- Novo estado: `const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)`
-- `handleDragOver` recebe `columnId` e seta `setDragOverColumn(columnId)`
-- Novo `handleDragEnd`: limpa `draggedClient`, `dragOverColumn`, chama `stopScroll()`
-- `handleDrop`: limpa `dragOverColumn`
-- Visual: borda/fundo destacado na coluna ativa (`isDragOver ? 'border-primary bg-primary/5' : ''`)
-- Atributo `onDragEnd={handleDragEnd}` no div draggable
+```typescript
+const isDraggingRef = useRef(false);
 
-**`src/components/intensivo/IntensiveKanban.tsx`**
-- Corrigir `handleDragLeave`: verificar se `e.relatedTarget` ainda esta dentro do `e.currentTarget`
-- Novo `handleDragEnd`: limpa `draggedLead`, `dragOverColumn`, chama `stopScroll()`
-- Atributo `onDragEnd={handleDragEnd}` no `IntensiveLeadCard` (via prop ou wrapper)
-
-**`src/components/intensivo/IntensiveLeadCard.tsx`**
-- Adicionar prop `onDragEnd` e passar ao elemento `Card`
-
-### Logica do `handleDragLeave` corrigido:
-```tsx
-const handleDragLeave = (e: React.DragEvent) => {
-  // Ignorar se o mouse ainda esta dentro da coluna (transitou para um filho)
-  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-  setDragOverColumn(null);
+const handleDragStart = (e: React.DragEvent, client: ClientWithLastCall) => {
+  isDraggingRef.current = true;
+  setDraggedClient(client);
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', client.id);
 };
-```
 
-### Logica do `handleDragEnd`:
-```tsx
 const handleDragEnd = () => {
+  // Usar setTimeout para que o flag persista durante o evento click
+  setTimeout(() => { isDraggingRef.current = false; }, 0);
   setDraggedClient(null);
   setDragOverColumn(null);
   stopScroll();
 };
 ```
+
+### Interceptacao do click no wrapper draggable:
+
+```tsx
+<div
+  draggable
+  onDragStart={(e) => handleDragStart(e, client)}
+  onDragEnd={handleDragEnd}
+  onClick={(e) => {
+    if (isDraggingRef.current) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }}
+  className={cn(
+    "cursor-grab active:cursor-grabbing transition-opacity",
+    draggedClient?.id === client.id && "opacity-50"
+  )}
+>
+  <ClientCard client={client} lastCallDate={client.lastCallDate} onUpdate={onRefresh} />
+</div>
+```
+
+### setData no IntensiveKanban (para consistencia):
+
+```typescript
+const handleDragStart = (e: React.DragEvent, lead: IntensiveLead) => {
+  setDraggedLead(lead);
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', lead.id);
+};
+```
+
+### Arquivos modificados:
+- `src/components/clients/ClientKanban.tsx` - Flag de drag + setData
+- `src/components/intensivo/IntensiveKanban.tsx` - setData para compatibilidade
 
