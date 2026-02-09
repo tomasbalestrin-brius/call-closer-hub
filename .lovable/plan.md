@@ -1,53 +1,66 @@
 
 
-# Otimizacao de Performance de Carregamento
+# Corrigir Impossibilidade de Logout com Sessao Corrompida
 
-## Resumo
+## Problema
 
-Tres ajustes cirurgicos para eliminar redundancias que impactam o tempo de carregamento inicial da aplicacao, sem alterar design ou funcionalidade.
+Quando o refresh token de um usuario expira ou e invalidado, o fluxo atual:
+1. `onAuthStateChange` nao dispara `SIGNED_OUT`
+2. `getSession` retorna sessao `null` mas os tokens invalidos permanecem no localStorage
+3. O app redireciona para `/auth` mas os tokens corrompidos persistem
+4. Na proxima visita, o ciclo se repete — tela branca ou loop infinito
 
----
+O botao "Sair" esta no Sidebar, que so aparece para usuarios autenticados (`MainLayout`), entao o usuario nao consegue clicar nele.
 
-## 1. Remover double lazy-load do Dashboard
+## Solucao
 
-**Problema:** `App.tsx` carrega `Index.tsx` via lazy, que por sua vez faz outro `lazy()` para carregar `Dashboard.tsx`. Isso cria uma cadeia desnecessaria: JS parse -> Index.tsx -> novo chunk request -> Dashboard.tsx.
+### 1. Tratar token invalido no AuthContext
 
-**Solucao:** Importar `Dashboard` diretamente no `Index.tsx` em vez de usar `lazy()` novamente, ja que `Index.tsx` ja e lazy-loaded pelo `App.tsx`.
+**Arquivo:** `src/contexts/AuthContext.tsx`
 
-**Arquivo:** `src/pages/Index.tsx`
-- Remover `lazy` e `Suspense` imports
-- Importar `Dashboard` com import estatico
-- Renderizar `<Dashboard />` diretamente
+Adicionar tratamento no listener `onAuthStateChange` para o evento `TOKEN_REFRESHED` com erro, e tambem no fallback `getSession`:
 
----
+- Quando `onAuthStateChange` dispara com evento `SIGNED_OUT` ou quando `getSession` retorna sessao `null`, chamar `supabase.auth.signOut()` para limpar tokens do localStorage
+- Isso garante que tokens corrompidos sejam removidos e o usuario veja a tela de login limpa
 
-## 2. Remover query duplicada no CacheWarmer
+### 2. Adicionar botao de logout na pagina de Auth (fallback)
 
-**Problema:** O componente `CacheWarmer` em `App.tsx` faz `prefetchQuery` para `['user-role', user.id]`, mas o `UserRoleContext` ja faz exatamente essa mesma query (`user_roles` com `eq('user_id', user.id)`). Isso gera uma requisicao duplicada ao banco na inicializacao.
+**Arquivo:** `src/pages/Auth.tsx`
 
-**Solucao:** Remover o prefetch de `user-role` do `CacheWarmer`, mantendo apenas o prefetch de `daily-verse` que nao e duplicado.
+Adicionar uma verificacao: se o usuario chegou na pagina `/auth` mas ainda existem tokens no localStorage (sessao corrompida), mostrar um botao "Limpar sessao" ou fazer a limpeza automatica chamando `signOut()` ao montar o componente.
 
-**Arquivo:** `src/App.tsx`
-- Remover o bloco `prefetchQuery` de `user-role`
-- Manter o prefetch de `daily-verse`
+## Detalhes Tecnicos
 
----
+No `AuthContext.tsx`, dentro do `useEffect`:
 
-## 3. Unificar caminho da imagem do logo
+```
+// Dentro do callback de onAuthStateChange
+if (event === 'TOKEN_REFRESHED' && !session) {
+  // Token refresh falhou - limpar estado corrompido
+  supabase.auth.signOut();
+}
 
-**Problema:** O Sidebar e Auth importam o logo via `import logo from '@/assets/logo-bethel-closer.png'`, o que inclui a imagem no bundle JS (base64 ou hash separado). A mesma imagem ja existe em `/public/logo-bethel-closer.png` e e pre-carregada pelo HTML.
+// No fallback getSession
+if (!session) {
+  // Garantir limpeza de tokens invalidos
+  supabase.auth.signOut();
+}
+```
 
-**Solucao:** Usar o caminho publico `/logo-bethel-closer.png` diretamente, evitando que o bundler processe a imagem novamente.
+No `Auth.tsx`, adicionar um `useEffect`:
 
-**Arquivos:**
-- `src/components/layout/Sidebar.tsx` - Remover `import logo` e usar `"/logo-bethel-closer.png"` no `src`
-- `src/pages/Auth.tsx` - Mesmo ajuste
+```
+// Limpar sessao corrompida ao chegar na pagina de login
+useEffect(() => {
+  supabase.auth.signOut();
+}, []);
+```
 
----
+Isso e seguro porque se o usuario tem sessao valida, o redirect para `/` ja acontece antes.
 
-## Impacto Esperado
+## Impacto
 
-- Elimina 1 request extra na cadeia de carregamento (double lazy)
-- Elimina 1 query duplicada ao banco de dados no login
-- Reduz o tamanho do bundle JS removendo a imagem do pipeline de assets
+- Resolve o problema do Deyvid imediatamente (ao abrir `/auth`, a sessao corrompida sera limpa)
+- Previne que o mesmo problema aconteca com outros usuarios no futuro
+- Nenhuma mudanca visual — apenas comportamento interno
 
