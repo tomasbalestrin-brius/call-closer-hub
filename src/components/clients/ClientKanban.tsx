@@ -143,10 +143,24 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+
+  const handleDragOver = (e: React.DragEvent, columnId: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    setDragOverColumn(columnId);
     autoScrollDragOver(e);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOverColumn(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedClient(null);
+    setDragOverColumn(null);
+    stopScroll();
   };
 
   const handleDrop = async (e: React.DragEvent, columnId: string) => {
@@ -178,6 +192,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
 
     stopScroll();
     setDraggedClient(null);
+    setDragOverColumn(null);
   };
 
   const handleSaleComplete = () => {
@@ -197,8 +212,12 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
             return (
               <div
                 key={column.id}
-                className="flex flex-col bg-muted/30 rounded-xl border border-border/50 min-w-[280px] w-[280px] shrink-0"
-                onDragOver={handleDragOver}
+                className={cn(
+                  "flex flex-col bg-muted/30 rounded-xl border min-w-[280px] w-[280px] shrink-0 transition-colors",
+                  dragOverColumn === column.id ? 'border-primary bg-primary/5' : 'border-border/50'
+                )}
+                onDragOver={(e) => handleDragOver(e, column.id)}
+                onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, column.id)}
               >
                 {/* Column Header */}
@@ -241,6 +260,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
                       key={client.id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, client)}
+                      onDragEnd={handleDragEnd}
                       className={cn(
                         "cursor-grab active:cursor-grabbing transition-opacity",
                         draggedClient?.id === client.id && "opacity-50"

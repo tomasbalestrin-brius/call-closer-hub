@@ -74,8 +74,15 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
     autoScrollDragOver(e);
   };
 
-  const handleDragLeave = () => {
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setDragOverColumn(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedLead(null);
+    setDragOverColumn(null);
+    stopScroll();
   };
 
   const handleDrop = async (e: React.DragEvent, newStatus: IntensiveLeadStatus) => {
@@ -190,6 +197,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
                       lead={lead}
                       onClick={() => setSelectedLead(lead)}
                       onDragStart={(e) => handleDragStart(e, lead)}
+                      onDragEnd={handleDragEnd}
                       isDragging={draggedLead?.id === lead.id}
                     />
                   ))}
