@@ -11,10 +11,11 @@ interface IntensiveLeadCardProps {
   lead: IntensiveLead;
   onClick: () => void;
   onDragStart: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
   isDragging?: boolean;
 }
 
-export function IntensiveLeadCard({ lead, onClick, onDragStart, isDragging }: IntensiveLeadCardProps) {
+export function IntensiveLeadCard({ lead, onClick, onDragStart, onDragEnd, isDragging }: IntensiveLeadCardProps) {
   const statusChangedDate = safeDate(lead.status_changed_at);
   const timeInStatus = statusChangedDate
     ? formatDistanceToNow(statusChangedDate, { addSuffix: false, locale: ptBR })
@@ -29,6 +30,7 @@ export function IntensiveLeadCard({ lead, onClick, onDragStart, isDragging }: In
       )}
       draggable
       onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       onClick={onClick}
     >
       <div className="flex items-start gap-2">
