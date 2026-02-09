@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Client } from '@/types';
+import { useDragAutoScroll } from '@/hooks/useDragAutoScroll';
 import ClientCard from './ClientCard';
 import SaleFormDialog from './SaleFormDialog';
 import ColumnSettingsDialog from './settings/ColumnSettingsDialog';
@@ -106,11 +107,19 @@ interface ClientKanbanProps {
 }
 
 export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { handleDragOver: autoScrollDragOver, stopScroll } = useDragAutoScroll(scrollRef);
   const [draggedClient, setDraggedClient] = useState<ClientWithLastCall | null>(null);
   const [saleDialogOpen, setSaleDialogOpen] = useState(false);
   const [clientForSale, setClientForSale] = useState<ClientWithLastCall | null>(null);
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
   const { settings, getColumnSettings, fetchSettings } = useColumnSettings();
+
+  // Get viewport ref for auto-scroll
+  useEffect(() => {
+    const root = document.querySelector('.client-kanban-scroll [data-radix-scroll-area-viewport]');
+    if (root) (scrollRef as React.MutableRefObject<HTMLElement | null>).current = root as HTMLElement;
+  }, []);
 
   const getColumnDisplay = (column: typeof KANBAN_COLUMNS[0]) => {
     const customSettings = getColumnSettings(column.id);
@@ -137,6 +146,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    autoScrollDragOver(e);
   };
 
   const handleDrop = async (e: React.DragEvent, columnId: string) => {
@@ -166,6 +176,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
       toast.error('Erro ao atualizar status');
     }
 
+    stopScroll();
     setDraggedClient(null);
   };
 
@@ -177,7 +188,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
 
   return (
     <>
-      <ScrollArea className="w-full pb-4">
+      <ScrollArea className="w-full pb-4 client-kanban-scroll">
         <div className="flex gap-4 min-h-[600px] pb-4">
           {KANBAN_COLUMNS.map((column) => {
             const columnClients = getClientsForColumn(column.id);
