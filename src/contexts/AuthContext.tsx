@@ -27,6 +27,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Token refresh failed - clear corrupted state
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          supabase.auth.signOut();
+        }
       }
     );
 
@@ -36,6 +41,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+      }
+      // Clear corrupted tokens from localStorage
+      if (!session) {
+        supabase.auth.signOut();
       }
     });
 
