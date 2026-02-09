@@ -1,81 +1,33 @@
 
 
-# Fix: Drag-and-Drop no CRM Calls
+# Recuperar call com erro "Failed to export document"
 
-## Problemas Identificados
+## Situacao Atual
 
-1. **`setData()` ausente no `dragstart`**: Alguns navegadores exigem que `e.dataTransfer.setData()` seja chamado para iniciar o drag corretamente. Sem isso, o drag pode falhar silenciosamente.
+- 2 das 3 calls com erro ja foram recuperadas automaticamente pelo sistema (kjq-tcvt-xtr e pvc-ngnk-qbh)
+- Apenas 1 call permanece com erro: `zwq-yqae-gbj` (Hannah) - "Failed to export document"
+- ID do registro: `08448731-8c08-42e5-aa26-d9224282de74`
+- Drive file ID: `1Q77vxVNfzKv_9CCx3C7U2RrUN7VMkU6QuIBqMvsdCP0`
 
-2. **Conflito click vs drag**: O `ClientCard` tem `onClick` que navega para `/clients/${client.id}`. Quando o drag e muito curto ou cancelado, o `click` dispara e leva o usuario para outra pagina, dando a impressao de que o drag nao funciona. No `IntensiveKanban`, o `onClick` abre um dialog (permanece na mesma pagina), entao esse problema nao aparece la.
+## Causa
+
+Erro temporario do Google Drive ao tentar exportar o documento como texto. Isso geralmente e um problema transitorio (permissao temporaria, arquivo ainda sendo processado pelo Google, etc).
 
 ## Solucao
 
-### Arquivo: `src/components/clients/ClientKanban.tsx`
+### Passo unico: Resetar o arquivo para "pending" via SQL
 
-1. Adicionar `e.dataTransfer.setData('text/plain', client.id)` no `handleDragStart` para garantir compatibilidade com todos os navegadores
-2. Usar um `useRef` para rastrear se um drag esta em progresso
-3. No wrapper draggable, interceptar o `onClick` e prevenir a navegacao se um drag acabou de ocorrer
+Executar uma migracao que reseta o status do arquivo com erro para `pending`, limpando a mensagem de erro. O proximo ciclo do cron `auto-sync-drive` (a cada 30 min) ou um disparo manual ira reprocessa-lo automaticamente.
 
-### Arquivo: `src/components/intensivo/IntensiveKanban.tsx`
-
-1. Adicionar `e.dataTransfer.setData('text/plain', lead.id)` no `handleDragStart` para consistencia
-
-## Detalhes Tecnicos
-
-### Logica do flag de drag (ClientKanban):
-
-```typescript
-const isDraggingRef = useRef(false);
-
-const handleDragStart = (e: React.DragEvent, client: ClientWithLastCall) => {
-  isDraggingRef.current = true;
-  setDraggedClient(client);
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', client.id);
-};
-
-const handleDragEnd = () => {
-  // Usar setTimeout para que o flag persista durante o evento click
-  setTimeout(() => { isDraggingRef.current = false; }, 0);
-  setDraggedClient(null);
-  setDragOverColumn(null);
-  stopScroll();
-};
+```sql
+UPDATE imported_files 
+SET status = 'pending', 
+    error_message = NULL, 
+    started_processing_at = NULL
+WHERE id = '08448731-8c08-42e5-aa26-d9224282de74';
 ```
 
-### Interceptacao do click no wrapper draggable:
+### Nenhuma alteracao de codigo necessaria
 
-```tsx
-<div
-  draggable
-  onDragStart={(e) => handleDragStart(e, client)}
-  onDragEnd={handleDragEnd}
-  onClick={(e) => {
-    if (isDraggingRef.current) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-  }}
-  className={cn(
-    "cursor-grab active:cursor-grabbing transition-opacity",
-    draggedClient?.id === client.id && "opacity-50"
-  )}
->
-  <ClientCard client={client} lastCallDate={client.lastCallDate} onUpdate={onRefresh} />
-</div>
-```
-
-### setData no IntensiveKanban (para consistencia):
-
-```typescript
-const handleDragStart = (e: React.DragEvent, lead: IntensiveLead) => {
-  setDraggedLead(lead);
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', lead.id);
-};
-```
-
-### Arquivos modificados:
-- `src/components/clients/ClientKanban.tsx` - Flag de drag + setData
-- `src/components/intensivo/IntensiveKanban.tsx` - setData para compatibilidade
+O sistema ja possui toda a logica de retry e reprocessamento. Basta resetar o status do registro.
 
