@@ -108,6 +108,7 @@ interface ClientKanbanProps {
 
 export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
   const { handleDragOver: autoScrollDragOver, stopScroll } = useDragAutoScroll(scrollRef);
   const [draggedClient, setDraggedClient] = useState<ClientWithLastCall | null>(null);
   const [saleDialogOpen, setSaleDialogOpen] = useState(false);
@@ -139,8 +140,10 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
   };
 
   const handleDragStart = (e: React.DragEvent, client: ClientWithLastCall) => {
+    isDraggingRef.current = true;
     setDraggedClient(client);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', client.id);
   };
 
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
@@ -158,6 +161,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
   };
 
   const handleDragEnd = () => {
+    setTimeout(() => { isDraggingRef.current = false; }, 0);
     setDraggedClient(null);
     setDragOverColumn(null);
     stopScroll();
@@ -261,6 +265,12 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
                       draggable
                       onDragStart={(e) => handleDragStart(e, client)}
                       onDragEnd={handleDragEnd}
+                      onClick={(e) => {
+                        if (isDraggingRef.current) {
+                          e.stopPropagation();
+                          e.preventDefault();
+                        }
+                      }}
                       className={cn(
                         "cursor-grab active:cursor-grabbing transition-opacity",
                         draggedClient?.id === client.id && "opacity-50"

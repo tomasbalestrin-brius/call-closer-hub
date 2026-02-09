@@ -66,6 +66,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
   const handleDragStart = (e: React.DragEvent, lead: IntensiveLead) => {
     setDraggedLead(lead);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', lead.id);
   };
 
   const handleDragOver = (e: React.DragEvent, columnId: string) => {
