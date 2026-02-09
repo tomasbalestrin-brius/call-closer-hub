@@ -1,66 +1,48 @@
 
-
-# Corrigir Impossibilidade de Logout com Sessao Corrompida
+# Auto-scroll ao Arrastar Cards no Kanban
 
 ## Problema
 
-Quando o refresh token de um usuario expira ou e invalidado, o fluxo atual:
-1. `onAuthStateChange` nao dispara `SIGNED_OUT`
-2. `getSession` retorna sessao `null` mas os tokens invalidos permanecem no localStorage
-3. O app redireciona para `/auth` mas os tokens corrompidos persistem
-4. Na proxima visita, o ciclo se repete — tela branca ou loop infinito
-
-O botao "Sair" esta no Sidebar, que so aparece para usuarios autenticados (`MainLayout`), entao o usuario nao consegue clicar nele.
+Ao arrastar um card de uma coluna distante (ex: "Repitch") para outra (ex: "Venda Realizada"), o usuario precisa soltar o card, rolar manualmente a tela, e arrastar novamente. A area de scroll nao acompanha o arraste.
 
 ## Solucao
 
-### 1. Tratar token invalido no AuthContext
+Adicionar auto-scroll horizontal durante o drag em ambos os kanbans. Quando o usuario arrasta um card proximo a borda esquerda ou direita da area visivel, o scroll se move automaticamente nessa direcao.
 
-**Arquivo:** `src/contexts/AuthContext.tsx`
+### Comportamento
 
-Adicionar tratamento no listener `onAuthStateChange` para o evento `TOKEN_REFRESHED` com erro, e tambem no fallback `getSession`:
+- Zona de ativacao: 80px das bordas esquerda/direita
+- Velocidade progressiva: quanto mais proximo da borda, mais rapido o scroll
+- Funciona durante todo o drag, sem precisar soltar o card
 
-- Quando `onAuthStateChange` dispara com evento `SIGNED_OUT` ou quando `getSession` retorna sessao `null`, chamar `supabase.auth.signOut()` para limpar tokens do localStorage
-- Isso garante que tokens corrompidos sejam removidos e o usuario veja a tela de login limpa
+## Arquivos a Alterar
 
-### 2. Adicionar botao de logout na pagina de Auth (fallback)
+### 1. Criar hook reutilizavel: `src/hooks/useDragAutoScroll.ts`
 
-**Arquivo:** `src/pages/Auth.tsx`
+Hook que encapsula a logica de auto-scroll para ser usado nos dois kanbans:
 
-Adicionar uma verificacao: se o usuario chegou na pagina `/auth` mas ainda existem tokens no localStorage (sessao corrompida), mostrar um botao "Limpar sessao" ou fazer a limpeza automatica chamando `signOut()` ao montar o componente.
+- Recebe uma `ref` do container de scroll
+- No `dragover`, calcula a posicao do cursor relativa ao container
+- Se estiver dentro da zona de 80px da borda, inicia um `requestAnimationFrame` loop que faz `scrollLeft += velocidade`
+- Velocidade proporcional a proximidade da borda (mais perto = mais rapido, max ~15px/frame)
+- Para o scroll quando o cursor sai da zona ou o drag termina
+
+### 2. `src/components/clients/ClientKanban.tsx`
+
+- Adicionar `useRef` no container de scroll (o `div` que contem as colunas)
+- Usar o hook `useDragAutoScroll` passando a ref
+- Conectar os eventos `onDragOver` do container ao hook
+
+### 3. `src/components/intensivo/IntensiveKanban.tsx`
+
+- Mesmo ajuste: `useRef` + `useDragAutoScroll`
 
 ## Detalhes Tecnicos
 
-No `AuthContext.tsx`, dentro do `useEffect`:
-
-```
-// Dentro do callback de onAuthStateChange
-if (event === 'TOKEN_REFRESHED' && !session) {
-  // Token refresh falhou - limpar estado corrompido
-  supabase.auth.signOut();
-}
-
-// No fallback getSession
-if (!session) {
-  // Garantir limpeza de tokens invalidos
-  supabase.auth.signOut();
-}
+```text
+|<-- 80px -->|          area visivel          |<-- 80px -->|
+|  scroll <  |                                |  scroll >  |
+|  auto-left |                                | auto-right |
 ```
 
-No `Auth.tsx`, adicionar um `useEffect`:
-
-```
-// Limpar sessao corrompida ao chegar na pagina de login
-useEffect(() => {
-  supabase.auth.signOut();
-}, []);
-```
-
-Isso e seguro porque se o usuario tem sessao valida, o redirect para `/` ja acontece antes.
-
-## Impacto
-
-- Resolve o problema do Deyvid imediatamente (ao abrir `/auth`, a sessao corrompida sera limpa)
-- Previne que o mesmo problema aconteca com outros usuarios no futuro
-- Nenhuma mudanca visual — apenas comportamento interno
-
+O hook usara `requestAnimationFrame` para scroll suave e cancelara o loop em `dragend` ou quando o cursor sair da zona de borda. A ref apontara para o elemento DOM interno do `ScrollArea` (o `[data-radix-scroll-area-viewport]`) para ter acesso direto ao `scrollLeft`.
