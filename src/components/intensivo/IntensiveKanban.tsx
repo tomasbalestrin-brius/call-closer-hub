@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { differenceInDays } from 'date-fns';
+import { useDragAutoScroll } from '@/hooks/useDragAutoScroll';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { IntensiveLeadCard } from './IntensiveLeadCard';
@@ -43,10 +44,18 @@ interface IntensiveKanbanProps {
 }
 
 export function IntensiveKanban({ leads, editionId, loading, edition }: IntensiveKanbanProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { handleDragOver: autoScrollDragOver, stopScroll } = useDragAutoScroll(scrollRef);
   const { moveLeadStatus } = useIntensivoCRM(editionId);
   const [selectedLead, setSelectedLead] = useState<IntensiveLead | null>(null);
   const [draggedLead, setDraggedLead] = useState<IntensiveLead | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+
+  // Get viewport ref for auto-scroll
+  useEffect(() => {
+    const root = document.querySelector('.intensive-kanban-scroll [data-radix-scroll-area-viewport]');
+    if (root) (scrollRef as React.MutableRefObject<HTMLElement | null>).current = root as HTMLElement;
+  }, []);
 
   // Calculate days until event with safe date parsing
   const eventDate = edition ? safeDate(edition.event_date) : null;
@@ -62,6 +71,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
   const handleDragOver = (e: React.DragEvent, columnId: string) => {
     e.preventDefault();
     setDragOverColumn(columnId);
+    autoScrollDragOver(e);
   };
 
   const handleDragLeave = () => {
@@ -71,6 +81,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
   const handleDrop = async (e: React.DragEvent, newStatus: IntensiveLeadStatus) => {
     e.preventDefault();
     setDragOverColumn(null);
+    stopScroll();
     
     if (draggedLead && draggedLead.status !== newStatus) {
       await moveLeadStatus.mutateAsync({
@@ -141,7 +152,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
         </div>
       )}
 
-      <ScrollArea className="w-full">
+      <ScrollArea className="w-full intensive-kanban-scroll">
         <div className="flex gap-4 pb-4 min-w-max">
           {INTENSIVE_COLUMNS.map((column) => {
             const columnLeads = getLeadsByStatus(column.id);
