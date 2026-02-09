@@ -1,48 +1,72 @@
 
-# Auto-scroll ao Arrastar Cards no Kanban
+# Sync Automatico do Google Drive via Cron
 
 ## Problema
 
-Ao arrastar um card de uma coluna distante (ex: "Repitch") para outra (ex: "Venda Realizada"), o usuario precisa soltar o card, rolar manualmente a tela, e arrastar novamente. A area de scroll nao acompanha o arraste.
+Hoje a verificacao de novos arquivos no Drive so acontece quando o closer ou admin clica manualmente. Os campos `drive_auto_import` e `drive_import_frequency` existem na base mas nao estao conectados a nenhum agendamento real. Todos os 6 closers conectados tem `drive_auto_import = true`.
 
 ## Solucao
 
-Adicionar auto-scroll horizontal durante o drag em ambos os kanbans. Quando o usuario arrasta um card proximo a borda esquerda ou direita da area visivel, o scroll se move automaticamente nessa direcao.
+Criar uma edge function orquestradora (`auto-sync-drive`) que busca todos os closers com auto-import ativo e chama `sync-drive-files` para cada um. Agendar via `pg_cron` para rodar a cada 30 minutos.
 
-### Comportamento
+## Arquivos a Criar/Alterar
 
-- Zona de ativacao: 80px das bordas esquerda/direita
-- Velocidade progressiva: quanto mais proximo da borda, mais rapido o scroll
-- Funciona durante todo o drag, sem precisar soltar o card
+### 1. Criar edge function: `supabase/functions/auto-sync-drive/index.ts`
 
-## Arquivos a Alterar
+Funcao orquestradora que:
+- Consulta `profiles` filtrando `google_connected = true` e `drive_auto_import = true`
+- Para cada usuario encontrado, chama `sync-drive-files` passando o `userId`
+- Processa sequencialmente (um closer por vez) para evitar sobrecarga
+- Loga quantos usuarios foram sincronizados e resultados
+- Inclui delay de 2s entre usuarios para nao sobrecarregar a API do Google
 
-### 1. Criar hook reutilizavel: `src/hooks/useDragAutoScroll.ts`
+### 2. Adicionar config em `supabase/config.toml`
 
-Hook que encapsula a logica de auto-scroll para ser usado nos dois kanbans:
+```
+[functions.auto-sync-drive]
+verify_jwt = false
+```
 
-- Recebe uma `ref` do container de scroll
-- No `dragover`, calcula a posicao do cursor relativa ao container
-- Se estiver dentro da zona de 80px da borda, inicia um `requestAnimationFrame` loop que faz `scrollLeft += velocidade`
-- Velocidade proporcional a proximidade da borda (mais perto = mais rapido, max ~15px/frame)
-- Para o scroll quando o cursor sai da zona ou o drag termina
+### 3. Criar cron job via SQL (executado manualmente, nao via migration)
 
-### 2. `src/components/clients/ClientKanban.tsx`
+Habilitar as extensoes `pg_cron` e `pg_net`, e agendar a funcao para rodar a cada 30 minutos:
 
-- Adicionar `useRef` no container de scroll (o `div` que contem as colunas)
-- Usar o hook `useDragAutoScroll` passando a ref
-- Conectar os eventos `onDragOver` do container ao hook
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
 
-### 3. `src/components/intensivo/IntensiveKanban.tsx`
+SELECT cron.schedule(
+  'auto-sync-drive-30min',
+  '*/30 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://eevsyfgtlumaaslgeyib.supabase.co/functions/v1/auto-sync-drive',
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVldnN5Zmd0bHVtYWFzbGdleWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTkyNTEsImV4cCI6MjA4MzE5NTI1MX0.uA8AJtvQQ4lz3rlUUYH0Xi3wvPNm8TEfFvUZBaAWoTE"}'::jsonb,
+    body := '{}'::jsonb
+  ) AS request_id;
+  $$
+);
+```
 
-- Mesmo ajuste: `useRef` + `useDragAutoScroll`
+## Fluxo
+
+```text
+pg_cron (a cada 30 min)
+  |
+  v
+auto-sync-drive (orquestrador)
+  |
+  +--> Para cada closer com google_connected + auto_import:
+         |
+         +--> sync-drive-files (userId)
+                |
+                +--> list-drive-files (verifica novos)
+                +--> import-and-analyze (processa novos)
+```
 
 ## Detalhes Tecnicos
 
-```text
-|<-- 80px -->|          area visivel          |<-- 80px -->|
-|  scroll <  |                                |  scroll >  |
-|  auto-left |                                | auto-right |
-```
-
-O hook usara `requestAnimationFrame` para scroll suave e cancelara o loop em `dragend` ou quando o cursor sair da zona de borda. A ref apontara para o elemento DOM interno do `ScrollArea` (o `[data-radix-scroll-area-viewport]`) para ter acesso direto ao `scrollLeft`.
+- A funcao `auto-sync-drive` usa `SUPABASE_SERVICE_ROLE_KEY` para consultar perfis e chamar as outras funcoes
+- Timeout seguro: como `sync-drive-files` processa ate 20 arquivos sequencialmente, o orquestrador aguarda ate 5 minutos por closer
+- Se um closer falhar, o erro e logado e o proximo closer e processado normalmente
+- O cron de 30 minutos e conservador o suficiente para nao estourar limites da API do Google Drive
