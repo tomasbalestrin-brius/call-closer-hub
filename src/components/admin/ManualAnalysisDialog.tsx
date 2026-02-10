@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import mammoth from 'mammoth';
 import { FileText, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,14 +43,31 @@ export function ManualAnalysisDialog({ onAnalysisComplete }: ManualAnalysisDialo
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      setTranscription(text);
-      setFileName(file.name);
-      toast.success(`Arquivo "${file.name}" carregado (${text.length} caracteres)`);
-    };
-    reader.readAsText(file);
+
+    if (file.name.endsWith('.docx')) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          setTranscription(result.value);
+          setFileName(file.name);
+          toast.success(`Arquivo "${file.name}" carregado (${result.value.length} caracteres)`);
+        } catch {
+          toast.error('Erro ao ler arquivo .docx');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        setTranscription(text);
+        setFileName(file.name);
+        toast.success(`Arquivo "${file.name}" carregado (${text.length} caracteres)`);
+      };
+      reader.readAsText(file);
+    }
   };
 
   const handleAnalyze = async () => {
@@ -167,12 +185,12 @@ export function ManualAnalysisDialog({ onAnalysisComplete }: ManualAnalysisDialo
               <label htmlFor="file-upload" className="cursor-pointer">
                 <div className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-input bg-background text-sm hover:bg-accent hover:text-accent-foreground transition-colors">
                   <Upload className="w-4 h-4" />
-                  Enviar arquivo .txt
+                  Enviar arquivo .txt ou .docx
                 </div>
                 <Input
                   id="file-upload"
                   type="file"
-                  accept=".txt"
+                  accept=".txt,.docx"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
