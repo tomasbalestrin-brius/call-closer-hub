@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { FileText, Loader2 } from 'lucide-react';
+import { FileText, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ManualAnalysisDialogProps {
@@ -37,6 +37,20 @@ export function ManualAnalysisDialog({ onAnalysisComplete }: ManualAnalysisDialo
   const [callDate, setCallDate] = useState(new Date().toISOString().split('T')[0]);
   const [transcription, setTranscription] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      setTranscription(text);
+      setFileName(file.name);
+      toast.success(`Arquivo "${file.name}" carregado (${text.length} caracteres)`);
+    };
+    reader.readAsText(file);
+  };
 
   const handleAnalyze = async () => {
     if (!closerId) {
@@ -70,6 +84,7 @@ export function ManualAnalysisDialog({ onAnalysisComplete }: ManualAnalysisDialo
       setCloserId('');
       setClientName('');
       setTranscription('');
+      setFileName(null);
       setCallDate(new Date().toISOString().split('T')[0]);
       setOpen(false);
       onAnalysisComplete?.();
@@ -148,11 +163,31 @@ export function ManualAnalysisDialog({ onAnalysisComplete }: ManualAnalysisDialo
                 ({transcription.length} caracteres — mínimo 500)
               </span>
             </Label>
+            <div className="flex items-center gap-2 mb-2">
+              <label htmlFor="file-upload" className="cursor-pointer">
+                <div className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-input bg-background text-sm hover:bg-accent hover:text-accent-foreground transition-colors">
+                  <Upload className="w-4 h-4" />
+                  Enviar arquivo .txt
+                </div>
+                <Input
+                  id="file-upload"
+                  type="file"
+                  accept=".txt"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+              {fileName && (
+                <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                  📄 {fileName}
+                </span>
+              )}
+            </div>
             <Textarea
               id="transcription"
-              placeholder="Cole aqui a transcrição completa da call..."
+              placeholder="Cole aqui a transcrição completa da call ou envie um arquivo .txt..."
               value={transcription}
-              onChange={(e) => setTranscription(e.target.value)}
+              onChange={(e) => { setTranscription(e.target.value); setFileName(null); }}
               className="min-h-[250px] font-mono text-xs"
             />
           </div>
