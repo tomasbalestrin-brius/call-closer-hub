@@ -33,7 +33,7 @@ const baseNavigation = [
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
 
-const closerOnlyItems = ['/calls', '/clients', '/intensivo-crm'];
+const closerOnlyItems = ['/clients', '/intensivo-crm'];
 
 const getBaseNavigation = (isAdmin: boolean) => {
   if (isAdmin) {

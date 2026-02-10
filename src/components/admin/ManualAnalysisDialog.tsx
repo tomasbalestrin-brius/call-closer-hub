@@ -1,0 +1,181 @@
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useClosersList } from '@/hooks/useClosersList';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { FileText, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+interface ManualAnalysisDialogProps {
+  onAnalysisComplete?: () => void;
+}
+
+export function ManualAnalysisDialog({ onAnalysisComplete }: ManualAnalysisDialogProps) {
+  const { user } = useAuth();
+  const { data: closers = [] } = useClosersList();
+  const [open, setOpen] = useState(false);
+  const [closerId, setCloserId] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [callDate, setCallDate] = useState(new Date().toISOString().split('T')[0]);
+  const [transcription, setTranscription] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const handleAnalyze = async () => {
+    if (!closerId) {
+      toast.error('Selecione um closer');
+      return;
+    }
+    if (!clientName.trim()) {
+      toast.error('Informe o nome do cliente');
+      return;
+    }
+    if (transcription.length < 500) {
+      toast.error('A transcrição deve ter pelo menos 500 caracteres');
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('manual-analyze', {
+        body: { transcription, closerId, clientName: clientName.trim(), callDate },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(
+        `Call analisada com sucesso! Nota: ${data.score ?? 'N/A'}/10`,
+        { duration: 5000 }
+      );
+
+      // Reset form
+      setCloserId('');
+      setClientName('');
+      setTranscription('');
+      setCallDate(new Date().toISOString().split('T')[0]);
+      setOpen(false);
+      onAnalysisComplete?.();
+    } catch (error) {
+      console.error('Manual analysis error:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao analisar transcrição');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const allClosers = [
+    ...(user ? [{ user_id: user.id, full_name: 'Eu mesmo (Admin)' }] : []),
+    ...closers,
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="gap-2">
+          <FileText className="w-4 h-4" />
+          Análise Manual
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Análise Manual de Transcrição</DialogTitle>
+          <DialogDescription>
+            Cole a transcrição da call para análise automática pela IA.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="closer">Closer *</Label>
+              <Select value={closerId} onValueChange={setCloserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o closer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allClosers.map((closer) => (
+                    <SelectItem key={closer.user_id} value={closer.user_id}>
+                      {closer.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="callDate">Data da Call *</Label>
+              <Input
+                id="callDate"
+                type="date"
+                value={callDate}
+                onChange={(e) => setCallDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="clientName">Nome do Cliente *</Label>
+            <Input
+              id="clientName"
+              placeholder="Nome do cliente"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="transcription">
+              Transcrição * 
+              <span className="text-muted-foreground text-xs ml-2">
+                ({transcription.length} caracteres — mínimo 500)
+              </span>
+            </Label>
+            <Textarea
+              id="transcription"
+              placeholder="Cole aqui a transcrição completa da call..."
+              value={transcription}
+              onChange={(e) => setTranscription(e.target.value)}
+              className="min-h-[250px] font-mono text-xs"
+            />
+          </div>
+
+          <Button
+            onClick={handleAnalyze}
+            disabled={analyzing || !closerId || !clientName.trim() || transcription.length < 500}
+            className="w-full"
+          >
+            {analyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Analisando... (pode levar até 2 min)
+              </>
+            ) : (
+              <>
+                <FileText className="w-4 h-4 mr-2" />
+                Analisar Transcrição
+              </>
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

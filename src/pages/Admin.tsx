@@ -37,6 +37,7 @@ import { ResetPasswordDialog } from '@/components/admin/ResetPasswordDialog';
 import { ImportStatusPanel } from '@/components/admin/ImportStatusPanel';
 import SystemMetricsDashboard from '@/components/admin/SystemMetricsDashboard';
 import { ErrorLogsPanel } from '@/components/admin/ErrorLogsPanel';
+import { ManualAnalysisDialog } from '@/components/admin/ManualAnalysisDialog';
 import { Navigate } from 'react-router-dom';
 import { UserRole } from '@/types';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
@@ -716,8 +717,9 @@ export default function Admin() {
                           Reanalisar Todas
                         </>
                       )}
-                    </Button>
-                  </CardContent>
+                     </Button>
+                     <ManualAnalysisDialog />
+                   </CardContent>
                 </Card>
               </TabsContent>
               <TabsContent value="metrics">
