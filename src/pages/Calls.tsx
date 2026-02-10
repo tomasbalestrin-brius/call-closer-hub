@@ -6,6 +6,7 @@ import { useClosersList } from '@/hooks/useClosersList';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import CallCard from '@/components/calls/CallCard';
+import { ManualAnalysisDialog } from '@/components/admin/ManualAnalysisDialog';
 import NewCallDialog from '@/components/calls/NewCallDialog';
 import CallStatsBar from '@/components/calls/CallStatsBar';
 import ActiveFiltersChips from '@/components/calls/ActiveFiltersChips';
@@ -180,6 +181,7 @@ export default function Calls() {
                 Excluir ({selectedCalls.length})
               </Button>
             )}
+            {isAdmin && <ManualAnalysisDialog onAnalysisComplete={invalidateCalls} />}
             <NewCallDialog onCallCreated={invalidateCalls} />
           </div>
         </div>
