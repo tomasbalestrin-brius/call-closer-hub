@@ -1,45 +1,66 @@
 
 
-# Upload de arquivo de transcrição na Análise Manual
+# Suporte a upload de arquivos .docx na Analise Manual
 
-## Abordagem
+## Problema
 
-Adicionar um botão "Enviar arquivo" ao lado do textarea no `ManualAnalysisDialog`. O arquivo e lido diretamente no navegador usando a `FileReader API` e o conteudo e inserido no campo de transcrição. Nenhuma mudança no backend.
+Atualmente apenas arquivos `.txt` sao aceitos. Arquivos `.docx` (Word) sao binarios e precisam de uma biblioteca para extrair o texto.
 
-## Impactos
+## Solucao
 
-- **Backend**: Nenhum. O texto extraido do arquivo segue o mesmo fluxo que o texto colado manualmente.
-- **Infraestrutura**: Nenhum bucket de storage necessario.
-- **Formatos suportados**: `.txt` (leitura nativa via FileReader).
-- **Limitação**: Somente arquivos de texto puro. Para `.docx` seria necessario adicionar uma dependencia (`mammoth`), o que aumenta o bundle. Recomendo manter apenas `.txt` por simplicidade.
+Adicionar a biblioteca `mammoth` ao projeto e atualizar o componente `ManualAnalysisDialog` para aceitar tanto `.txt` quanto `.docx`.
 
-## Alterações
+## Alteracoes
 
-### 1. Atualizar `src/components/admin/ManualAnalysisDialog.tsx`
+### 1. Instalar dependencia `mammoth`
 
-- Adicionar um `<Input type="file" accept=".txt" />` acima ou ao lado do textarea
-- Ao selecionar um arquivo, usar `FileReader.readAsText()` para ler o conteudo
-- Preencher o state `transcription` com o texto lido
-- O admin ainda pode editar o texto apos o upload, caso queira ajustar
-- Exibir o nome do arquivo selecionado como feedback visual
+Pacote leve (~30KB gzipped) que converte `.docx` para texto puro diretamente no navegador. Sem mudancas no backend.
 
-### Codigo resumido da mudanca
+### 2. Atualizar `src/components/admin/ManualAnalysisDialog.tsx`
+
+- Alterar o `accept` do input de arquivo para `.txt,.docx`
+- Na funcao `handleFileUpload`, verificar a extensao do arquivo:
+  - Se `.txt`: usar `FileReader.readAsText()` (como ja funciona)
+  - Se `.docx`: usar `FileReader.readAsArrayBuffer()` e passar para `mammoth.extractRawText()`
+- O texto extraido vai para o mesmo state `transcription`, seguindo o fluxo identico
+
+### Codigo resumido
 
 ```tsx
-const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+import mammoth from 'mammoth';
+
+const handleFileUpload = (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    const text = event.target?.result as string;
-    setTranscription(text);
-    toast.success(`Arquivo "${file.name}" carregado (${text.length} caracteres)`);
-  };
-  reader.readAsText(file);
+
+  if (file.name.endsWith('.docx')) {
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const arrayBuffer = event.target?.result as ArrayBuffer;
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      setTranscription(result.value);
+      setFileName(file.name);
+      toast.success(`Arquivo "${file.name}" carregado`);
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    // .txt - fluxo existente
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      setTranscription(text);
+      setFileName(file.name);
+      toast.success(`Arquivo "${file.name}" carregado`);
+    };
+    reader.readAsText(file);
+  }
 };
 ```
 
-## Resultado
+## Impactos
 
-O admin pode tanto colar a transcrição manualmente quanto fazer upload de um arquivo `.txt`. O restante do fluxo (analise via IA, inserção na tabela calls) permanece identico.
+- **Bundle**: +30KB gzipped (mammoth)
+- **Backend**: Nenhum
+- **UX**: Admin pode arrastar/selecionar arquivos .txt ou .docx. O texto e editavel antes de analisar.
+- **Formatos nao suportados**: .doc (formato antigo do Word) nao e suportado pelo mammoth, apenas .docx
 
