@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { differenceInDays } from 'date-fns';
 import { useDragAutoScroll } from '@/hooks/useDragAutoScroll';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -9,31 +9,14 @@ import { useIntensivoCRM } from '@/hooks/useIntensivoCRM';
 import { safeDate } from '@/lib/dateUtils';
 import { INTENSIVE_COLUMNS, type IntensiveLead, type IntensiveLeadStatus, type IntensiveEdition } from '@/types/intensivo';
 import { 
-  MessageSquare, 
-  Brain, 
-  Send, 
-  Clock, 
-  CheckCircle, 
-  Ticket, 
-  Flame, 
-  UserCheck, 
-  UserX, 
-  XCircle, 
-  Calendar 
+  MessageSquare, Brain, Send, Clock, CheckCircle, Ticket, Flame, 
+  UserCheck, UserX, XCircle, Calendar 
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  MessageSquare,
-  Brain,
-  Send,
-  Clock,
-  CheckCircle,
-  Ticket,
-  Flame,
-  UserCheck,
-  UserX,
-  XCircle,
-  Calendar,
+  MessageSquare, Brain, Send, Clock, CheckCircle, Ticket, Flame,
+  UserCheck, UserX, XCircle, Calendar,
 };
 
 interface IntensiveKanbanProps {
@@ -45,91 +28,72 @@ interface IntensiveKanbanProps {
 
 export function IntensiveKanban({ leads, editionId, loading, edition }: IntensiveKanbanProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
   const { handleDragOver: autoScrollDragOver, stopScroll } = useDragAutoScroll(scrollRef);
   const { moveLeadStatus } = useIntensivoCRM(editionId);
   const [selectedLead, setSelectedLead] = useState<IntensiveLead | null>(null);
   const [draggedLead, setDraggedLead] = useState<IntensiveLead | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
-  // Get viewport ref for auto-scroll
   useEffect(() => {
     const root = document.querySelector('.intensive-kanban-scroll [data-radix-scroll-area-viewport]');
     if (root) (scrollRef as React.MutableRefObject<HTMLElement | null>).current = root as HTMLElement;
   }, []);
 
-  // Calculate days until event with safe date parsing
   const eventDate = edition ? safeDate(edition.event_date) : null;
-  const daysUntilEvent = eventDate 
-    ? differenceInDays(eventDate, new Date())
-    : null;
+  const daysUntilEvent = eventDate ? differenceInDays(eventDate, new Date()) : null;
 
-  const handleDragStart = (e: React.DragEvent, lead: IntensiveLead) => {
+  const handleDragStart = useCallback((e: React.DragEvent, lead: IntensiveLead) => {
+    isDraggingRef.current = true;
     setDraggedLead(lead);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', lead.id);
-  };
+  }, []);
 
-  const handleDragOver = (e: React.DragEvent, columnId: string) => {
+  const handleDragOver = useCallback((e: React.DragEvent, columnId: string) => {
     e.preventDefault();
     setDragOverColumn(columnId);
     autoScrollDragOver(e);
-  };
+  }, [autoScrollDragOver]);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setDragOverColumn(null);
-  };
+  }, []);
 
-  const handleDragEnd = () => {
+  const handleDragEnd = useCallback(() => {
     setDraggedLead(null);
     setDragOverColumn(null);
     stopScroll();
-  };
+    setTimeout(() => { isDraggingRef.current = false; }, 0);
+  }, [stopScroll]);
 
-  const handleDrop = async (e: React.DragEvent, newStatus: IntensiveLeadStatus) => {
+  const handleDrop = useCallback(async (e: React.DragEvent, newStatus: IntensiveLeadStatus) => {
     e.preventDefault();
     setDragOverColumn(null);
     stopScroll();
     
     if (draggedLead && draggedLead.status !== newStatus) {
-      await moveLeadStatus.mutateAsync({
-        leadId: draggedLead.id,
-        newStatus,
-      });
+      await moveLeadStatus.mutateAsync({ leadId: draggedLead.id, newStatus });
     }
-    
     setDraggedLead(null);
-  };
+  }, [draggedLead, moveLeadStatus, stopScroll]);
 
-  const getLeadsByStatus = (status: IntensiveLeadStatus) => {
-    return leads.filter(lead => lead.status === status);
-  };
+  const handleCardClick = useCallback((lead: IntensiveLead) => {
+    if (isDraggingRef.current) return;
+    setSelectedLead(lead);
+  }, []);
 
-  // Get count for column badge - persistent for confirmados and ingresso_retirado
+  const getLeadsByStatus = (status: IntensiveLeadStatus) => leads.filter(lead => lead.status === status);
+
   const getColumnCount = (status: IntensiveLeadStatus) => {
-    // Confirmados: count those who passed through confirmados (confirmed_at not null)
-    // except those who went back to aguardando_confirmacao
     if (status === 'confirmados') {
-      return leads.filter(lead => 
-        lead.confirmed_at !== null && 
-        lead.status !== 'aguardando_confirmacao'
-      ).length;
+      return leads.filter(lead => lead.confirmed_at !== null && lead.status !== 'aguardando_confirmacao').length;
     }
-    
-    // Ingresso Retirado: count those who passed through ingresso_retirado
-    // except those who went back to earlier statuses
     if (status === 'ingresso_retirado') {
-      const statusesBeforeIngresso = [
-        'abordagem_inicial', 'nivel_consciencia', 'convite_intensivo',
-        'aguardando_confirmacao', 'confirmados'
-      ];
-      return leads.filter(lead => 
-        lead.ticket_retrieved_at !== null && 
-        !statusesBeforeIngresso.includes(lead.status)
-      ).length;
+      const before = ['abordagem_inicial', 'nivel_consciencia', 'convite_intensivo', 'aguardando_confirmacao', 'confirmados'];
+      return leads.filter(lead => lead.ticket_retrieved_at !== null && !before.includes(lead.status)).length;
     }
-    
-    // Other statuses: count leads currently in this status
     return leads.filter(lead => lead.status === status).length;
   };
 
@@ -143,18 +107,12 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
 
   return (
     <>
-      {/* Days countdown */}
       {daysUntilEvent !== null && daysUntilEvent >= 0 && (
         <div className="mb-4 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
           <div className="flex items-center gap-2 text-orange-600">
             <Flame className="w-5 h-5" />
             <span className="font-medium">
-              {daysUntilEvent === 0 
-                ? 'Evento hoje!' 
-                : daysUntilEvent === 1 
-                  ? 'Falta 1 dia para o evento'
-                  : `Faltam ${daysUntilEvent} dias para o evento`
-              }
+              {daysUntilEvent === 0 ? 'Evento hoje!' : daysUntilEvent === 1 ? 'Falta 1 dia para o evento' : `Faltam ${daysUntilEvent} dias para o evento`}
             </span>
           </div>
         </div>
@@ -170,14 +128,14 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
             return (
               <div
                 key={column.id}
-                className={`flex flex-col w-72 shrink-0 rounded-lg border bg-card transition-colors ${
+                className={cn(
+                  'flex flex-col w-72 shrink-0 rounded-lg border bg-card transition-colors',
                   isDragOver ? 'border-primary bg-primary/5' : 'border-border'
-                }`}
+                )}
                 onDragOver={(e) => handleDragOver(e, column.id)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, column.id)}
               >
-                {/* Column Header */}
                 <div className={`p-3 rounded-t-lg ${column.color}`}>
                   <div className="flex items-center justify-between text-white">
                     <div className="flex items-center gap-2">
@@ -190,17 +148,23 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
                   </div>
                 </div>
 
-                {/* Column Content */}
                 <div className="flex-1 p-2 space-y-2 min-h-[200px] max-h-[calc(100vh-350px)] overflow-y-auto">
                   {columnLeads.map((lead) => (
-                    <IntensiveLeadCard
+                    <div
                       key={lead.id}
-                      lead={lead}
-                      onClick={() => setSelectedLead(lead)}
+                      draggable
                       onDragStart={(e) => handleDragStart(e, lead)}
                       onDragEnd={handleDragEnd}
-                      isDragging={draggedLead?.id === lead.id}
-                    />
+                      className={cn(
+                        'transition-all',
+                        draggedLead?.id === lead.id && 'opacity-50 scale-95'
+                      )}
+                    >
+                      <IntensiveLeadCard
+                        lead={lead}
+                        onClick={() => handleCardClick(lead)}
+                      />
+                    </div>
                   ))}
                   
                   {columnLeads.length === 0 && (
@@ -216,7 +180,6 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
 
-      {/* Lead Detail Dialog */}
       <IntensiveLeadDetailDialog
         lead={selectedLead}
         open={!!selectedLead}

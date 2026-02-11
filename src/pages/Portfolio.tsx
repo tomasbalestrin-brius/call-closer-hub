@@ -18,6 +18,7 @@ export interface PortfolioFiltersState {
   activityFilter: 'all' | 'with_activities' | 'without_activities' | 'intensivo' | 'mentoria' | 'evento';
   indicationFilter: 'all' | 'with_indications' | 'without_indications';
   dateRange: { from: Date | undefined; to: Date | undefined };
+  monthFilter: string; // 'all' or 'YYYY-MM'
 }
 
 export default function Portfolio() {
@@ -28,6 +29,7 @@ export default function Portfolio() {
     activityFilter: 'all',
     indicationFilter: 'all',
     dateRange: { from: undefined, to: undefined },
+    monthFilter: 'all',
   });
   
   const { data: students, isLoading } = usePortfolioStudents();
@@ -61,6 +63,13 @@ export default function Portfolio() {
       if (filters.dateRange.to) {
         const entryDate = new Date(student.entry_date);
         if (entryDate > filters.dateRange.to) return false;
+      }
+      
+      // Month filter
+      if (filters.monthFilter !== 'all') {
+        const entryDate = new Date(student.entry_date);
+        const yearMonth = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
+        if (yearMonth !== filters.monthFilter) return false;
       }
       
       // Activity filter

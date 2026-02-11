@@ -1151,6 +1151,7 @@ export type Database = {
           email: string | null
           id: string
           indication_id: string | null
+          lead_temperature: string
           name: string
           niche: string | null
           notes: string | null
@@ -1173,6 +1174,7 @@ export type Database = {
           email?: string | null
           id?: string
           indication_id?: string | null
+          lead_temperature?: string
           name: string
           niche?: string | null
           notes?: string | null
@@ -1195,6 +1197,7 @@ export type Database = {
           email?: string | null
           id?: string
           indication_id?: string | null
+          lead_temperature?: string
           name?: string
           niche?: string | null
           notes?: string | null

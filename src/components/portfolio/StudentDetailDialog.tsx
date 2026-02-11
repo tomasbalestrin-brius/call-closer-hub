@@ -122,10 +122,15 @@ export default function StudentDetailDialog({ student, open, onOpenChange }: Stu
           {/* Student Info */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 border-b">
             {student.phone && (
-              <div className="flex items-center gap-2 text-sm">
+              <a
+                href={`https://wa.me/${student.phone.replace(/\D/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm hover:text-green-600 transition-colors"
+              >
                 <Phone className="w-4 h-4 text-muted-foreground" />
                 <span>{student.phone}</span>
-              </div>
+              </a>
             )}
             {student.email && (
               <div className="flex items-center gap-2 text-sm">

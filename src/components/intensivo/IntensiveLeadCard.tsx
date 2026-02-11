@@ -2,72 +2,80 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Phone, Building2, GripVertical } from 'lucide-react';
-import type { IntensiveLead } from '@/types/intensivo';
+import { Phone, Building2, Flame, Thermometer, Snowflake } from 'lucide-react';
+import type { IntensiveLead, LeadTemperature } from '@/types/intensivo';
 import { cn } from '@/lib/utils';
 import { safeDate } from '@/lib/dateUtils';
 
 interface IntensiveLeadCardProps {
   lead: IntensiveLead;
   onClick: () => void;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragEnd?: (e: React.DragEvent) => void;
-  isDragging?: boolean;
 }
 
-export function IntensiveLeadCard({ lead, onClick, onDragStart, onDragEnd, isDragging }: IntensiveLeadCardProps) {
+const temperatureConfig: Record<LeadTemperature, { icon: typeof Flame; label: string; className: string }> = {
+  quente: { icon: Flame, label: 'Quente', className: 'bg-red-500/10 text-red-600 border-red-500/30' },
+  morno: { icon: Thermometer, label: 'Morno', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' },
+  frio: { icon: Snowflake, label: 'Frio', className: 'bg-blue-500/10 text-blue-600 border-blue-500/30' },
+};
+
+export function IntensiveLeadCard({ lead, onClick }: IntensiveLeadCardProps) {
   const statusChangedDate = safeDate(lead.status_changed_at);
   const timeInStatus = statusChangedDate
     ? formatDistanceToNow(statusChangedDate, { addSuffix: false, locale: ptBR })
     : 'desconhecido';
 
+  const temp = temperatureConfig[lead.lead_temperature || 'morno'];
+  const TempIcon = temp.icon;
+
   return (
     <Card
       style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
-      className={cn(
-        'p-3 cursor-pointer hover:shadow-md transition-all group',
-        isDragging && 'opacity-50 scale-95'
-      )}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      className="p-3 cursor-pointer hover:shadow-md transition-all"
       onClick={onClick}
     >
-      <div className="flex items-start gap-2">
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
-          <GripVertical className="w-4 h-4 text-muted-foreground" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-medium text-sm truncate">{lead.name}</h4>
+          <Badge variant="outline" className={cn('text-xs py-0 gap-1 shrink-0', temp.className)}>
+            <TempIcon className="w-3 h-3" />
+            {temp.label}
+          </Badge>
         </div>
         
-        <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-sm truncate">{lead.name}</h4>
-          
-          {(lead.company || lead.niche) && (
-            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-              <Building2 className="w-3 h-3" />
-              <span className="truncate">
-                {[lead.company, lead.niche].filter(Boolean).join(' | ')}
-              </span>
-            </div>
-          )}
-          
-          {lead.phone && (
-            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-              <Phone className="w-3 h-3" />
-              <span>{lead.phone}</span>
-            </div>
-          )}
-          
-          <div className="flex items-center gap-2 mt-2">
-            {lead.source && (
-              <Badge variant="outline" className="text-xs py-0">
-                {lead.source}
-              </Badge>
-            )}
+        {(lead.company || lead.niche) && (
+          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+            <Building2 className="w-3 h-3" />
+            <span className="truncate">
+              {[lead.company, lead.niche].filter(Boolean).join(' | ')}
+            </span>
           </div>
-          
-          <div className="mt-2 text-xs text-muted-foreground">
-            Há {timeInStatus} nesta etapa
+        )}
+        
+        {lead.phone && (
+          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+            <Phone className="w-3 h-3" />
+            <a
+              href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="hover:text-green-600 hover:underline"
+            >
+              {lead.phone}
+            </a>
           </div>
+        )}
+        
+        <div className="flex items-center gap-2 mt-2">
+          {lead.source && (
+            <Badge variant="outline" className="text-xs py-0">
+              {lead.source}
+            </Badge>
+          )}
+        </div>
+        
+        <div className="mt-2 text-xs text-muted-foreground">
+          Há {timeInStatus} nesta etapa
         </div>
       </div>
     </Card>

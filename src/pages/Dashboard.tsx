@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import SalesListDialog from '@/components/dashboard/SalesListDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -37,6 +38,7 @@ export default function Dashboard() {
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
   });
+  const [showSalesList, setShowSalesList] = useState(false);
 
   const { data: stats = emptyStats, isLoading: loading } = useQuery({
     queryKey: ['dashboard-stats', user?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), selectedFunnel, isAdmin],
@@ -225,7 +227,7 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <StatsCard title="Total de Calls" value={stats.totalCalls} icon={Phone} variant="default" />
-          <StatsCard title="Vendas Fechadas" value={stats.totalSales} icon={Target} variant="success" />
+          <StatsCard title="Vendas Fechadas" value={stats.totalSales} icon={Target} variant="success" onClick={() => setShowSalesList(true)} />
           <StatsCard title="Taxa de Conversão" value={`${stats.conversionRate}%`} icon={TrendingUp} variant="default" />
           <StatsCard title="Valor Total Vendido" value={formatCurrency(stats.totalSaleValue)} icon={DollarSign} variant="accent" />
           <StatsCard title="Total de Entradas" value={formatCurrency(stats.totalEntryValue)} icon={Wallet} variant="success" />
@@ -266,6 +268,13 @@ export default function Dashboard() {
             />
           </div>
         </div>
+
+        <SalesListDialog
+          open={showSalesList}
+          onOpenChange={setShowSalesList}
+          dateRange={dateRange}
+          selectedFunnel={selectedFunnel}
+        />
       </div>
     </MainLayout>
   );

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -8,6 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import type { PortfolioFiltersState } from '@/pages/Portfolio';
 import type { TicketType } from '@/types';
+import { usePortfolioStudents } from '@/hooks/usePortfolio';
 
 interface PortfolioFiltersProps {
   filters: PortfolioFiltersState;
@@ -15,11 +17,29 @@ interface PortfolioFiltersProps {
 }
 
 export default function PortfolioFilters({ filters, onFiltersChange }: PortfolioFiltersProps) {
+  const { data: students } = usePortfolioStudents();
+  
+  const availableMonths = useMemo(() => {
+    if (!students) return [];
+    const monthSet = new Set<string>();
+    students.forEach(s => {
+      const d = new Date(s.entry_date);
+      monthSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    });
+    return Array.from(monthSet).sort().reverse().map(ym => {
+      const [y, m] = ym.split('-');
+      const d = new Date(Number(y), Number(m) - 1, 1);
+      const label = format(d, "MMMM/yyyy", { locale: ptBR });
+      return { value: ym, label: label.charAt(0).toUpperCase() + label.slice(1) };
+    });
+  }, [students]);
+
   const hasActiveFilters = 
     filters.ticketFilter !== 'all' || 
     filters.activityFilter !== 'all' || 
     filters.indicationFilter !== 'all' ||
-    filters.dateRange.from !== undefined;
+    filters.dateRange.from !== undefined ||
+    filters.monthFilter !== 'all';
   
   const clearFilters = () => {
     onFiltersChange({
@@ -27,6 +47,7 @@ export default function PortfolioFilters({ filters, onFiltersChange }: Portfolio
       activityFilter: 'all',
       indicationFilter: 'all',
       dateRange: { from: undefined, to: undefined },
+      monthFilter: 'all',
     });
   };
   
@@ -127,6 +148,24 @@ export default function PortfolioFilters({ filters, onFiltersChange }: Portfolio
           <SelectItem value="without_indications">Sem indicações</SelectItem>
         </SelectContent>
       </Select>
+
+      {/* Month Filter */}
+      {availableMonths.length > 0 && (
+        <Select
+          value={filters.monthFilter}
+          onValueChange={(value) => onFiltersChange({ ...filters, monthFilter: value })}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Mês de entrada" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os meses</SelectItem>
+            {availableMonths.map(m => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
       
       {/* Clear Filters */}
       {hasActiveFilters && (
