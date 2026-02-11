@@ -20,7 +20,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Carregando...</div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-muted-foreground" />
       </div>
     );
   }
@@ -31,8 +31,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      <a href="#main-content" className="skip-link">Pular para conteúdo</a>
       <Sidebar />
-      <main className="pl-64 transition-all duration-300">
+      <main id="main-content" className="pl-64 transition-all duration-300">
         <div className="p-6">{children}</div>
       </main>
     </div>

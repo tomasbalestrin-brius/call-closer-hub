@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import SalesListDialog from '@/components/dashboard/SalesListDialog';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -181,6 +183,8 @@ export default function Dashboard() {
 
   return (
     <MainLayout>
+      <ErrorBoundary section="Dashboard">
+      {loading ? <DashboardSkeleton /> : (
       <div className="space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -276,6 +280,8 @@ export default function Dashboard() {
           selectedFunnel={selectedFunnel}
         />
       </div>
+      )}
+      </ErrorBoundary>
     </MainLayout>
   );
 }
