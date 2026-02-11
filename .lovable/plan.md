@@ -1,207 +1,121 @@
 
-# Melhorias no CRM Intensivo, Carteira, Dashboard e UX
 
-## 1. Drag-and-drop do CRM Intensivo (alinhamento com CRM Calls)
+# Paginacao, Select Especifico e PlaceholderData
 
-O CRM Intensivo ja possui drag-and-drop funcional no `IntensiveKanban.tsx`. Porem, falta a logica de **prevencao de clique apos arraste** que o CRM Calls implementa usando `isDraggingRef` + `setTimeout`. Vou aplicar o mesmo padrao:
+## Resumo
 
-**Arquivo:** `src/components/intensivo/IntensiveKanban.tsx`
-- Adicionar `isDraggingRef` (useRef) para rastrear estado de arraste
-- No `handleDragStart`, setar `isDraggingRef.current = true`
-- No `handleDragEnd`, usar `setTimeout(() => { isDraggingRef.current = false }, 0)`
-- Envolver cada card em um wrapper `<div>` com `draggable`, `onDragStart`, `onDragEnd`, e `onClick` que verifica `isDraggingRef` antes de permitir navegacao
-- Remover os props `onDragStart`/`onDragEnd`/`draggable` do `IntensiveLeadCard` (movendo para o wrapper)
-
-**Arquivo:** `src/components/intensivo/IntensiveLeadCard.tsx`
-- Remover props `onDragStart`, `onDragEnd`, `isDragging`, `draggable` do componente
-- Simplificar para ser apenas um card de exibicao (sem logica de drag)
+Aplicar o padrao de paginacao "Carregar mais" (ja usado em Calls) no Portfolio e CRM Clients, trocar `select('*')` por campos especificos no CRM Intensivo, e adicionar `placeholderData: (prev) => prev` em todas as queries principais para eliminar flash de loading ao re-fetchar.
 
 ---
 
-## 2. Sistema de Tags: Lead Quente, Morno e Frio
+## 1. Paginacao no Portfolio
 
-### 2.1 Migracao de banco de dados
-
-Adicionar coluna `lead_temperature` na tabela `intensive_leads`:
-```sql
-ALTER TABLE intensive_leads 
-ADD COLUMN lead_temperature text DEFAULT 'morno' 
-CHECK (lead_temperature IN ('quente', 'morno', 'frio'));
-```
-
-### 2.2 Alteracoes no tipo TypeScript
-
-**Arquivo:** `src/types/intensivo.ts`
-- Adicionar tipo `LeadTemperature = 'quente' | 'morno' | 'frio'`
-- Adicionar campo `lead_temperature` na interface `IntensiveLead`
-
-### 2.3 Exibicao no card
-
-**Arquivo:** `src/components/intensivo/IntensiveLeadCard.tsx`
-- Exibir badge colorido com a temperatura:
-  - Quente: vermelho/laranja com icone Flame
-  - Morno: amarelo com icone Thermometer
-  - Frio: azul com icone Snowflake
-
-### 2.4 Filtro de temperatura
-
-**Arquivo:** `src/pages/IntensivoCRM.tsx`
-- Adicionar state `temperatureFilter` ('all' | 'quente' | 'morno' | 'frio')
-- Adicionar Select de filtro no bloco de filtros existente
-- Filtrar `filteredLeads` pela temperatura
-- Adicionar chip no `IntensiveActiveFilters`
-
-**Arquivo:** `src/components/intensivo/IntensiveActiveFilters.tsx`
-- Adicionar chip para filtro de temperatura
-
-### 2.5 Edicao da temperatura
-
-**Arquivo:** `src/components/intensivo/IntensiveLeadDetailDialog.tsx`
-- Adicionar selector de temperatura no painel de detalhes do lead
-
----
-
-## 3. Carteira: Categorizacao por mes de entrada e filtro
-
-### 3.1 Badge de mes no card
-
-**Arquivo:** `src/components/portfolio/StudentCard.tsx`
-- Adicionar badge com formato "Mmm/AA" (ex: "Jan/26") derivado de `student.entry_date`
-- Usar `format(new Date(student.entry_date), "MMM/yy", { locale: ptBR })` com primeira letra maiuscula
-
-### 3.2 Filtro por mes
+**Arquivo:** `src/hooks/usePortfolio.ts` - `usePortfolioStudents()`
+- Adicionar parametro `limit` na query key e na chamada `.limit(limit)`
+- Retornar tambem o `limit` para o componente pai saber quando mostrar "Carregar mais"
+- Adicionar `placeholderData: (prev) => prev`
 
 **Arquivo:** `src/pages/Portfolio.tsx`
-- Adicionar campo `monthFilter` no `PortfolioFiltersState` (string | 'all', formato 'YYYY-MM')
-- Calcular lista de meses disponiveis a partir dos `entry_date` dos alunos
-- Filtrar alunos pelo mes selecionado
+- Adicionar state `const [limit, setLimit] = useState(50)`
+- Passar `limit` para `usePortfolioStudents(limit)`
+- Apos a `StudentList`, renderizar botao "Carregar mais" quando `students.length >= limit`
+- Botao incrementa limit em 50: `setLimit(prev => prev + 50)`
 
-**Arquivo:** `src/components/portfolio/PortfolioFilters.tsx`
-- Adicionar Select com os meses disponiveis (ex: "Janeiro/2026", "Dezembro/2025")
-- Manter o filtro de periodo existente (ambos podem coexistir)
-
----
-
-## 4. Carteira: Icones clicaveis de Intensivo, Mentoria e Evento
-
-### 4.1 Criar dialogs de listagem
-
-**Arquivo:** `src/components/portfolio/ActivityListDialog.tsx` (novo)
-- Dialog que recebe um tipo de atividade ('intensivo' | 'mentoria' | 'evento')
-- Lista todos os alunos que possuem aquela atividade registrada
-- Cada item mostra nome do aluno, data da atividade
-- Ao clicar no aluno, abre o `StudentDetailDialog`
-
-### 4.2 Tornar icones clicaveis
-
-**Arquivo:** `src/components/portfolio/ActivityMetrics.tsx`
-- Adicionar `onClick` em cada Card (Intensivos, Mentorias, Eventos)
-- Ao clicar, abrir o `ActivityListDialog` com o tipo correspondente
-- Adicionar `cursor-pointer hover:shadow-md` nos cards
+**Arquivo:** `src/components/portfolio/StudentList.tsx`
+- Nenhuma alteracao necessaria (ja recebe array filtrado)
 
 ---
 
-## 5. Dashboard: Card de Vendas clicavel com popup
+## 2. Paginacao no CRM Clients
 
-### 5.1 Criar dialog de vendas
-
-**Arquivo:** `src/components/dashboard/SalesListDialog.tsx` (novo)
-- Dialog que lista todas as vendas do periodo selecionado
-- Cada linha mostra: nome do cliente, nicho, valor de venda, valor de entrada, produto vendido
-- Ao clicar em um lead, navega para `/clients/{id}` (abre painel do cliente)
-- Busca dados da tabela `clients` onde `is_sold = true` e `sold_at` esta no range
-
-### 5.2 Tornar o card clicavel
-
-**Arquivo:** `src/pages/Dashboard.tsx`
-- Adicionar state para controlar abertura do dialog
-- No `StatsCard` de "Vendas Fechadas", adicionar `onClick` para abrir o dialog
-- Adicionar `className="cursor-pointer"` ao card
-- Passar `dateRange` e `selectedFunnel` para o dialog filtrar corretamente
-
-**Arquivo:** `src/components/dashboard/StatsCard.tsx`
-- Adicionar prop `onClick?: () => void` opcional
-- Quando presente, aplicar `cursor-pointer` e chamar onClick ao clicar
+**Arquivo:** `src/pages/Clients.tsx`
+- Adicionar state `const [limit, setLimit] = useState(50)`
+- Adicionar `limit` na query key: `['clients', targetCloserId, limit]`
+- Adicionar `.limit(limit)` na query de clients
+- Adicionar `placeholderData: (prev) => prev` na query
+- Apos o `ClientKanban`, renderizar botao "Carregar mais" quando `clients.length >= limit`
+- Substituir "Carregando..." por skeleton (mesmo padrao do Calls)
 
 ---
 
-## 6. Instagram e WhatsApp clicaveis
+## 3. Select especifico no CRM Intensivo
 
-O Instagram e WhatsApp **ja estao clicaveis** no `ClientCard.tsx`:
-- WhatsApp: link `https://wa.me/{phone}` (linha 137-146)
-- Instagram: link `https://instagram.com/{handle}` (linha 165-176)
-- Ambos com `e.stopPropagation()` para nao abrir o card
-
-Verificarei se isso tambem esta implementado em:
-
-**Arquivo:** `src/components/portfolio/StudentCard.tsx`
-- Atualmente o telefone e email nao sao clicaveis. Adicionar link de WhatsApp no telefone (mesmo padrao do ClientCard)
-
-**Arquivo:** `src/components/intensivo/IntensiveLeadCard.tsx`
-- O telefone ja aparece mas nao e clicavel. Adicionar link de WhatsApp
-
-**Arquivo:** `src/components/portfolio/StudentDetailDialog.tsx`
-- Verificar se telefone e instagram estao clicaveis no dialog de detalhe
+**Arquivo:** `src/hooks/useIntensivoCRM.ts`
+- Na query de leads (linha 37), substituir `.select('*')` por select com campos especificos:
+  ```
+  id, edition_id, closer_id, name, phone, email, company, niche, status, status_changed_at, source, source_client_id, source_student_id, indication_id, confirmed_at, ticket_retrieved_at, attended_at, lead_temperature, notes, created_at, updated_at
+  ```
+- Na query de editions (linha 17), substituir `.select('*')` por:
+  ```
+  id, name, event_date, location, description, is_active, created_by, created_at, updated_at
+  ```
+- Adicionar `placeholderData: (prev) => prev` em ambas as queries
 
 ---
 
-## Resumo de arquivos
+## 4. PlaceholderData nas queries restantes
 
-| Arquivo | Acao |
-|---------|------|
-| `src/types/intensivo.ts` | Adicionar `LeadTemperature` e campo no `IntensiveLead` |
-| `src/components/intensivo/IntensiveKanban.tsx` | Aplicar padrao isDraggingRef do CRM Calls |
-| `src/components/intensivo/IntensiveLeadCard.tsx` | Tags de temperatura, WhatsApp clicavel, simplificar drag |
-| `src/pages/IntensivoCRM.tsx` | Filtro de temperatura |
-| `src/components/intensivo/IntensiveActiveFilters.tsx` | Chip de temperatura |
-| `src/components/intensivo/IntensiveLeadDetailDialog.tsx` | Selector de temperatura |
-| `src/components/portfolio/StudentCard.tsx` | Badge de mes, WhatsApp clicavel |
-| `src/pages/Portfolio.tsx` | Filtro por mes no state |
-| `src/components/portfolio/PortfolioFilters.tsx` | Select de filtro por mes |
-| `src/components/portfolio/ActivityMetrics.tsx` | Cards clicaveis |
-| `src/components/portfolio/ActivityListDialog.tsx` | Novo dialog de listagem por atividade |
-| `src/components/dashboard/SalesListDialog.tsx` | Novo dialog de vendas |
-| `src/components/dashboard/StatsCard.tsx` | Prop onClick |
-| `src/pages/Dashboard.tsx` | Abrir dialog de vendas |
-| `src/components/portfolio/StudentDetailDialog.tsx` | Links clicaveis |
-| Migracao SQL | Coluna `lead_temperature` em `intensive_leads` |
+Adicionar `placeholderData: (prev) => prev` nas seguintes queries que ainda nao possuem:
+
+| Arquivo | Hook/Query |
+|---------|-----------|
+| `src/hooks/usePortfolio.ts` | `usePortfolioStudents` |
+| `src/hooks/usePortfolio.ts` | `useTicketUpgrades` |
+| `src/hooks/usePortfolio.ts` | `useStudentActivities` |
+| `src/hooks/usePortfolio.ts` | `useStudentIndications` |
+| `src/hooks/usePortfolio.ts` | `useAllPortfolioData` |
+| `src/hooks/useDashboardData.ts` | `useDashboardData` |
+| `src/hooks/useIntensivoCRM.ts` | editions query |
+| `src/hooks/useIntensivoCRM.ts` | leads query |
+| `src/pages/Clients.tsx` | clients query |
+
+O Calls (`src/pages/Calls.tsx` linha 83) ja possui `placeholderData: (prev) => prev`.
+
+---
 
 ## Detalhes tecnicos
 
-### Migracao SQL
-```sql
-ALTER TABLE public.intensive_leads 
-ADD COLUMN lead_temperature text NOT NULL DEFAULT 'morno';
+### Padrao de paginacao (identico ao Calls)
 
--- Validacao via trigger (sem CHECK constraint)
-CREATE OR REPLACE FUNCTION validate_lead_temperature()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.lead_temperature NOT IN ('quente', 'morno', 'frio') THEN
-    RAISE EXCEPTION 'lead_temperature must be quente, morno or frio';
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_validate_lead_temperature
-BEFORE INSERT OR UPDATE ON public.intensive_leads
-FOR EACH ROW EXECUTE FUNCTION validate_lead_temperature();
-```
-
-### Fluxo do dialog de vendas no Dashboard
 ```text
-Usuario clica no card "Vendas Fechadas"
-    |
-    v
-Abre SalesListDialog
-    |
-    v
-Query: clients WHERE is_sold=true AND sold_at BETWEEN dateRange
-    |
-    v
-Lista com: nome, nicho, sale_value, entry_value, product_offered
-    |
-    v
-Clique no lead -> navigate('/clients/{id}')
+// State
+const [limit, setLimit] = useState(50);
+
+// Na query
+.limit(limit)
+
+// No JSX, apos a lista
+{data.length >= limit && (
+  <div className="flex justify-center pt-4">
+    <Button variant="outline" onClick={() => setLimit(prev => prev + 50)}>
+      Carregar mais
+    </Button>
+  </div>
+)}
 ```
+
+### PlaceholderData
+
+Adicionar em cada `useQuery`:
+```typescript
+placeholderData: (prev) => prev,
+```
+
+Isso mantem os dados anteriores visiveis enquanto o refetch ocorre, eliminando o flash de loading/skeleton quando os dados ja foram carregados uma vez.
+
+### Select especifico do Intensivo
+
+Todos os 21 campos da interface `IntensiveLead` serao listados explicitamente, e os 9 campos de `IntensiveEdition`. Isso evita trazer colunas futuras desnecessarias e reduz payload.
+
+---
+
+## Arquivos modificados
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/hooks/usePortfolio.ts` | placeholderData em 4 queries, limit param em usePortfolioStudents |
+| `src/hooks/useDashboardData.ts` | placeholderData |
+| `src/hooks/useIntensivoCRM.ts` | select especifico + placeholderData em 2 queries |
+| `src/pages/Portfolio.tsx` | State limit + botao "Carregar mais" |
+| `src/pages/Clients.tsx` | State limit + .limit() + placeholderData + botao "Carregar mais" + skeleton |
+
