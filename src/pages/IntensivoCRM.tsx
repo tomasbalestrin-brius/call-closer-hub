@@ -22,10 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Search, Flame, Trash2, LayoutGrid, Columns, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, Search, Flame, Trash2, LayoutGrid, Columns, AlertCircle, RefreshCw, Thermometer } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import type { IntensiveLead, IntensiveLeadStatus } from '@/types/intensivo';
+import type { IntensiveLead, IntensiveLeadStatus, LeadTemperature } from '@/types/intensivo';
 
 // View mode toggle
 import { IntensiveKanban } from '@/components/intensivo/IntensiveKanban';
@@ -37,6 +37,7 @@ export default function IntensivoCRM() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<IntensiveLeadStatus | 'all'>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [temperatureFilter, setTemperatureFilter] = useState<LeadTemperature | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'kanban'>('kanban');
   const [showNewEditionDialog, setShowNewEditionDialog] = useState(false);
   const [showNewLeadDialog, setShowNewLeadDialog] = useState(false);
@@ -115,8 +116,9 @@ export default function IntensivoCRM() {
     
     const matchesStatus = statusFilter === 'all' || lead.status === statusFilter;
     const matchesSource = sourceFilter === 'all' || lead.source === sourceFilter;
+    const matchesTemperature = temperatureFilter === 'all' || lead.lead_temperature === temperatureFilter;
     
-    return matchesSearch && matchesStatus && matchesSource;
+    return matchesSearch && matchesStatus && matchesSource && matchesTemperature;
   });
 
   const selectedEdition = editions.find(e => e.id === selectedEditionId);
@@ -263,6 +265,19 @@ export default function IntensivoCRM() {
               </SelectContent>
             </Select>
           )}
+
+          <Select value={temperatureFilter} onValueChange={(v) => setTemperatureFilter(v as LeadTemperature | 'all')}>
+            <SelectTrigger className="w-[180px]">
+              <Thermometer className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Temperatura" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas temperaturas</SelectItem>
+              <SelectItem value="quente">🔥 Quente</SelectItem>
+              <SelectItem value="morno">🌡️ Morno</SelectItem>
+              <SelectItem value="frio">❄️ Frio</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Active Filters Chips */}
@@ -270,13 +285,16 @@ export default function IntensivoCRM() {
           searchQuery={searchQuery}
           statusFilter={statusFilter}
           sourceFilter={sourceFilter}
+          temperatureFilter={temperatureFilter}
           onClearSearch={() => setSearchQuery('')}
           onClearStatus={() => setStatusFilter('all')}
           onClearSource={() => setSourceFilter('all')}
+          onClearTemperature={() => setTemperatureFilter('all')}
           onClearAll={() => {
             setSearchQuery('');
             setStatusFilter('all');
             setSourceFilter('all');
+            setTemperatureFilter('all');
           }}
         />
 

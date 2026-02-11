@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { useIntensivoCRM } from '@/hooks/useIntensivoCRM';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
-import { INTENSIVE_COLUMNS, INTENSIVE_STATUS_LABELS, type IntensiveLead, type IntensiveLeadStatus } from '@/types/intensivo';
+import { INTENSIVE_COLUMNS, INTENSIVE_STATUS_LABELS, TEMPERATURE_LABELS, type IntensiveLead, type IntensiveLeadStatus, type LeadTemperature } from '@/types/intensivo';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -113,10 +113,22 @@ export function IntensiveLeadDetailDialog({
             <TabsContent value="info" className="space-y-4 mt-4">
               {/* Contact Info */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone className="w-4 h-4 text-muted-foreground" />
-                  <span>{lead.phone || 'Não informado'}</span>
-                </div>
+                {lead.phone ? (
+                  <a
+                    href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm hover:text-green-600 transition-colors"
+                  >
+                    <Phone className="w-4 h-4 text-muted-foreground" />
+                    <span>{lead.phone}</span>
+                  </a>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="w-4 h-4 text-muted-foreground" />
+                    <span>Não informado</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-sm">
                   <Mail className="w-4 h-4 text-muted-foreground" />
                   <span>{lead.email || 'Não informado'}</span>
@@ -132,6 +144,26 @@ export function IntensiveLeadDetailDialog({
               </div>
 
               <Separator />
+
+              {/* Temperature Selector */}
+              <div className="space-y-2">
+                <Label>Temperatura do Lead</Label>
+                <Select 
+                  value={lead.lead_temperature || 'morno'} 
+                  onValueChange={async (value: LeadTemperature) => {
+                    await updateLead.mutateAsync({ id: lead.id, lead_temperature: value } as any);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="quente">🔥 Quente</SelectItem>
+                    <SelectItem value="morno">🌡️ Morno</SelectItem>
+                    <SelectItem value="frio">❄️ Frio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               {/* Status Selector */}
               <div className="space-y-2">

@@ -76,6 +76,7 @@ export function NewIntensiveLeadDialog({
       ticket_retrieved_at: null,
       attended_at: null,
       notes: data.notes || null,
+      lead_temperature: 'morno' as const,
     });
 
     reset();

@@ -1,5 +1,13 @@
 // Intensivo CRM Types
 
+export type LeadTemperature = 'quente' | 'morno' | 'frio';
+
+export const TEMPERATURE_LABELS: Record<LeadTemperature, string> = {
+  quente: 'Quente',
+  morno: 'Morno',
+  frio: 'Frio',
+};
+
 export type IntensiveLeadStatus = 
   | 'abordagem_inicial'
   | 'nivel_consciencia'
@@ -46,6 +54,7 @@ export interface IntensiveLead {
   confirmed_at: string | null;
   ticket_retrieved_at: string | null;
   attended_at: string | null;
+  lead_temperature: LeadTemperature;
   notes: string | null;
   created_at: string;
   updated_at: string;

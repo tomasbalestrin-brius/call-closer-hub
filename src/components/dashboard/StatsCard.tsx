@@ -12,6 +12,7 @@ interface StatsCardProps {
     isPositive: boolean;
   };
   variant?: 'default' | 'accent' | 'success' | 'warning';
+  onClick?: () => void;
 }
 
 const variantStyles = {
@@ -34,13 +35,19 @@ const StatsCard = React.forwardRef<HTMLDivElement, StatsCardProps>(({
   subtitle, 
   icon: Icon, 
   trend,
-  variant = 'default' 
+  variant = 'default',
+  onClick,
 }, ref) => {
   return (
-    <div ref={ref} className={cn(
-      'rounded-xl border p-6 shadow-card transition-all hover:shadow-md animate-slide-up',
-      variantStyles[variant]
-    )}>
+    <div 
+      ref={ref} 
+      onClick={onClick}
+      className={cn(
+        'rounded-xl border p-6 shadow-card transition-all hover:shadow-md animate-slide-up',
+        variantStyles[variant],
+        onClick && 'cursor-pointer'
+      )}
+    >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>

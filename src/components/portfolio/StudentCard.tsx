@@ -1,7 +1,9 @@
 import { memo } from 'react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { User, Phone, Mail, Link as LinkIcon, Flame, Users, GraduationCap, DollarSign, Target, ShoppingBag, Loader2 } from 'lucide-react';
+import { User, Phone, Mail, Link as LinkIcon, Flame, Users, GraduationCap, DollarSign, Target, ShoppingBag, Loader2, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TICKET_LABELS } from '@/types';
 import type { PortfolioStudent, TicketType } from '@/types';
@@ -33,6 +35,8 @@ const formatCurrency = (value: number | null | undefined) => {
 const StudentCard = memo(function StudentCard({ student, enrichedData, isLoadingEnriched, onClick }: StudentCardProps) {
   const isFromCRM = !!student.client_id;
   const niche = enrichedData?.niche || student.niche;
+  const entryMonth = format(new Date(student.entry_date), "MMM/yy", { locale: ptBR });
+  const entryMonthCapitalized = entryMonth.charAt(0).toUpperCase() + entryMonth.slice(1);
   
   return (
     <Card 
@@ -62,10 +66,16 @@ const StudentCard = memo(function StudentCard({ student, enrichedData, isLoading
               </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground mt-0.5 flex-wrap">
                 {student.phone && (
-                  <span className="flex items-center gap-1">
+                  <a
+                    href={`https://wa.me/${student.phone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 hover:text-green-600"
+                  >
                     <Phone className="w-3 h-3" />
                     {student.phone}
-                  </span>
+                  </a>
                 )}
                 {student.email && (
                   <span className="flex items-center gap-1 truncate">
@@ -144,6 +154,10 @@ const StudentCard = memo(function StudentCard({ student, enrichedData, isLoading
               className={cn('font-medium', ticketStyles[student.current_ticket])}
             >
               {TICKET_LABELS[student.current_ticket]}
+            </Badge>
+            <Badge variant="outline" className="bg-muted/50 text-muted-foreground gap-1">
+              <Calendar className="w-3 h-3" />
+              {entryMonthCapitalized}
             </Badge>
           </div>
         </div>
