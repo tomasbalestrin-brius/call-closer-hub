@@ -16,7 +16,7 @@ export function useIntensivoCRM(editionId?: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('intensive_editions')
-        .select('*')
+        .select('id, name, event_date, location, description, is_active, created_by, created_at, updated_at')
         .order('event_date', { ascending: false });
       
       if (error) throw error;
@@ -24,6 +24,7 @@ export function useIntensivoCRM(editionId?: string) {
     },
     enabled: !!user,
     retry: 2,
+    placeholderData: (prev) => prev,
   });
 
   // Fetch leads for selected edition
@@ -34,7 +35,7 @@ export function useIntensivoCRM(editionId?: string) {
       
       const { data, error } = await supabase
         .from('intensive_leads')
-        .select('*')
+        .select('id, edition_id, closer_id, name, phone, email, company, niche, status, status_changed_at, source, source_client_id, source_student_id, indication_id, confirmed_at, ticket_retrieved_at, attended_at, lead_temperature, notes, created_at, updated_at')
         .eq('edition_id', editionId)
         .order('created_at', { ascending: false });
       
@@ -43,6 +44,7 @@ export function useIntensivoCRM(editionId?: string) {
     },
     enabled: !!user && !!editionId,
     retry: 2,
+    placeholderData: (prev) => prev,
   });
 
   // Create edition mutation

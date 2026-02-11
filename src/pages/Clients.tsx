@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Search, Users, X, User, Eye } from 'lucide-react';
 import { Client } from '@/types';
+import { KanbanSkeleton } from '@/components/skeletons/CardListSkeleton';
 
 interface ClientWithLastCall extends Client {
   lastCallDate?: string | null;
@@ -34,21 +35,22 @@ export default function Clients() {
   const { data: closers = [] } = useClosersList();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCloserId, setSelectedCloserId] = useState<string | null>(null);
+  const [limit, setLimit] = useState(50);
 
   const targetCloserId = selectedCloserId || user?.id;
 
   const { data: clients = [], isLoading: loading } = useQuery({
-    queryKey: ['clients', targetCloserId],
+    queryKey: ['clients', targetCloserId, limit],
     queryFn: async (): Promise<ClientWithLastCall[]> => {
       if (!user || !targetCloserId) return [];
 
-      // Fetch clients and calls in parallel
       const [clientsResult, callsResult] = await Promise.all([
         supabase
           .from('clients')
           .select(CLIENTS_SELECT)
           .eq('closer_id', targetCloserId)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .limit(limit),
         supabase
           .from('calls')
           .select('client_id, call_date')
@@ -76,6 +78,7 @@ export default function Clients() {
       })) as ClientWithLastCall[];
     },
     enabled: !!user && !permissionsLoading && !!targetCloserId,
+    placeholderData: (prev) => prev,
   });
 
   const invalidateClients = () => {
@@ -140,10 +143,19 @@ export default function Clients() {
           </div>
         </div>
 
-        {loading ? (
-          <div className="text-muted-foreground">Carregando...</div>
+        {loading && clients.length === 0 ? (
+          <KanbanSkeleton columns={5} />
         ) : filteredClients.length > 0 ? (
-          <ClientKanban clients={filteredClients} onRefresh={invalidateClients} />
+          <>
+            <ClientKanban clients={filteredClients} onRefresh={invalidateClients} />
+            {clients.length >= limit && (
+              <div className="flex justify-center pt-4">
+                <Button variant="outline" onClick={() => setLimit(prev => prev + 50)}>
+                  Carregar mais
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-12 bg-card rounded-xl border">
             <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />

@@ -32,7 +32,8 @@ export default function Portfolio() {
     monthFilter: 'all',
   });
   
-  const { data: students, isLoading } = usePortfolioStudents();
+  const [limit, setLimit] = useState(50);
+  const { data: students, isLoading } = usePortfolioStudents(limit);
   const { data: activities } = useStudentActivities();
   const { data: indications } = useStudentIndications();
   const metrics = useClientsMetrics(); // Métricas baseadas em TODOS os clientes
@@ -139,6 +140,14 @@ export default function Portfolio() {
           </div>
           
           <StudentList students={filteredStudents} isLoading={isLoading} />
+          
+          {students && students.length >= limit && (
+            <div className="flex justify-center pt-4">
+              <Button variant="outline" onClick={() => setLimit(prev => prev + 50)}>
+                Carregar mais
+              </Button>
+            </div>
+          )}
         </div>
         
         {/* Dialogs */}

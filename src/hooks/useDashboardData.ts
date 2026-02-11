@@ -84,5 +84,6 @@ export function useDashboardData() {
     },
     staleTime: 60_000,
     enabled: !!user,
+    placeholderData: (prev) => prev,
   });
 }

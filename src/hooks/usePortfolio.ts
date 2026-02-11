@@ -74,21 +74,23 @@ export function useStudentEnrichedData(students: PortfolioStudent[]) {
   return { enrichedDataMap, isLoading };
 }
 
-export function usePortfolioStudents() {
+export function usePortfolioStudents(limit = 50) {
   const { user } = useAuth();
   
   return useQuery({
-    queryKey: ['portfolio-students', user?.id],
+    queryKey: ['portfolio-students', user?.id, limit],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('portfolio_students')
         .select('id, client_id, closer_id, name, phone, email, niche, notes, current_ticket, entry_date, created_at, updated_at')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(limit);
       
       if (error) throw error;
       return data as PortfolioStudent[];
     },
     enabled: !!user,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -107,6 +109,7 @@ export function useTicketUpgrades() {
       return data as TicketUpgrade[];
     },
     enabled: !!user,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -125,6 +128,7 @@ export function useStudentActivities() {
       return data as StudentActivity[];
     },
     enabled: !!user,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -143,6 +147,7 @@ export function useStudentIndications() {
       return data;
     },
     enabled: !!user,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -169,6 +174,7 @@ export function useAllPortfolioData() {
     },
     enabled: !!user,
     staleTime: 120_000,
+    placeholderData: (prev) => prev,
   });
 }
 
