@@ -187,3 +187,71 @@
     transform: scale(1);
   }
 }
+
+/* ═══ UX Performance PRD v3.0 ═══ */
+
+/* GPU-safe button micro-interaction */
+button, [role="button"], a {
+  transition: background-color 150ms ease, transform 100ms ease, opacity 100ms ease;
+}
+
+button:active:not(:disabled), [role="button"]:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Focus visible - keyboard only */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Prevent iOS zoom on inputs */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+@media (min-width: 1024px) {
+  input, select, textarea {
+    font-size: inherit !important;
+  }
+}
+
+/* Touch targets minimum 44x44 */
+@media (max-width: 768px) {
+  button, [role="button"], a[href] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Skip to content link */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  z-index: 100;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 8px 16px;
+  transition: top 200ms ease;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
