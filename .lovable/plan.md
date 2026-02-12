@@ -1,38 +1,37 @@
 
+# Limpar logs de erros anteriores a 01/02/2026
 
-# Adicionar regra de Problematização para Deyvid e Leandro
+## O que será feito
 
-## O que muda
+Deletar os **809 registros** da tabela `system_logs` com nível `error`, `warning` ou `critical` que têm timestamp anterior a 01/02/2026.
 
-Para Deyvid e Leandro, a etapa de **Problematização** é conduzida pela pergunta-chave:
+Como a ferramenta de query do banco é somente leitura, a exclusão será feita via código do frontend, usando o cliente do banco que já está disponível no painel admin.
 
-> "O que vai acontecer com seu negócio se continuar da mesma forma?"
+## Abordagem
 
-Sempre que essa pergunta (ou variação próxima) aparecer na transcrição, a IA deve reconhecer como a etapa de Problematização acontecendo.
+Adicionar um botão "Limpar Logs Antigos" no `ErrorLogsPanel.tsx` que executa:
 
-## Onde aplicar
-
-Essa instrução será injetada nas regras de prioridade de framework que já existem para Deyvid e Leandro, em **dois arquivos**:
-
-| Arquivo | Localização |
-|---------|-------------|
-| `supabase/functions/analyze-call/index.ts` | Função `getFrameworkPriorityInstructions()`, bloco do Deyvid/Leandro (linhas 82-95) |
-| `supabase/functions/reanalyze-call/index.ts` | Mesmo bloco equivalente (se já tiver a função de prioridade) ou no prompt master |
-
-## Texto a ser adicionado
-
-Dentro do bloco de regras para Deyvid/Leandro, após as regras de framework, será incluído:
-
-```text
-REGRA DE IDENTIFICAÇÃO DE PROBLEMATIZAÇÃO:
-- A pergunta-chave que conduz a Problematização para este closer é: "O que vai acontecer com seu negócio se continuar da mesma forma?"
-- Sempre que essa pergunta (ou variação semanticamente equivalente) aparecer na transcrição, marque a etapa "problematizacao" como aconteceu: "sim" ou "parcial"
-- Variações válidas incluem: "o que acontece se você continuar assim?", "se nada mudar, o que vai acontecer?", "como fica daqui a 1 ano se continuar do mesmo jeito?"
+```sql
+DELETE FROM system_logs 
+WHERE timestamp < '2026-02-01T00:00:00Z'
+AND level IN ('error', 'warning', 'critical')
 ```
 
-## Impacto
+Porém, como isso é uma ação pontual solicitada agora, a forma mais direta é executar o delete diretamente no código sem adicionar UI permanente. Vou usar a abordagem de chamar o delete via `supabase.from('system_logs').delete()` dentro de uma ação no painel.
 
-- Nenhuma mudança estrutural no código
-- Apenas adição de texto instrucional no prompt da IA
-- Afeta apenas calls de Deyvid e Leandro
-- Deploy automático das duas edge functions após a edição
+## Detalhes técnicos
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/admin/ErrorLogsPanel.tsx` | Adicionar botão "Limpar Antigos" ao lado do botão "Atualizar" nos filtros. Ao clicar, deleta logs com timestamp antes de 01/02/2026 e atualiza a lista |
+
+O botão executará:
+```typescript
+await supabase
+  .from('system_logs')
+  .delete()
+  .lt('timestamp', '2026-02-01T00:00:00Z')
+  .in('level', ['error', 'warning', 'critical']);
+```
+
+Após a exclusão, a lista será atualizada automaticamente, e os 72 erros visíveis serão reduzidos apenas aos de fevereiro/2026 em diante.
