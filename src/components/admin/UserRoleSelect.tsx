@@ -21,6 +21,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
   lider: 'Líder',
   closer: 'Closer',
+  financeiro: 'Financeiro',
 };
 
 export function UserRoleSelect({ userId, currentRole, onRoleChange }: UserRoleSelectProps) {
@@ -89,6 +90,7 @@ export function UserRoleSelect({ userId, currentRole, onRoleChange }: UserRoleSe
       <SelectContent>
         <SelectItem value="closer">Closer</SelectItem>
         <SelectItem value="lider">Líder</SelectItem>
+        <SelectItem value="financeiro">Financeiro</SelectItem>
         <SelectItem value="admin">Admin</SelectItem>
       </SelectContent>
     </Select>

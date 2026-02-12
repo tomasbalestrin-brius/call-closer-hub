@@ -12,10 +12,10 @@ interface MonthlySalesData {
 
 export function useMonthlySales() {
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isFinanceiro } = useUserRole();
 
   return useQuery({
-    queryKey: ['monthly-sales', user?.id, isAdmin],
+    queryKey: ['monthly-sales', user?.id, isAdmin, isFinanceiro],
     queryFn: async (): Promise<MonthlySalesData> => {
       if (!user) throw new Error('No user');
 
@@ -31,12 +31,13 @@ export function useMonthlySales() {
         .gte('sold_at', monthStart)
         .lte('sold_at', monthEnd);
 
-      if (!isAdmin) {
+      const canSeeAll = isAdmin || isFinanceiro;
+      if (!canSeeAll) {
         salesQuery = salesQuery.eq('closer_id', user.id);
       }
 
-      // Closer count only needed for admin
-      const closerCountPromise = isAdmin
+      // Closer count only needed for admin/financeiro
+      const closerCountPromise = canSeeAll
         ? supabase.from('user_roles').select('id').eq('role', 'closer')
         : Promise.resolve({ data: null, error: null });
 
