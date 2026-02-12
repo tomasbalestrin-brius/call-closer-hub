@@ -15,10 +15,10 @@ interface DashboardConsolidatedData {
 
 export function useDashboardData() {
   const { user } = useAuth();
-  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { isAdmin, isFinanceiro, loading: roleLoading } = useUserRole();
 
   return useQuery({
-    queryKey: ['dashboard-consolidated', user?.id, isAdmin],
+    queryKey: ['dashboard-consolidated', user?.id, isAdmin, isFinanceiro],
     queryFn: async (): Promise<DashboardConsolidatedData> => {
       if (!user) throw new Error('No user');
 
@@ -36,7 +36,8 @@ export function useDashboardData() {
         .gte('sold_at', monthStart)
         .lte('sold_at', monthEnd);
 
-      if (!isAdmin) {
+      const canSeeAll = isAdmin || isFinanceiro;
+      if (!canSeeAll) {
         salesQuery = salesQuery.eq('closer_id', user.id);
       }
 
@@ -46,11 +47,11 @@ export function useDashboardData() {
         .eq('month', currentMonth)
         .eq('year', currentYear);
 
-      if (!isAdmin) {
+      if (!canSeeAll) {
         goalsQuery = goalsQuery.eq('closer_id', user.id);
       }
 
-      const closerCountPromise = isAdmin
+      const closerCountPromise = canSeeAll
         ? supabase.from('user_roles').select('id').eq('role', 'closer')
         : Promise.resolve({ data: null, error: null });
 
@@ -70,7 +71,7 @@ export function useDashboardData() {
       // Calculate goal
       let monthlyGoal: number | null = null;
       if (goalsResult.data && goalsResult.data.length > 0) {
-        if (isAdmin) {
+        if (canSeeAll) {
           monthlyGoal = goalsResult.data.reduce((acc, g) => acc + Number(g.goal_value), 0);
         } else {
           monthlyGoal = Number(goalsResult.data[0].goal_value);

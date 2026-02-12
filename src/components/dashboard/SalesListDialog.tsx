@@ -26,10 +26,10 @@ const formatCurrency = (value: number | null | undefined) => {
 export default function SalesListDialog({ open, onOpenChange, dateRange, selectedFunnel }: SalesListDialogProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { isAdmin, isFinanceiro, loading: roleLoading } = useUserRole();
 
   const { data: sales = [], isLoading } = useQuery({
-    queryKey: ['sales-list', user?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), selectedFunnel, isAdmin],
+    queryKey: ['sales-list', user?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), selectedFunnel, isAdmin, isFinanceiro],
     queryFn: async () => {
       let query = supabase
         .from('clients')
@@ -38,7 +38,7 @@ export default function SalesListDialog({ open, onOpenChange, dateRange, selecte
         .not('sold_at', 'is', null)
         .order('sold_at', { ascending: false });
 
-      if (!isAdmin) query = query.eq('closer_id', user!.id);
+      if (!isAdmin && !isFinanceiro) query = query.eq('closer_id', user!.id);
       if (dateRange?.from) query = query.gte('sold_at', format(dateRange.from, 'yyyy-MM-dd'));
       if (dateRange?.to) query = query.lte('sold_at', format(dateRange.to, 'yyyy-MM-dd') + 'T23:59:59');
       if (selectedFunnel) query = query.eq('funnel_source', selectedFunnel);
@@ -88,7 +88,7 @@ export default function SalesListDialog({ open, onOpenChange, dateRange, selecte
                         {sale.niche && (
                           <p className="text-xs text-muted-foreground truncate">{sale.niche}</p>
                         )}
-                        {isAdmin && (sale as any).profiles?.full_name && (
+                        {(isAdmin || isFinanceiro) && (sale as any).profiles?.full_name && (
                           <p className="text-xs text-primary truncate">Closer: {(sale as any).profiles.full_name}</p>
                         )}
                       </div>

@@ -1926,7 +1926,7 @@ export type Database = {
       lead_classification: "pos_venda" | "follow"
       student_activity_type: "intensivo" | "mentoria" | "evento"
       ticket_type: "29_90" | "12k" | "80k"
-      user_role: "admin" | "closer" | "lider"
+      user_role: "admin" | "closer" | "lider" | "financeiro"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2085,7 +2085,7 @@ export const Constants = {
       lead_classification: ["pos_venda", "follow"],
       student_activity_type: ["intensivo", "mentoria", "evento"],
       ticket_type: ["29_90", "12k", "80k"],
-      user_role: ["admin", "closer", "lider"],
+      user_role: ["admin", "closer", "lider", "financeiro"],
     },
   },
 } as const

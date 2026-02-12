@@ -7,6 +7,7 @@ interface UserRoleContextType {
   role: UserRole | null;
   isAdmin: boolean;
   isLeader: boolean;
+  isFinanceiro: boolean;
   loading: boolean;
 }
 
@@ -18,6 +19,7 @@ export function UserRoleProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLeader, setIsLeader] = useState(false);
+  const [isFinanceiro, setIsFinanceiro] = useState(false);
   const [lastFetchedUserId, setLastFetchedUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export function UserRoleProvider({ children }: { children: ReactNode }) {
       setRole(null);
       setIsAdmin(false);
       setIsLeader(false);
+      setIsFinanceiro(false);
       setLoading(false);
     }
   }, [user?.id, authLoading]);
@@ -51,18 +54,20 @@ export function UserRoleProvider({ children }: { children: ReactNode }) {
       setRole(userRole);
       setIsAdmin(userRole === 'admin');
       setIsLeader(userRole === 'lider');
+      setIsFinanceiro(userRole === 'financeiro');
     } catch (error) {
       console.error('Error fetching role:', error);
       setRole('closer');
       setIsAdmin(false);
       setIsLeader(false);
+      setIsFinanceiro(false);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <UserRoleContext.Provider value={{ role, isAdmin, isLeader, loading }}>
+    <UserRoleContext.Provider value={{ role, isAdmin, isLeader, isFinanceiro, loading }}>
       {children}
     </UserRoleContext.Provider>
   );

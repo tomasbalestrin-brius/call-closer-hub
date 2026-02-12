@@ -78,7 +78,7 @@ interface LeaderSquad {
 
 export default function Admin() {
   const { user } = useAuth();
-  const { isAdmin, isLeader, loading: roleLoading } = useUserRole();
+  const { isAdmin, isLeader, isFinanceiro, loading: roleLoading } = useUserRole();
   const { logAction } = useAuditLog();
   const [closers, setClosers] = useState<CloserWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,14 +100,14 @@ export default function Admin() {
   const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   useEffect(() => {
-    if (isAdmin || isLeader) {
-      if (isLeader && !isAdmin) {
+    if (isAdmin || isLeader || isFinanceiro) {
+      if (isLeader && !isAdmin && !isFinanceiro) {
         fetchLeaderSquad();
       } else {
         fetchClosers();
       }
     }
-  }, [isAdmin, isLeader]);
+  }, [isAdmin, isLeader, isFinanceiro]);
 
   useEffect(() => {
     if (leaderSquad) {
@@ -141,8 +141,8 @@ export default function Admin() {
     try {
       let profilesData;
 
-      if (isAdmin) {
-        // Admin vê todos os closers
+      if (isAdmin || isFinanceiro) {
+        // Admin/Financeiro vê todos os closers
         const { data, error } = await supabase
           .from('profiles')
           .select(`
@@ -404,11 +404,12 @@ export default function Admin() {
     );
   }
 
-  if (!isAdmin && !isLeader) {
+  if (!isAdmin && !isLeader && !isFinanceiro) {
     return <Navigate to="/" replace />;
   }
 
-  const isLeaderOnly = isLeader && !isAdmin;
+  const isLeaderOnly = isLeader && !isAdmin && !isFinanceiro;
+  const isFinanceiroOnly = isFinanceiro && !isAdmin;
 
   return (
     <MainLayout>
@@ -507,28 +508,30 @@ export default function Admin() {
                       }
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      onClick={() => setGoalDialogOpen(true)} 
-                      variant="outline"
-                    >
-                      <Target className="w-4 h-4 mr-2" />
-                      Definir Meta
-                    </Button>
-                    {isLeaderOnly && leaderSquad && (
+                  {!isFinanceiroOnly && (
+                    <div className="flex gap-2">
                       <Button 
-                        onClick={() => setSquadMembersDialogOpen(true)} 
+                        onClick={() => setGoalDialogOpen(true)} 
                         variant="outline"
                       >
-                        <Users2 className="w-4 h-4 mr-2" />
-                        Gerenciar Time
+                        <Target className="w-4 h-4 mr-2" />
+                        Definir Meta
                       </Button>
-                    )}
-                    <Button onClick={() => setDialogOpen(true)} className="gradient-primary">
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Novo Closer
-                    </Button>
-                  </div>
+                      {isLeaderOnly && leaderSquad && (
+                        <Button 
+                          onClick={() => setSquadMembersDialogOpen(true)} 
+                          variant="outline"
+                        >
+                          <Users2 className="w-4 h-4 mr-2" />
+                          Gerenciar Time
+                        </Button>
+                      )}
+                      <Button onClick={() => setDialogOpen(true)} className="gradient-primary">
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Novo Closer
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -570,7 +573,7 @@ export default function Admin() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3 flex-wrap">
-                          {isAdmin && (
+                          {isAdmin && !isFinanceiroOnly && (
                             <UserRoleSelect
                               userId={closer.user_id}
                               currentRole={closer.role}
@@ -625,39 +628,43 @@ export default function Admin() {
                           >
                             {closer.status === 'active' ? 'Ativo' : 'Inativo'}
                           </Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedCloserForReset({ user_id: closer.user_id, full_name: closer.full_name });
-                              setResetPasswordDialogOpen(true);
-                            }}
-                          >
-                            <Key className="w-4 h-4 mr-1" />
-                            Senha
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleCloserStatus(closer.id, closer.status)}
-                          >
-                            {closer.status === 'active' ? 'Desativar' : 'Ativar'}
-                          </Button>
-                          {isAdmin && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedCloserForDelete({
-                                  id: closer.id,
-                                  user_id: closer.user_id,
-                                  full_name: closer.full_name
-                                });
-                                setDeleteUserDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                          {!isFinanceiroOnly && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedCloserForReset({ user_id: closer.user_id, full_name: closer.full_name });
+                                  setResetPasswordDialogOpen(true);
+                                }}
+                              >
+                                <Key className="w-4 h-4 mr-1" />
+                                Senha
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleCloserStatus(closer.id, closer.status)}
+                              >
+                                {closer.status === 'active' ? 'Desativar' : 'Ativar'}
+                              </Button>
+                              {isAdmin && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedCloserForDelete({
+                                      id: closer.id,
+                                      user_id: closer.user_id,
+                                      full_name: closer.full_name
+                                    });
+                                    setDeleteUserDialogOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>

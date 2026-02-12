@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'lider' | 'closer';
+export type UserRole = 'admin' | 'lider' | 'closer' | 'financeiro';
 
 export type CallStatus = 
   | 'pendente' 
