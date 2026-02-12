@@ -1,38 +1,54 @@
 
-# Mostrar nome do closer na lista de vendas (visao admin)
 
-## Resumo
+# Corrigir race condition na Meta Mensal do admin
 
-Quando o admin visualiza o dialog "Vendas Fechadas", cada card deve exibir o nome do closer responsavel pela venda, para que o admin saiba quem vendeu para cada cliente.
+## Problema
 
----
+O hook `useDashboardData` e a query de stats no Dashboard disparam ANTES do papel do usuario (admin/closer/lider) ser carregado. Como `isAdmin` comeca como `false`, a primeira query roda filtrando por `closer_id = user.id`, trazendo dados individuais em vez do agregado de todos os closers.
 
-## Mudanca
+Quando o papel finalmente carrega e `isAdmin` vira `true`, a query key muda e o refetch acontece, mas o `placeholderData` mantem os dados errados visiveis ate o novo resultado chegar -- ou em alguns casos o usuario ja viu os valores errados.
 
-**Arquivo:** `src/components/dashboard/SalesListDialog.tsx`
+## Solucao
 
-1. **Query** - Adicionar `closer_id` no select e fazer um join com a tabela `profiles` para trazer o nome do closer:
-   ```
-   .select('id, name, niche, sale_value, entry_value, product_offered, sold_at, closer_id, profiles!closer_id(full_name)')
-   ```
-
-2. **UI** - Quando `isAdmin` for true, exibir o nome do closer abaixo do nicho do cliente, com uma badge ou texto pequeno indicando quem fechou a venda. Exemplo:
-   - Abaixo do nome/nicho, adicionar uma linha com texto tipo: `Closer: Nome do Closer` em `text-xs text-blue-600`
-
-3. Nenhuma mudanca de schema necessaria - a relacao `clients.closer_id -> profiles.user_id` ja existe.
+Adicionar a verificacao de `loading` do `useUserRole()` na condicao `enabled` de todas as queries que dependem de `isAdmin`.
 
 ---
 
-## Detalhe tecnico
+## Mudancas
 
-Na renderizacao de cada card, quando `isAdmin`:
+### 1. `src/hooks/useDashboardData.ts`
+
+- Desestruturar `loading: roleLoading` de `useUserRole()`
+- Alterar `enabled` de `!!user` para `!!user && !roleLoading`
+- Isso garante que a query so dispara depois que o papel do usuario esta determinado
+
+### 2. `src/pages/Dashboard.tsx`
+
+- O hook `useUserRole()` ja e chamado na linha 8 como `const { isAdmin } = useUserRole()`
+- Adicionar `loading: roleLoading` na desestruturacao
+- Alterar o `enabled` da query de stats (linha ~45) de `!!user` para `!!user && !roleLoading`
+
+---
+
+## Detalhes tecnicos
+
+Antes (useDashboardData.ts):
 ```text
-{isAdmin && sale.profiles?.full_name && (
-  <p className="text-xs text-blue-600 truncate">Closer: {sale.profiles.full_name}</p>
-)}
+const { isAdmin } = useUserRole();
+// ...
+enabled: !!user,
 ```
 
-Isso aparecera logo abaixo do nicho, dentro do bloco de info do cliente.
+Depois:
+```text
+const { isAdmin, loading: roleLoading } = useUserRole();
+// ...
+enabled: !!user && !roleLoading,
+```
+
+O mesmo padrao se aplica a query de stats no Dashboard.tsx.
+
+Com essa mudanca, nenhuma query sera executada ate que `isAdmin` tenha seu valor correto, eliminando os dados errados na tela.
 
 ---
 
@@ -40,4 +56,6 @@ Isso aparecera logo abaixo do nicho, dentro do bloco de info do cliente.
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/dashboard/SalesListDialog.tsx` | Adicionar join com profiles no select + exibir nome do closer para admin |
+| `src/hooks/useDashboardData.ts` | Adicionar roleLoading ao enabled |
+| `src/pages/Dashboard.tsx` | Adicionar roleLoading ao enabled da query de stats |
+
