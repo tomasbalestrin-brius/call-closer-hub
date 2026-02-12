@@ -49,7 +49,8 @@ import {
   FileText,
   Quote,
   RefreshCw,
-  Loader2
+  Loader2,
+  AtSign
 } from 'lucide-react';
 import { MergeCallDialog } from '@/components/calls/MergeCallDialog';
 import {
@@ -551,6 +552,21 @@ export default function ClientDetail() {
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Mail className="w-4 h-4 flex-shrink-0" />
                 <span>{client.email || <span className="text-muted-foreground/50 italic">E-mail não informado</span>}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <AtSign className="w-4 h-4 flex-shrink-0" />
+                {client.instagram ? (
+                  <a
+                    href={`https://instagram.com/${client.instagram.replace(/^@/, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    @{client.instagram.replace(/^@/, '')}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground/50 italic">Instagram não informado</span>
+                )}
               </div>
             </CardContent>
           </Card>
