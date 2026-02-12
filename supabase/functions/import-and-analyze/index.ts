@@ -304,8 +304,8 @@ serve(async (req) => {
     // ========== QUALITY VALIDATION ==========
     console.log("Validating content quality...");
 
-    // Reject calls shorter than ~5 minutes (estimated at ~150 words/min = ~3750 chars)
-    const MIN_CONTENT_LENGTH = 3750;
+    // Reject calls shorter than ~4 minutes (estimated at ~150 words/min = ~3000 chars)
+    const MIN_CONTENT_LENGTH = 3000;
     if (content.length < MIN_CONTENT_LENGTH) {
       const errorMsg = `Call muito curta (${content.length} caracteres). Mínimo: ${MIN_CONTENT_LENGTH} caracteres (~5 minutos de conversa)`;
       console.warn(`⚠️ ${errorMsg}`);
