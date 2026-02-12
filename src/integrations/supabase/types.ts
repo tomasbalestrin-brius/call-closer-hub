@@ -155,6 +155,7 @@ export type Database = {
           lead_classification:
             | Database["public"]["Enums"]["lead_classification"]
             | null
+          lead_temperature: string | null
           loss_point: string | null
           main_difficulty: string | null
           main_errors: string[] | null
@@ -203,6 +204,7 @@ export type Database = {
           lead_classification?:
             | Database["public"]["Enums"]["lead_classification"]
             | null
+          lead_temperature?: string | null
           loss_point?: string | null
           main_difficulty?: string | null
           main_errors?: string[] | null
@@ -251,6 +253,7 @@ export type Database = {
           lead_classification?:
             | Database["public"]["Enums"]["lead_classification"]
             | null
+          lead_temperature?: string | null
           loss_point?: string | null
           main_difficulty?: string | null
           main_errors?: string[] | null

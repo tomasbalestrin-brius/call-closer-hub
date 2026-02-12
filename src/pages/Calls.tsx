@@ -37,7 +37,7 @@ import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
-const CALLS_SELECT = 'id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at, company_name, notes, observation, deleted_at, deleted_by, next_contact_date, google_doc_id, source_file_id, content_hash, has_partner, consciousness_level, decision_reason, lead_classification, closer_classification, analysis_metadata, analysis_quality_score';
+const CALLS_SELECT = 'id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at, company_name, notes, observation, deleted_at, deleted_by, next_contact_date, google_doc_id, source_file_id, content_hash, has_partner, consciousness_level, decision_reason, lead_classification, closer_classification, analysis_metadata, analysis_quality_score, lead_temperature';
 
 export default function Calls() {
   const { user } = useAuth();

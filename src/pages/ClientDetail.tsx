@@ -278,7 +278,7 @@ export default function ClientDetail() {
       // Fetch calls for this client
       const { data: callsData, error: callsError } = await supabase
         .from('calls')
-        .select('id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at, notes, observation, company_name, consciousness_level, decision_reason, lead_classification, closer_classification, has_partner, next_contact_date, analysis_quality_score, analysis_metadata, deleted_at, deleted_by, source_file_id, google_doc_id, content_hash, transcription')
+        .select('id, closer_id, client_id, client_name, call_date, call_time, duration_minutes, status, score, product, sale_value, entry_value, main_errors, main_wins, loss_point, niche, main_pain, main_difficulty, ai_summary, call_conclusion, technical_analysis, merged_with_call_id, created_at, updated_at, analyzed_at, notes, observation, company_name, consciousness_level, decision_reason, lead_classification, closer_classification, has_partner, next_contact_date, analysis_quality_score, analysis_metadata, deleted_at, deleted_by, source_file_id, google_doc_id, content_hash, transcription, lead_temperature')
         .eq('client_id', id)
         .order('call_date', { ascending: false });
 

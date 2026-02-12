@@ -3,7 +3,7 @@ import { Call, CallStatus, LeadClassification, CloserClassification } from '@/ty
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Calendar, Clock, Star, DollarSign, Target, TrendingUp, User } from 'lucide-react';
+import { Calendar, Clock, Star, DollarSign, Target, TrendingUp, User, Flame, Thermometer, Snowflake } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import CallDetailDialog from './CallDetailDialog';
@@ -28,6 +28,12 @@ const statusConfig: Record<CallStatus, { label: string; className: string }> = {
 const leadClassificationConfig: Record<LeadClassification, { label: string; className: string }> = {
   pos_venda: { label: 'Pós-venda', className: 'bg-success/20 text-success border-success/30' },
   follow: { label: 'Follow-up', className: 'bg-warning/20 text-warning border-warning/30' },
+};
+
+const temperatureConfig: Record<string, { icon: typeof Flame; label: string; className: string }> = {
+  quente: { icon: Flame, label: 'Quente', className: 'bg-red-500/10 text-red-600 border-red-500/30' },
+  morno: { icon: Thermometer, label: 'Morno', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' },
+  frio: { icon: Snowflake, label: 'Frio', className: 'bg-blue-500/10 text-blue-600 border-blue-500/30' },
 };
 
 const closerClassificationConfig: Record<CloserClassification, { label: string; className: string }> = {
@@ -61,6 +67,8 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
 
   const leadInfo = call.lead_classification ? leadClassificationConfig[call.lead_classification] : null;
   const closerInfo = call.closer_classification ? closerClassificationConfig[call.closer_classification] : null;
+  const tempInfo = call.lead_temperature ? temperatureConfig[call.lead_temperature] : null;
+  const TempIcon = tempInfo?.icon;
 
   return (
     <>
@@ -91,6 +99,12 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
                 {leadInfo && (
                   <Badge variant="outline" className={cn('text-xs border', leadInfo.className)}>
                     {leadInfo.label}
+                  </Badge>
+                )}
+                {tempInfo && TempIcon && (
+                  <Badge variant="outline" className={cn('text-xs border gap-1', tempInfo.className)}>
+                    <TempIcon className="w-3 h-3" />
+                    {tempInfo.label}
                   </Badge>
                 )}
               </div>
@@ -170,6 +184,7 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
   return prev.call.id === next.call.id 
     && prev.call.status === next.call.status
     && prev.call.updated_at === next.call.updated_at
+    && prev.call.lead_temperature === next.call.lead_temperature
     && prev.canDelete === next.canDelete;
 });
 

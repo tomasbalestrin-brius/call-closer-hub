@@ -1,0 +1,1 @@
+ALTER TABLE public.calls ADD COLUMN lead_temperature text DEFAULT 'morno';
