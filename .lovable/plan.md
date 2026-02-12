@@ -1,54 +1,81 @@
 
+# Adicionar botao "Reanalisar" nos erros do sistema
 
-# Corrigir race condition na Meta Mensal do admin
+## Resumo
 
-## Problema
-
-O hook `useDashboardData` e a query de stats no Dashboard disparam ANTES do papel do usuario (admin/closer/lider) ser carregado. Como `isAdmin` comeca como `false`, a primeira query roda filtrando por `closer_id = user.id`, trazendo dados individuais em vez do agregado de todos os closers.
-
-Quando o papel finalmente carrega e `isAdmin` vira `true`, a query key muda e o refetch acontece, mas o `placeholderData` mantem os dados errados visiveis ate o novo resultado chegar -- ou em alguns casos o usuario ja viu os valores errados.
-
-## Solucao
-
-Adicionar a verificacao de `loading` do `useUserRole()` na condicao `enabled` de todas as queries que dependem de `isAdmin`.
+Adicionar um botao de reanalise em cada linha de erro do tipo `import_failed` no painel de Erros do Sistema, e tambem um botao para reanalisar todos os erros de uma vez. Ao clicar, o sistema reseta o status do arquivo correspondente na tabela `imported_files` de `error` para `pending`, fazendo com que o pipeline de processamento automatico o reprocesse.
 
 ---
 
 ## Mudancas
 
-### 1. `src/hooks/useDashboardData.ts`
+### `src/components/admin/ErrorLogsPanel.tsx`
 
-- Desestruturar `loading: roleLoading` de `useUserRole()`
-- Alterar `enabled` de `!!user` para `!!user && !roleLoading`
-- Isso garante que a query so dispara depois que o papel do usuario esta determinado
+1. **Extrair `fileId` do metadata** - Adicionar helper `getMetadataFileId` similar aos existentes (`getMetadataFileName`, etc.)
 
-### 2. `src/pages/Dashboard.tsx`
+2. **Funcao `handleReanalyze(fileId)`** - Para cada erro individual:
+   - Buscar o registro em `imported_files` pelo `drive_file_id`
+   - Atualizar o `status` de `error` para `pending` e limpar `error_message`
+   - Mostrar toast de sucesso/erro
 
-- O hook `useUserRole()` ja e chamado na linha 8 como `const { isAdmin } = useUserRole()`
-- Adicionar `loading: roleLoading` na desestruturacao
-- Alterar o `enabled` da query de stats (linha ~45) de `!!user` para `!!user && !roleLoading`
+3. **Funcao `handleReanalyzeAll()`** - Para todos os erros visiveis que tem `fileId` no metadata:
+   - Coletar todos os `fileId` unicos dos logs filtrados
+   - Resetar todos de uma vez para `pending`
+   - Mostrar toast com quantidade
+
+4. **UI - Botao individual** - Adicionar coluna "Acoes" na tabela de erros com botao de reanalise (icone RefreshCw) em cada linha que tenha `fileId` no metadata
+
+5. **UI - Botao "Reanalisar Todos"** - Adicionar botao no header do card de erros, ao lado do titulo, para resetar todos os arquivos com erro de uma vez
 
 ---
 
 ## Detalhes tecnicos
 
-Antes (useDashboardData.ts):
+### Helper para extrair fileId:
 ```text
-const { isAdmin } = useUserRole();
-// ...
-enabled: !!user,
+const getMetadataFileId = (metadata: Json | null): string | null => {
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    return (metadata as Record<string, unknown>).fileId as string || null;
+  }
+  return null;
+};
 ```
 
-Depois:
+### Funcao de reanalise individual:
 ```text
-const { isAdmin, loading: roleLoading } = useUserRole();
-// ...
-enabled: !!user && !roleLoading,
+const handleReanalyze = async (driveFileId: string) => {
+  // Update imported_files: set status = 'pending', clear error
+  const { error } = await supabase
+    .from('imported_files')
+    .update({ status: 'pending', error_message: null })
+    .eq('drive_file_id', driveFileId)
+    .eq('status', 'error');
+
+  if (error) toast.error('Erro ao agendar reanalise');
+  else toast.success('Arquivo agendado para reanalise');
+};
 ```
 
-O mesmo padrao se aplica a query de stats no Dashboard.tsx.
+### Funcao de reanalise em lote:
+```text
+const handleReanalyzeAll = async () => {
+  const fileIds = [...new Set(otherErrors.map(l => getMetadataFileId(l.metadata)).filter(Boolean))];
+  // Reset all matching files
+  const { error, count } = await supabase
+    .from('imported_files')
+    .update({ status: 'pending', error_message: null })
+    .in('drive_file_id', fileIds)
+    .eq('status', 'error');
+  // Toast with count
+};
+```
 
-Com essa mudanca, nenhuma query sera executada ate que `isAdmin` tenha seu valor correto, eliminando os dados errados na tela.
+### Nova coluna na tabela de erros:
+- Adicionar `<TableHead>Acoes</TableHead>` no header
+- Em cada row, botao com icone RefreshCw que chama `handleReanalyze(fileId)` quando o log tem `fileId` no metadata
+
+### Botao no header do card:
+- Ao lado do titulo "Erros do Sistema (N)", adicionar botao "Reanalisar Todos" que chama `handleReanalyzeAll()`
 
 ---
 
@@ -56,6 +83,4 @@ Com essa mudanca, nenhuma query sera executada ate que `isAdmin` tenha seu valor
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/hooks/useDashboardData.ts` | Adicionar roleLoading ao enabled |
-| `src/pages/Dashboard.tsx` | Adicionar roleLoading ao enabled da query de stats |
-
+| `src/components/admin/ErrorLogsPanel.tsx` | Adicionar helpers, funcoes de reanalise, coluna de acoes e botao em lote |
