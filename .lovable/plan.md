@@ -1,31 +1,56 @@
 
 
-# Mostrar lideres no seletor de Closer (visao admin)
+# Adicionar tags de Temperatura (Quente/Morno/Frio) no CRM de Calls
 
 ## Resumo
 
-No dropdown "Selecionar Closer" da pagina SquadView, atualmente so aparecem usuarios com role `closer`. Para o admin, todos os usuarios que nao sao admin devem aparecer (closers e lideres).
+Reutilizar o sistema de temperatura de leads do CRM Intensivo (quente, morno, frio) no CRM de Calls. O usuario podera controlar a temperatura manualmente no painel de detalhes da call, e a tag aparecera no card da call.
 
-## Mudanca
+---
 
-**Arquivo:** `src/pages/SquadView.tsx` (linha 117)
+## Mudancas
 
-Alterar o filtro final da query de membros:
+### 1. Migracao de banco de dados
 
-**Antes:**
+Adicionar coluna `lead_temperature` na tabela `calls`:
+
 ```text
-.filter(m => m.role === 'closer');
+ALTER TABLE public.calls 
+ADD COLUMN lead_temperature text DEFAULT 'morno';
 ```
 
-**Depois:**
-```text
-.filter(m => m.role !== 'admin');
-```
+Sem trigger de validacao (seguindo o mesmo padrao do intensivo onde o campo e `text` sem constraint).
 
-Isso inclui tanto closers quanto lideres no dropdown, excluindo apenas outros admins.
+### 2. `src/types/index.ts`
+
+- Importar `LeadTemperature` de `@/types/intensivo` ou adicionar o tipo inline
+- Adicionar `lead_temperature: LeadTemperature | null` na interface `Call`
+
+### 3. `src/components/calls/CallCard.tsx`
+
+- Importar `Flame`, `Thermometer`, `Snowflake` do lucide-react
+- Adicionar config de temperatura (reutilizar o mesmo mapeamento do IntensiveLeadCard)
+- Exibir badge de temperatura ao lado dos badges existentes (status e lead_classification)
+
+### 4. `src/components/calls/CallDetailDialog.tsx`
+
+- Adicionar um seletor de temperatura (Select) no painel de detalhes, similar ao IntensiveLeadDetailDialog
+- Ao mudar o valor, fazer update direto na tabela `calls` via supabase
+- Opcoes: Quente, Morno, Frio com emojis
+
+### 5. `src/pages/Calls.tsx`
+
+- Adicionar `lead_temperature` no `CALLS_SELECT` para que o campo seja carregado nas queries
+
+---
 
 ## Arquivos modificados
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/SquadView.tsx` | Alterar filtro de `=== 'closer'` para `!== 'admin'` na linha 117 |
+| Migracao SQL | Adicionar coluna `lead_temperature` na tabela `calls` |
+| `src/types/index.ts` | Adicionar campo `lead_temperature` na interface `Call` |
+| `src/pages/Calls.tsx` | Adicionar `lead_temperature` ao CALLS_SELECT |
+| `src/components/calls/CallCard.tsx` | Exibir badge de temperatura no card |
+| `src/components/calls/CallDetailDialog.tsx` | Adicionar seletor de temperatura |
+
