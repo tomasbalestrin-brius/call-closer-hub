@@ -117,6 +117,22 @@ export function ErrorLogsPanel() {
     return null;
   };
 
+  const getMetadataContentLength = (metadata: Json | null): number | null => {
+    if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+      const val = (metadata as Record<string, unknown>).content_length;
+      return typeof val === 'number' ? val : null;
+    }
+    return null;
+  };
+
+  const getMetadataMinLength = (metadata: Json | null): number | null => {
+    if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+      const val = (metadata as Record<string, unknown>).minimum_length;
+      return typeof val === 'number' ? val : null;
+    }
+    return null;
+  };
+
   const handleReanalyze = async (driveFileId: string) => {
     setReanalyzing(driveFileId);
     const { error } = await supabase
@@ -236,9 +252,16 @@ export function ErrorLogsPanel() {
                       {log.user_id ? profiles[log.user_id] || log.user_id.slice(0, 8) : '-'}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {getMetadataReason(log.metadata) === 'call_muito_curta' ? 'Call muito curta' : 'Conteúdo inválido'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          {getMetadataReason(log.metadata) === 'call_muito_curta' ? 'Call muito curta' : 'Conteúdo inválido'}
+                        </Badge>
+                        {getMetadataReason(log.metadata) === 'call_muito_curta' && getMetadataContentLength(log.metadata) != null && (
+                          <span className="text-xs text-muted-foreground">
+                            ({getMetadataContentLength(log.metadata)} / {getMetadataMinLength(log.metadata) ?? '?'} chars)
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
