@@ -33,7 +33,7 @@ const emptyStats: DashboardStats = {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const { data: consolidatedData } = useDashboardData();
   const [selectedFunnel, setSelectedFunnel] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -171,7 +171,7 @@ export default function Dashboard() {
       };
     },
     staleTime: 30_000,
-    enabled: !!user,
+    enabled: !!user && !roleLoading,
   });
 
   const formatCurrency = (value: number) => {
