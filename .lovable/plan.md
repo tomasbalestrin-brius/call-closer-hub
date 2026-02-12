@@ -1,35 +1,54 @@
 
 
-# Corrigir sistema de juncao de calls
+# Permitir Admin Mestre Alterar Email/Login de Usuarios
 
-## Problema
+## Resumo
 
-O erro nos logs e claro:
-```
-invalid input syntax for type integer: "7.5"
-```
+Criar funcionalidade para que o admin mestre (tomasbalestrin@gmail.com) possa alterar o email de login de qualquer usuario diretamente pelo painel administrativo.
 
-A coluna `score` na tabela `calls` e do tipo `integer`, mas a analise da IA retorna notas decimais como `7.5`. A edge function `merge-and-reanalyze` tenta gravar esse valor diretamente, causando o erro do Postgres.
+---
 
-## Solucao
+## Mudancas
 
-### `supabase/functions/merge-and-reanalyze/index.ts`
+### 1. Nova Edge Function: `admin-update-email`
 
-Arredondar o score antes de salvar no banco:
+Criar `supabase/functions/admin-update-email/index.ts`:
 
+- Recebe `user_id` e `new_email` no body
+- Verifica que o chamador e admin
+- Verifica que o chamador e o admin mestre (tomasbalestrin@gmail.com) como camada extra de seguranca
+- Usa `supabaseAdmin.auth.admin.updateUserById(user_id, { email: new_email })` para alterar o email
+- Retorna sucesso ou erro
+
+Adicionar em `supabase/config.toml`:
 ```text
-score: Math.round(analysis.call_score),
+[functions.admin-update-email]
+verify_jwt = false
 ```
 
-Tambem adicionar `Math.round` na observacao da call secundaria para garantir consistencia:
+### 2. Novo Componente: `src/components/admin/ChangeEmailDialog.tsx`
 
-```text
-observation: `Call mesclada com call principal (...). Nota combinada: ${Math.round(analysis.call_score)}`
-```
+Dialog similar ao `ResetPasswordDialog`:
+- Campo para novo email com validacao (formato email valido)
+- Campo de confirmacao do novo email
+- Botao de salvar que chama a edge function
+- Mostra nome do usuario sendo editado
 
-## Arquivos modificados
+### 3. `src/pages/Admin.tsx`
+
+- Importar `ChangeEmailDialog`
+- Adicionar estado para controlar o dialog (`changeEmailDialogOpen`, `selectedCloserForEmail`)
+- Adicionar botao "Email" (icone `Mail`) ao lado do botao "Senha" na lista de closers
+- Visivel apenas para o admin mestre (verificar se o email do usuario logado e `tomasbalestrin@gmail.com`)
+
+---
+
+## Arquivos modificados/criados
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/merge-and-reanalyze/index.ts` | `Math.round()` no score antes de gravar |
+| `supabase/functions/admin-update-email/index.ts` | Nova edge function para alterar email |
+| `supabase/config.toml` | Adicionar config da nova function |
+| `src/components/admin/ChangeEmailDialog.tsx` | Novo dialog para alterar email |
+| `src/pages/Admin.tsx` | Adicionar botao e dialog de alterar email |
 
