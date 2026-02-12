@@ -6,7 +6,7 @@ import { Phone, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ACTIVITY_TYPE_LABELS } from '@/types';
-import { usePortfolioStudents, useStudentActivities } from '@/hooks/usePortfolio';
+import { usePortfolioStudents, useAllClientActivities } from '@/hooks/usePortfolio';
 import StudentDetailDialog from './StudentDetailDialog';
 import type { PortfolioStudent, StudentActivityType } from '@/types';
 
@@ -19,15 +19,16 @@ interface ActivityListDialogProps {
 
 export default function ActivityListDialog({ open, onOpenChange, activityType, title }: ActivityListDialogProps) {
   const { data: students } = usePortfolioStudents();
-  const { data: activities } = useStudentActivities();
+  const { data: activities } = useAllClientActivities();
   const [selectedStudent, setSelectedStudent] = useState<PortfolioStudent | null>(null);
 
   const studentsWithActivity = (students || []).filter(student => {
-    return activities?.some(a => a.student_id === student.id && a.activity_type === activityType);
+    if (!student.client_id) return false;
+    return activities?.some(a => a.client_id === student.client_id && a.activity_type === activityType);
   });
 
-  const getStudentActivities = (studentId: string) => {
-    return activities?.filter(a => a.student_id === studentId && a.activity_type === activityType) || [];
+  const getStudentActivityCount = (clientId: string) => {
+    return activities?.filter(a => a.client_id === clientId && a.activity_type === activityType).length || 0;
   };
 
   return (
@@ -43,7 +44,7 @@ export default function ActivityListDialog({ open, onOpenChange, activityType, t
               <p className="text-center text-muted-foreground py-8">Nenhum aluno encontrado</p>
             ) : (
               studentsWithActivity.map(student => {
-                const acts = getStudentActivities(student.id);
+                const count = student.client_id ? getStudentActivityCount(student.client_id) : 0;
                 return (
                   <Card
                     key={student.id}
@@ -69,13 +70,9 @@ export default function ActivityListDialog({ open, onOpenChange, activityType, t
                             )}
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                          {acts.map(a => (
-                            <Badge key={a.id} variant="outline" className="text-xs">
-                              {format(new Date(a.activity_date), 'dd/MM/yy', { locale: ptBR })}
-                            </Badge>
-                          ))}
-                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          {count} {count === 1 ? 'participação' : 'participações'}
+                        </Badge>
                       </div>
                     </CardContent>
                   </Card>
