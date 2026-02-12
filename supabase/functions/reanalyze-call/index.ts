@@ -951,7 +951,7 @@ serve(async (req) => {
     // Fetch the call with transcription
     const { data: call, error: fetchError } = await supabase
       .from('calls')
-      .select('id, transcription, client_name')
+      .select('id, transcription, client_name, closer_id')
       .eq('id', callId)
       .single();
 
@@ -973,8 +973,57 @@ serve(async (req) => {
 
     console.log(`[reanalyze-call] Transcrição encontrada, length: ${call.transcription.length}`);
 
-    // Chamar OpenAI DIRETAMENTE (sem intermediário)
-    const aiResponse = await callOpenAI(MASTER_PROMPT, call.transcription);
+    // Buscar nome do closer para regras de prioridade de framework
+    let frameworkPriorityInstructions = '';
+    if (call.closer_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', call.closer_id)
+        .single();
+      
+      if (profile?.full_name) {
+        const closerName = profile.full_name;
+        const nameLower = closerName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
+        if (nameLower.includes("deyvid") || nameLower.includes("leandro")) {
+          frameworkPriorityInstructions = `
+
+════════════════════════════════════════════════════════════════════
+REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
+════════════════════════════════════════════════════════════════════
+- Ordem de prioridade OBRIGATÓRIA: 1) "Elite Premium"  2) "Programa de Implementação Comercial"  3) "Implementação de IA (NextTrack)"
+- ⛔ BLOQUEIO ABSOLUTO: NUNCA selecione "Mentoria Julia Ottoni" para este closer, INDEPENDENTE do conteúdo da transcrição
+- Se houver QUALQUER evidência de "Elite Premium" (mentoria premium, Cleiton, alto ticket, mastermind), use esse framework
+- Se não for "Elite Premium", verifique "Programa de Implementação Comercial"
+- Se não for "Programa de Implementação Comercial", use "Implementação de IA (NextTrack)"
+- Em NENHUMA hipótese use "Mentoria Julia Ottoni"
+
+REGRA DE IDENTIFICAÇÃO DE PROBLEMATIZAÇÃO:
+- A pergunta-chave que conduz a Problematização para este closer é: "O que vai acontecer com seu negócio se continuar da mesma forma?"
+- Sempre que essa pergunta (ou variação semanticamente equivalente) aparecer na transcrição, marque a etapa "problematizacao" como aconteceu: "sim" ou "parcial"
+- Variações válidas incluem: "o que acontece se você continuar assim?", "se nada mudar, o que vai acontecer?", "como fica daqui a 1 ano se continuar do mesmo jeito?"
+════════════════════════════════════════════════════════════════════`;
+          console.log(`[reanalyze-call] Injected framework priority for closer: ${closerName}`);
+        } else if (nameLower.includes("hannah")) {
+          frameworkPriorityInstructions = `
+
+════════════════════════════════════════════════════════════════════
+REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
+════════════════════════════════════════════════════════════════════
+- Frameworks PRIORITÁRIOS: "Programa de Implementação Comercial" e "Implementação de IA (NextTrack)"
+- Verifique PRIMEIRO se a transcrição se encaixa em "Programa de Implementação Comercial" ou "Implementação de IA (NextTrack)"
+- Somente use outro framework se a transcrição claramente NÃO se encaixar em nenhum desses dois
+- Na dúvida entre esses dois e outro framework, escolha um desses dois
+════════════════════════════════════════════════════════════════════`;
+          console.log(`[reanalyze-call] Injected framework priority for closer: ${closerName}`);
+        }
+      }
+    }
+
+    // Chamar OpenAI com prompt + regras de prioridade
+    const finalPrompt = MASTER_PROMPT + frameworkPriorityInstructions;
+    const aiResponse = await callOpenAI(finalPrompt, call.transcription);
     
     // Parsear o JSON
     const analysis = parseJSONFromResponse(aiResponse);
@@ -1020,7 +1069,7 @@ serve(async (req) => {
     // Extrair campos de resumo
     const notaGeral = analysis.nota_geral;
     if (notaGeral !== undefined) {
-      updateData.score = typeof notaGeral === 'string' ? parseInt(notaGeral, 10) : notaGeral;
+      updateData.score = Math.round(typeof notaGeral === 'string' ? parseFloat(notaGeral) : Number(notaGeral));
     }
 
     // Main errors e wins (arrays de strings para exibição rápida)
