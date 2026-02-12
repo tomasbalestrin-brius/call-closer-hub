@@ -34,6 +34,7 @@ import { CloserLevelSelect, type CloserLevel } from '@/components/admin/CloserLe
 import { UserRoleSelect } from '@/components/admin/UserRoleSelect';
 import { SetMonthlyGoalDialog } from '@/components/admin/SetMonthlyGoalDialog';
 import { ResetPasswordDialog } from '@/components/admin/ResetPasswordDialog';
+import { ChangeEmailDialog } from '@/components/admin/ChangeEmailDialog';
 import { ImportStatusPanel } from '@/components/admin/ImportStatusPanel';
 import SystemMetricsDashboard from '@/components/admin/SystemMetricsDashboard';
 import { ErrorLogsPanel } from '@/components/admin/ErrorLogsPanel';
@@ -86,6 +87,8 @@ export default function Admin() {
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [selectedCloserForReset, setSelectedCloserForReset] = useState<{ user_id: string; full_name: string } | null>(null);
+  const [changeEmailDialogOpen, setChangeEmailDialogOpen] = useState(false);
+  const [selectedCloserForEmail, setSelectedCloserForEmail] = useState<{ user_id: string; full_name: string } | null>(null);
   const [leaderSquad, setLeaderSquad] = useState<LeaderSquad | null>(null);
   const [squadMembersDialogOpen, setSquadMembersDialogOpen] = useState(false);
   const [closerGoals, setCloserGoals] = useState<Map<string, number>>(new Map());
@@ -630,6 +633,19 @@ export default function Admin() {
                           </Badge>
                           {!isFinanceiroOnly && (
                             <>
+                              {user?.email === 'tomasbalestrin@gmail.com' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedCloserForEmail({ user_id: closer.user_id, full_name: closer.full_name });
+                                    setChangeEmailDialogOpen(true);
+                                  }}
+                                >
+                                  <Mail className="w-4 h-4 mr-1" />
+                                  Email
+                                </Button>
+                              )}
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -764,6 +780,12 @@ export default function Admin() {
         open={resetPasswordDialogOpen}
         onOpenChange={setResetPasswordDialogOpen}
         closer={selectedCloserForReset}
+      />
+
+      <ChangeEmailDialog
+        open={changeEmailDialogOpen}
+        onOpenChange={setChangeEmailDialogOpen}
+        closer={selectedCloserForEmail}
       />
 
       {isLeaderOnly && leaderSquad && (
