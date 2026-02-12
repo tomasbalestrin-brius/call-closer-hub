@@ -678,6 +678,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "clients_closer_id_profiles_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "clients_closer_id_profiles_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_safe"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "clients_indication_source_id_fkey"
             columns: ["indication_source_id"]
             isOneToOne: false

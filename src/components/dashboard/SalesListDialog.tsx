@@ -33,7 +33,7 @@ export default function SalesListDialog({ open, onOpenChange, dateRange, selecte
     queryFn: async () => {
       let query = supabase
         .from('clients')
-        .select('id, name, niche, sale_value, entry_value, product_offered, sold_at, closer_id, profiles!clients_closer_id_fkey(full_name)')
+        .select('id, name, niche, sale_value, entry_value, product_offered, sold_at, closer_id, profiles!clients_closer_id_profiles_fkey(full_name)')
         .eq('is_sold', true)
         .not('sold_at', 'is', null)
         .order('sold_at', { ascending: false });
