@@ -1,54 +1,52 @@
 
 
-# Permitir Admin Mestre Alterar Email/Login de Usuarios
+# Regras de Prioridade de Framework por Closer
 
 ## Resumo
 
-Criar funcionalidade para que o admin mestre (tomasbalestrin@gmail.com) possa alterar o email de login de qualquer usuario diretamente pelo painel administrativo.
+Adicionar logica na edge function `analyze-call` que busca o nome do closer no banco de dados e injeta instrucoes de prioridade de framework no prompt antes de enviar para a IA.
 
----
+## Regras de Negocio
 
-## Mudancas
+| Closer | Prioridade 1 | Prioridade 2 | Prioridade 3 | Bloqueio |
+|--------|-------------|-------------|-------------|----------|
+| Gisele | Mentoria Julia Ottoni | (auto-detectar) | - | - |
+| Tainara | Mentoria Julia Ottoni | (auto-detectar) | - | - |
+| Hannah | Impl. Comercial / Impl. IA | (auto-detectar) | - | - |
+| Deyvid | Elite Premium | Impl. Comercial | Impl. IA | NUNCA Mentoria Julia |
+| Leandro | Elite Premium | Impl. Comercial | Impl. IA | NUNCA Mentoria Julia |
 
-### 1. Nova Edge Function: `admin-update-email`
+## Mudancas Tecnicas
 
-Criar `supabase/functions/admin-update-email/index.ts`:
+### `supabase/functions/analyze-call/index.ts`
 
-- Recebe `user_id` e `new_email` no body
-- Verifica que o chamador e admin
-- Verifica que o chamador e o admin mestre (tomasbalestrin@gmail.com) como camada extra de seguranca
-- Usa `supabaseAdmin.auth.admin.updateUserById(user_id, { email: new_email })` para alterar o email
-- Retorna sucesso ou erro
+1. **Buscar perfil do closer**: Quando `userId` estiver presente, consultar a tabela `profiles` para obter o `full_name` do closer.
 
-Adicionar em `supabase/config.toml`:
+2. **Gerar bloco de prioridade**: Com base no nome do closer, gerar um texto de instrucoes adicionais para injetar no prompt. Exemplo para Gisele/Tainara:
+
 ```text
-[functions.admin-update-email]
-verify_jwt = false
+REGRA DE PRIORIDADE PARA ESTE CLOSER ({{nome}}):
+- Framework PRIORITARIO: "Mentoria Julia Ottoni"
+- Use este framework PRIMEIRO se houver QUALQUER evidencia compativel na transcricao
+- Somente use outro framework se a transcricao claramente NAO se encaixar em Mentoria Julia Ottoni
 ```
 
-### 2. Novo Componente: `src/components/admin/ChangeEmailDialog.tsx`
+Exemplo para Deyvid/Leandro:
+```text
+REGRA DE PRIORIDADE PARA ESTE CLOSER ({{nome}}):
+- Ordem de prioridade: 1) Elite Premium  2) Impl. Comercial  3) Impl. IA
+- NUNCA selecione "Mentoria Julia Ottoni" para este closer
+- Se houver qualquer evidencia de Elite Premium, use esse framework
+- Se nao, verifique Impl. Comercial, depois Impl. IA
+```
 
-Dialog similar ao `ResetPasswordDialog`:
-- Campo para novo email com validacao (formato email valido)
-- Campo de confirmacao do novo email
-- Botao de salvar que chama a edge function
-- Mostra nome do usuario sendo editado
+3. **Injetar no prompt**: Concatenar o bloco de prioridade ao final do `MASTER_PROMPT` e do `MERGE_PROMPT` antes de enviar para a OpenAI. Isso se aplica tanto a analises diretas quanto chunked (merge).
 
-### 3. `src/pages/Admin.tsx`
+4. **Sem impacto quando userId ausente**: Se nao houver userId ou o closer nao tiver regra de prioridade, o comportamento atual e mantido (auto-deteccao pura).
 
-- Importar `ChangeEmailDialog`
-- Adicionar estado para controlar o dialog (`changeEmailDialogOpen`, `selectedCloserForEmail`)
-- Adicionar botao "Email" (icone `Mail`) ao lado do botao "Senha" na lista de closers
-- Visivel apenas para o admin mestre (verificar se o email do usuario logado e `tomasbalestrin@gmail.com`)
-
----
-
-## Arquivos modificados/criados
+## Arquivos modificados
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/admin-update-email/index.ts` | Nova edge function para alterar email |
-| `supabase/config.toml` | Adicionar config da nova function |
-| `src/components/admin/ChangeEmailDialog.tsx` | Novo dialog para alterar email |
-| `src/pages/Admin.tsx` | Adicionar botao e dialog de alterar email |
+| `supabase/functions/analyze-call/index.ts` | Buscar profile, gerar regras de prioridade, injetar no prompt |
 
