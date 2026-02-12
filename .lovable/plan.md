@@ -1,38 +1,38 @@
 
 
-# Corrigir vendas zeradas no dialog "Vendas Fechadas"
+# Corrigir vendas zeradas - Foreign Key ausente
 
-## Problema
+## Problema Real
 
-O dialog "Vendas Fechadas" mostra 0 vendas porque a query e executada antes do papel do usuario (admin/closer) ser carregado. Quando o dialog abre, `isAdmin` ainda esta `false`, entao a query filtra por `closer_id` do admin -- que nao tem vendas proprias.
+O erro NAO e de race condition de role. A query retorna **status 400** porque o join `profiles!clients_closer_id_fkey(full_name)` referencia uma foreign key que nao existe no banco de dados. A tabela `clients` nao possui nenhuma foreign key, entao o PostgREST nao consegue resolver o relacionamento e retorna erro.
 
-O card do Dashboard funciona corretamente porque sua query usa `enabled: !!user && !roleLoading`, mas o `SalesListDialog` usa apenas `enabled: open && !!user`, ignorando o estado de carregamento do papel.
+Mensagem de erro da API:
+```text
+Could not find a relationship between 'clients' and 'profiles' 
+using the hint 'clients_closer_id_fkey'
+```
 
 ## Solucao
 
-### `src/components/dashboard/SalesListDialog.tsx`
+### 1. Migracao SQL - Criar a Foreign Key
 
-1. Importar `loading` do hook `useUserRole`
-2. Adicionar `!loading` na condicao `enabled` da query
-3. Adicionar `loading` no `queryKey` para forcar refetch apos resolucao do papel
+Adicionar a FK de `clients.closer_id` para `profiles.user_id`:
 
-**Antes:**
 ```text
-const { isAdmin } = useUserRole();
-// ...
-enabled: open && !!user,
+ALTER TABLE public.clients 
+ADD CONSTRAINT clients_closer_id_fkey 
+FOREIGN KEY (closer_id) REFERENCES public.profiles(user_id);
 ```
 
-**Depois:**
-```text
-const { isAdmin, loading: roleLoading } = useUserRole();
-// ...
-enabled: open && !!user && !roleLoading,
-```
+A coluna `profiles.user_id` ja possui indice unico, entao a FK e valida.
 
-## Arquivo modificado
+### 2. Nenhuma mudanca de codigo necessaria
+
+O `SalesListDialog.tsx` ja esta correto - o join `profiles!clients_closer_id_fkey(full_name)` vai funcionar assim que a FK existir no banco.
+
+## Arquivos modificados
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/dashboard/SalesListDialog.tsx` | Sincronizar query com resolucao do papel do usuario |
+| Migracao SQL | Criar FK `clients_closer_id_fkey` de `closer_id` para `profiles(user_id)` |
 
