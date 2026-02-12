@@ -114,7 +114,7 @@ export default function SquadView() {
             role: role?.role || 'closer'
           };
         })
-        .filter(m => m.role === 'closer');
+        .filter(m => m.role !== 'admin');
     },
     enabled: !!user && !roleLoading && (isAdmin || isLeader),
     staleTime: 60_000,
