@@ -26,7 +26,7 @@ const formatCurrency = (value: number | null | undefined) => {
 export default function SalesListDialog({ open, onOpenChange, dateRange, selectedFunnel }: SalesListDialogProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
 
   const { data: sales = [], isLoading } = useQuery({
     queryKey: ['sales-list', user?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString(), selectedFunnel, isAdmin],
@@ -47,7 +47,7 @@ export default function SalesListDialog({ open, onOpenChange, dateRange, selecte
       if (error) throw error;
       return data || [];
     },
-    enabled: open && !!user,
+    enabled: open && !!user && !roleLoading,
   });
 
   return (
