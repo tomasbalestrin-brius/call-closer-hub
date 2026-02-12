@@ -87,6 +87,7 @@ serve(async (req) => {
         clientName: primaryCall.client_name,
         product: primaryCall.product || secondaryCall.product,
         isMergedCall: true,
+        userId: primaryCall.closer_id,
       }),
     });
 

@@ -20,6 +20,85 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============= CLOSER FRAMEWORK PRIORITY RULES =============
+
+async function getCloserName(userId: string): Promise<string | null> {
+  try {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("user_id", userId)
+      .single();
+
+    if (error || !data) {
+      console.log(`⚠️ Could not fetch closer profile for userId=${userId}:`, error?.message);
+      return null;
+    }
+
+    console.log(`📋 Closer identified: ${data.full_name}`);
+    return data.full_name;
+  } catch (e) {
+    console.error("Error fetching closer name:", e);
+    return null;
+  }
+}
+
+function getFrameworkPriorityInstructions(closerName: string): string {
+  const nameLower = closerName.toLowerCase();
+
+  // Gisele / Tainara → Prioridade: Mentoria Julia Ottoni
+  if (nameLower.includes("gisele") || nameLower.includes("tainara")) {
+    return `
+
+════════════════════════════════════════════════════════════════════
+REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
+════════════════════════════════════════════════════════════════════
+- Framework PRIORITÁRIO: "Mentoria Julia Ottoni"
+- Use este framework PRIMEIRO se houver QUALQUER evidência compatível na transcrição
+- Somente use outro framework se a transcrição claramente NÃO se encaixar em "Mentoria Julia Ottoni"
+- Na dúvida entre "Mentoria Julia Ottoni" e qualquer outro framework, escolha "Mentoria Julia Ottoni"
+════════════════════════════════════════════════════════════════════`;
+  }
+
+  // Hannah → Prioridade: Impl. Comercial / Impl. IA
+  if (nameLower.includes("hannah")) {
+    return `
+
+════════════════════════════════════════════════════════════════════
+REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
+════════════════════════════════════════════════════════════════════
+- Frameworks PRIORITÁRIOS: "Programa de Implementação Comercial" e "Implementação de IA (NextTrack)"
+- Verifique PRIMEIRO se a transcrição se encaixa em "Programa de Implementação Comercial" ou "Implementação de IA (NextTrack)"
+- Somente use outro framework se a transcrição claramente NÃO se encaixar em nenhum desses dois
+- Na dúvida entre esses dois e outro framework, escolha um desses dois
+════════════════════════════════════════════════════════════════════`;
+  }
+
+  // Deyvid / Leandro → Prioridade: Elite Premium > Impl. Comercial > Impl. IA. NUNCA Julia.
+  if (nameLower.includes("deyvid") || nameLower.includes("leandro")) {
+    return `
+
+════════════════════════════════════════════════════════════════════
+REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
+════════════════════════════════════════════════════════════════════
+- Ordem de prioridade OBRIGATÓRIA: 1) "Elite Premium"  2) "Programa de Implementação Comercial"  3) "Implementação de IA (NextTrack)"
+- ⛔ BLOQUEIO ABSOLUTO: NUNCA selecione "Mentoria Julia Ottoni" para este closer, INDEPENDENTE do conteúdo da transcrição
+- Se houver QUALQUER evidência de "Elite Premium" (mentoria premium, Cleiton, alto ticket, mastermind), use esse framework
+- Se não for "Elite Premium", verifique "Programa de Implementação Comercial"
+- Se não for "Programa de Implementação Comercial", use "Implementação de IA (NextTrack)"
+- Em NENHUMA hipótese use "Mentoria Julia Ottoni"
+════════════════════════════════════════════════════════════════════`;
+  }
+
+  // Closer sem regra específica → sem injeção
+  return "";
+}
+
 // ============= CHUNKING CONFIGURATION =============
 const CHUNK_SIZE = 80000; // ~80KB per chunk (~20K tokens, gpt-4o supports 128K)
 const CHUNK_OVERLAP = 8000; // 8KB overlap for context (ensures full sentence preservation)
@@ -1231,7 +1310,7 @@ async function analyzeChunk(
   };
 }
 
-async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<AnalysisData> {
+async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[], customMergePrompt?: string): Promise<AnalysisData> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   
   if (!OPENAI_API_KEY) {
@@ -1240,7 +1319,8 @@ async function mergeChunkAnalyses(partialAnalyses: ChunkAnalysis[]): Promise<Ana
 
   console.log(`Merging ${partialAnalyses.length} chunk analyses...`);
 
-  const mergePrompt = MERGE_PROMPT.replace(
+  const basePrompt = customMergePrompt || MERGE_PROMPT;
+  const mergePrompt = basePrompt.replace(
     '{{partialAnalyses}}', 
     JSON.stringify(partialAnalyses, null, 2)
   );
@@ -1468,7 +1548,8 @@ function buildPartialAnalysisFromChunks(chunks: ChunkAnalysis[], totalChunksExpe
 async function analyzeWithChunking(
   transcription: string, 
   fileName: string,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  customMergePrompt?: string
 ): Promise<AnalysisData> {
   console.log(`Starting chunked analysis for file: ${fileName}`);
   console.log(`Transcription length: ${transcription.length} chars`);
@@ -1530,7 +1611,7 @@ async function analyzeWithChunking(
   console.log(`🔀 Merging ${partialAnalyses.length}/${chunks.length} chunks (${isPartial ? 'PARTIAL due to timeout' : 'COMPLETE'}) with ${Math.round(mergeTimeout/1000)}s timeout...`);
 
   let mergedAnalysis = await withTimeout(
-    mergeChunkAnalyses(partialAnalyses),
+    mergeChunkAnalyses(partialAnalyses, customMergePrompt),
     mergeTimeout,
     null
   );
@@ -2146,12 +2227,34 @@ serve(async (req) => {
 
     console.log(`Analyzing call from file: ${fileName}, transcription length: ${transcription.length}`);
 
+    // ============= FETCH CLOSER PRIORITY RULES =============
+    let priorityInstructions = "";
+    if (userId) {
+      const closerName = await getCloserName(userId);
+      if (closerName) {
+        priorityInstructions = getFrameworkPriorityInstructions(closerName);
+        if (priorityInstructions) {
+          console.log(`🎯 Framework priority rules injected for closer: ${closerName}`);
+        } else {
+          console.log(`ℹ️ No specific priority rules for closer: ${closerName}`);
+        }
+      }
+    }
+
+    // Build final prompts with priority instructions
+    const finalMasterPrompt = priorityInstructions 
+      ? MASTER_PROMPT + priorityInstructions 
+      : MASTER_PROMPT;
+    const finalMergePrompt = priorityInstructions
+      ? MERGE_PROMPT + priorityInstructions
+      : MERGE_PROMPT;
+
     let data: AnalysisData;
 
     // Check if chunking is needed
     if (transcription.length > MAX_SIZE_FOR_DIRECT) {
       console.log(`Large file detected (${transcription.length} chars > ${MAX_SIZE_FOR_DIRECT}), using CHUNKED analysis with timeout protection`);
-      data = await analyzeWithChunking(transcription, fileName, abortController.signal);
+      data = await analyzeWithChunking(transcription, fileName, abortController.signal, finalMergePrompt);
     } else {
       console.log(`Standard file size, using DIRECT analysis`);
       // Run single comprehensive analysis WITH timeout protection
@@ -2159,7 +2262,7 @@ serve(async (req) => {
       console.log(`Direct analysis timeout set to ${Math.round(directTimeout/1000)}s`);
       
       const masterResponse = await withTimeout(
-        callOpenAI(MASTER_PROMPT, transcription, abortController.signal),
+        callOpenAI(finalMasterPrompt, transcription, abortController.signal),
         directTimeout,
         null
       );
