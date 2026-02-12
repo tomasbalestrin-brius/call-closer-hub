@@ -405,6 +405,7 @@ export interface Call {
     analysis_method?: 'chunked' | 'direct';
     timeout_occurred?: boolean;
   } | null;
+  lead_temperature: 'quente' | 'morno' | 'frio' | null;
   analysis_quality_score: number | null;
   deleted_at: string | null;
   deleted_by: string | null;

@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -18,7 +19,7 @@ import {
 
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Phone, ExternalLink, UserPlus, Merge, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Phone, ExternalLink, UserPlus, Merge, Trash2, AlertTriangle, RefreshCw, Flame, Thermometer, Snowflake } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Call, CallStatus, TechnicalAnalysis } from '@/types';
@@ -246,8 +247,42 @@ export default function CallDetailDialog({
                     </p>
                   </div>
                 )}
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Temperatura do Lead</p>
+                  <Select
+                    value={call.lead_temperature || 'morno'}
+                    onValueChange={async (value) => {
+                      try {
+                        const { error } = await supabase
+                          .from('calls')
+                          .update({ lead_temperature: value })
+                          .eq('id', call.id);
+                        if (error) throw error;
+                        toast.success('Temperatura atualizada!');
+                        onCallUpdated?.();
+                      } catch (err) {
+                        console.error('Erro ao atualizar temperatura:', err);
+                        toast.error('Erro ao atualizar temperatura');
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="quente">
+                        <span className="flex items-center gap-2"><Flame className="w-4 h-4 text-red-500" /> Quente</span>
+                      </SelectItem>
+                      <SelectItem value="morno">
+                        <span className="flex items-center gap-2"><Thermometer className="w-4 h-4 text-yellow-500" /> Morno</span>
+                      </SelectItem>
+                      <SelectItem value="frio">
+                        <span className="flex items-center gap-2"><Snowflake className="w-4 h-4 text-blue-500" /> Frio</span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              
               {call.ai_summary && (
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Resumo da IA</p>
