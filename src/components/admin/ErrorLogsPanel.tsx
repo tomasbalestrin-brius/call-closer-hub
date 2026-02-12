@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, AlertCircle, Info, RefreshCw, FileX } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Info, RefreshCw, FileX, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -33,6 +33,7 @@ export function ErrorLogsPanel() {
   const [loading, setLoading] = useState(true);
   const [reanalyzing, setReanalyzing] = useState<string | null>(null);
   const [reanalyzingAll, setReanalyzingAll] = useState(false);
+  const [cleaningOld, setCleaningOld] = useState(false);
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [serviceFilter, setServiceFilter] = useState<string>('all');
 
@@ -142,6 +143,18 @@ export function ErrorLogsPanel() {
     else { toast.success(`${fileIds.length} arquivo(s) agendado(s) para reanálise`); fetchLogs(); }
   };
 
+  const handleCleanOldLogs = async () => {
+    setCleaningOld(true);
+    const { error } = await supabase
+      .from('system_logs')
+      .delete()
+      .lt('timestamp', '2026-02-01T00:00:00Z')
+      .in('level', ['error', 'warning', 'critical']);
+    setCleaningOld(false);
+    if (error) toast.error('Erro ao limpar logs antigos');
+    else { toast.success('Logs antigos removidos com sucesso'); fetchLogs(); }
+  };
+
   const formatTimestamp = (ts: string | null) => {
     if (!ts) return '-';
     try {
@@ -183,6 +196,11 @@ export function ErrorLogsPanel() {
         <Button variant="outline" size="sm" onClick={fetchLogs} disabled={loading}>
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
           Atualizar
+        </Button>
+
+        <Button variant="outline" size="sm" onClick={handleCleanOldLogs} disabled={cleaningOld} className="text-destructive border-destructive/50 hover:bg-destructive/10">
+          <Trash2 className={`w-4 h-4 mr-2 ${cleaningOld ? 'animate-spin' : ''}`} />
+          Limpar Antigos (&lt; Fev/2026)
         </Button>
       </div>
 
