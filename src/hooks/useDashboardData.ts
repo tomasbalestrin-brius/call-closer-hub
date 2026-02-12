@@ -15,7 +15,7 @@ interface DashboardConsolidatedData {
 
 export function useDashboardData() {
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
 
   return useQuery({
     queryKey: ['dashboard-consolidated', user?.id, isAdmin],
@@ -83,7 +83,7 @@ export function useDashboardData() {
       };
     },
     staleTime: 60_000,
-    enabled: !!user,
+    enabled: !!user && !roleLoading,
     placeholderData: (prev) => prev,
   });
 }
