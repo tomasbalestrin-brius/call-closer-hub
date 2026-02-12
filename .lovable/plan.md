@@ -1,71 +1,38 @@
 
-
-# Virtualizacao da StudentList com @tanstack/react-virtual
+# Mostrar nome do closer na lista de vendas (visao admin)
 
 ## Resumo
 
-Substituir a renderizacao completa de todos os cards na StudentList por uma lista virtualizada usando `@tanstack/react-virtual`. Apenas os cards visiveis no viewport serao montados no DOM, reduzindo drasticamente o trabalho do browser quando a lista tem dezenas ou centenas de alunos.
+Quando o admin visualiza o dialog "Vendas Fechadas", cada card deve exibir o nome do closer responsavel pela venda, para que o admin saiba quem vendeu para cada cliente.
 
 ---
 
-## Mudancas
+## Mudanca
 
-### 1. Instalar dependencia
+**Arquivo:** `src/components/dashboard/SalesListDialog.tsx`
 
-- Adicionar `@tanstack/react-virtual` ao projeto
+1. **Query** - Adicionar `closer_id` no select e fazer um join com a tabela `profiles` para trazer o nome do closer:
+   ```
+   .select('id, name, niche, sale_value, entry_value, product_offered, sold_at, closer_id, profiles!closer_id(full_name)')
+   ```
 
-### 2. Modificar `src/components/portfolio/StudentList.tsx`
+2. **UI** - Quando `isAdmin` for true, exibir o nome do closer abaixo do nicho do cliente, com uma badge ou texto pequeno indicando quem fechou a venda. Exemplo:
+   - Abaixo do nome/nicho, adicionar uma linha com texto tipo: `Closer: Nome do Closer` em `text-xs text-blue-600`
 
-- Importar `useVirtualizer` de `@tanstack/react-virtual`
-- Criar um `ref` para o container scrollavel com altura fixa (ex: `calc(100vh - 400px)` via `max-h` + `overflow-y-auto`)
-- Configurar o virtualizer:
-  - `count`: `students.length`
-  - `getScrollElement`: retorna o container ref
-  - `estimateSize`: `() => 108` (altura estimada de cada card ~96px + 12px gap)
-  - `overscan`: 3 (renderiza 3 cards extras acima/abaixo do viewport para scroll suave)
-- Renderizar um div interno com `height` = `totalSize` do virtualizer
-- Mapear `virtualizer.getVirtualItems()` em vez de `students.map()`, posicionando cada card com `position: absolute` + `transform: translateY()`
-- Remover o `contentVisibility: auto` do StudentCard (nao e mais necessario com virtualizacao real)
-
-### 3. Ajustar `src/components/portfolio/StudentCard.tsx`
-
-- Remover a prop `style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}` do Card, pois a virtualizacao ja cuida de nao renderizar cards fora do viewport
+3. Nenhuma mudanca de schema necessaria - a relacao `clients.closer_id -> profiles.user_id` ja existe.
 
 ---
 
-## Detalhes tecnicos
+## Detalhe tecnico
 
-### Estrutura do virtualizer
-
+Na renderizacao de cada card, quando `isAdmin`:
 ```text
-<div ref={parentRef} style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto' }}>
-  <div style={{ height: totalSize, position: 'relative' }}>
-    {virtualItems.map(virtualRow => (
-      <div
-        key={students[virtualRow.index].id}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          transform: `translateY(${virtualRow.start}px)`,
-        }}
-        ref={virtualRow.measureElement}  // medicao dinamica
-      >
-        <StudentCard ... />
-      </div>
-    ))}
-  </div>
-</div>
+{isAdmin && sale.profiles?.full_name && (
+  <p className="text-xs text-blue-600 truncate">Closer: {sale.profiles.full_name}</p>
+)}
 ```
 
-### Medicao dinamica
-
-Usar `measureElement` em vez de tamanho fixo para lidar com cards de alturas diferentes (mobile vs desktop, badges extras, etc). O `estimateSize` de 108px serve apenas como estimativa inicial.
-
-### Overscan
-
-`overscan: 3` garante que 3 cards extras sao renderizados acima e abaixo da area visivel, evitando flash branco durante scroll rapido.
+Isso aparecera logo abaixo do nicho, dentro do bloco de info do cliente.
 
 ---
 
@@ -73,7 +40,4 @@ Usar `measureElement` em vez de tamanho fixo para lidar com cards de alturas dif
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `package.json` | Adicionar `@tanstack/react-virtual` |
-| `src/components/portfolio/StudentList.tsx` | Implementar virtualizacao com useVirtualizer |
-| `src/components/portfolio/StudentCard.tsx` | Remover contentVisibility/containIntrinsicSize |
-
+| `src/components/dashboard/SalesListDialog.tsx` | Adicionar join com profiles no select + exibir nome do closer para admin |
