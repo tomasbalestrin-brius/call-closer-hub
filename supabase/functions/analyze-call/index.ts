@@ -92,6 +92,11 @@ REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
 - Se não for "Elite Premium", verifique "Programa de Implementação Comercial"
 - Se não for "Programa de Implementação Comercial", use "Implementação de IA (NextTrack)"
 - Em NENHUMA hipótese use "Mentoria Julia Ottoni"
+
+REGRA DE IDENTIFICAÇÃO DE PROBLEMATIZAÇÃO:
+- A pergunta-chave que conduz a Problematização para este closer é: "O que vai acontecer com seu negócio se continuar da mesma forma?"
+- Sempre que essa pergunta (ou variação semanticamente equivalente) aparecer na transcrição, marque a etapa "problematizacao" como aconteceu: "sim" ou "parcial"
+- Variações válidas incluem: "o que acontece se você continuar assim?", "se nada mudar, o que vai acontecer?", "como fica daqui a 1 ano se continuar do mesmo jeito?"
 ════════════════════════════════════════════════════════════════════`;
   }
 
