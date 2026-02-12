@@ -1,40 +1,35 @@
 
 
-# Adicionar Instagram no card de Contato (ClientDetail)
+# Corrigir sistema de juncao de calls
 
-## Mudanca
+## Problema
 
-Adicionar o campo Instagram logo abaixo do e-mail no card "Contato" da pagina de detalhe do cliente (`src/pages/ClientDetail.tsx`).
-
-## Detalhe tecnico
-
-### `src/pages/ClientDetail.tsx`
-
-1. Importar o icone `AtSign` do lucide-react (ja importado no arquivo)
-2. Apos a linha do e-mail (linha 554), adicionar um novo bloco para o Instagram:
-
-```text
-{/* Apos o e-mail */}
-<div className="flex items-center gap-2 text-muted-foreground">
-  <AtSign className="w-4 h-4 flex-shrink-0" />
-  {client.instagram ? (
-    <a
-      href={`https://instagram.com/${client.instagram.replace(/^@/, '')}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-primary hover:underline"
-    >
-      @{client.instagram.replace(/^@/, '')}
-    </a>
-  ) : (
-    <span className="text-muted-foreground/50 italic">Instagram nao informado</span>
-  )}
-</div>
+O erro nos logs e claro:
+```
+invalid input syntax for type integer: "7.5"
 ```
 
-O icone `AtSign` ja esta importado no arquivo. O padrao de link segue o mesmo usado no `ClientCard.tsx`.
+A coluna `score` na tabela `calls` e do tipo `integer`, mas a analise da IA retorna notas decimais como `7.5`. A edge function `merge-and-reanalyze` tenta gravar esse valor diretamente, causando o erro do Postgres.
+
+## Solucao
+
+### `supabase/functions/merge-and-reanalyze/index.ts`
+
+Arredondar o score antes de salvar no banco:
+
+```text
+score: Math.round(analysis.call_score),
+```
+
+Tambem adicionar `Math.round` na observacao da call secundaria para garantir consistencia:
+
+```text
+observation: `Call mesclada com call principal (...). Nota combinada: ${Math.round(analysis.call_score)}`
+```
+
+## Arquivos modificados
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/ClientDetail.tsx` | Adicionar campo Instagram abaixo do e-mail no card Contato |
+| `supabase/functions/merge-and-reanalyze/index.ts` | `Math.round()` no score antes de gravar |
 
