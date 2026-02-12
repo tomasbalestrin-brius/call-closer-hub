@@ -109,7 +109,7 @@ serve(async (req) => {
     const { error: updatePrimaryError } = await supabase
       .from("calls")
       .update({
-        score: analysis.call_score,
+        score: Math.round(analysis.call_score),
         technical_analysis: analysis.technical_analysis,
         ai_summary: analysis.ai_summary,
         main_errors: analysis.main_errors,
@@ -134,7 +134,7 @@ serve(async (req) => {
       .from("calls")
       .update({
         merged_with_call_id: primaryCallId,
-        observation: `Call mesclada com call principal (${primaryCall.call_date}). Nota combinada: ${analysis.call_score}`,
+        observation: `Call mesclada com call principal (${primaryCall.call_date}). Nota combinada: ${Math.round(analysis.call_score)}`,
       })
       .eq("id", secondaryCallId);
 
