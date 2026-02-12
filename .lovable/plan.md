@@ -1,37 +1,32 @@
 
-# Limpar logs de erros anteriores a 01/02/2026
 
-## O que será feito
+# Mostrar tamanho da call nas rejeicoes por qualidade
 
-Deletar os **809 registros** da tabela `system_logs` com nível `error`, `warning` ou `critical` que têm timestamp anterior a 01/02/2026.
+## O que muda
 
-Como a ferramenta de query do banco é somente leitura, a exclusão será feita via código do frontend, usando o cliente do banco que já está disponível no painel admin.
+Na tabela "Calls Rejeitadas por Qualidade" do painel de Logs de Erros, ao lado do badge "Call muito curta", sera exibido o tamanho do conteudo da call (em caracteres) que ja esta salvo no metadata do log.
 
-## Abordagem
+Exemplo visual: em vez de apenas `Call muito curta`, ficara `Call muito curta (282 / 3750 chars)` -- mostrando quantos caracteres a call tinha versus o minimo exigido.
 
-Adicionar um botão "Limpar Logs Antigos" no `ErrorLogsPanel.tsx` que executa:
+## Dados disponiveis
 
-```sql
-DELETE FROM system_logs 
-WHERE timestamp < '2026-02-01T00:00:00Z'
-AND level IN ('error', 'warning', 'critical')
-```
+Cada log de rejeicao ja armazena no campo `metadata`:
+- `content_length`: tamanho real do conteudo (ex: 282)
+- `minimum_length`: tamanho minimo exigido (ex: 3750)
 
-Porém, como isso é uma ação pontual solicitada agora, a forma mais direta é executar o delete diretamente no código sem adicionar UI permanente. Vou usar a abordagem de chamar o delete via `supabase.from('system_logs').delete()` dentro de uma ação no painel.
+Nao e necessaria nenhuma alteracao no backend.
 
-## Detalhes técnicos
+## Detalhes tecnicos
 
-| Arquivo | Mudança |
+| Arquivo | Mudanca |
 |---------|---------|
-| `src/components/admin/ErrorLogsPanel.tsx` | Adicionar botão "Limpar Antigos" ao lado do botão "Atualizar" nos filtros. Ao clicar, deleta logs com timestamp antes de 01/02/2026 e atualiza a lista |
+| `src/components/admin/ErrorLogsPanel.tsx` | Extrair `content_length` e `minimum_length` do metadata e exibir ao lado do badge de motivo na coluna "Motivo" |
 
-O botão executará:
-```typescript
-await supabase
-  .from('system_logs')
-  .delete()
-  .lt('timestamp', '2026-02-01T00:00:00Z')
-  .in('level', ['error', 'warning', 'critical']);
+Na coluna "Motivo" da tabela de rejeicoes, o codigo atual mostra apenas o badge com texto. Sera adicionado um texto auxiliar com o tamanho:
+
+```
+Call muito curta (282 / 3750)
 ```
 
-Após a exclusão, a lista será atualizada automaticamente, e os 72 erros visíveis serão reduzidos apenas aos de fevereiro/2026 em diante.
+Funcoes auxiliares `getMetadataContentLength` e `getMetadataMinLength` serao adicionadas seguindo o mesmo padrao das funcoes `getMetadataFileName`, `getMetadataReason` etc. que ja existem no componente.
+
