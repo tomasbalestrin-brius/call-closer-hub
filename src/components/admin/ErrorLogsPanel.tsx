@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertTriangle, AlertCircle, Info, RefreshCw, FileX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Json } from '@/integrations/supabase/types';
@@ -30,6 +31,8 @@ export function ErrorLogsPanel() {
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [reanalyzing, setReanalyzing] = useState<string | null>(null);
+  const [reanalyzingAll, setReanalyzingAll] = useState(false);
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [serviceFilter, setServiceFilter] = useState<string>('all');
 
@@ -104,6 +107,39 @@ export function ErrorLogsPanel() {
       return (metadata as Record<string, unknown>).reason as string || null;
     }
     return null;
+  };
+
+  const getMetadataFileId = (metadata: Json | null): string | null => {
+    if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+      return (metadata as Record<string, unknown>).fileId as string || null;
+    }
+    return null;
+  };
+
+  const handleReanalyze = async (driveFileId: string) => {
+    setReanalyzing(driveFileId);
+    const { error } = await supabase
+      .from('imported_files')
+      .update({ status: 'pending' as any, error_message: null })
+      .eq('drive_file_id', driveFileId)
+      .eq('status', 'error' as any);
+    setReanalyzing(null);
+    if (error) toast.error('Erro ao agendar reanálise');
+    else { toast.success('Arquivo agendado para reanálise'); fetchLogs(); }
+  };
+
+  const handleReanalyzeAll = async () => {
+    const fileIds = [...new Set(otherErrors.map(l => getMetadataFileId(l.metadata)).filter(Boolean))] as string[];
+    if (fileIds.length === 0) { toast.info('Nenhum arquivo para reanalisar'); return; }
+    setReanalyzingAll(true);
+    const { error } = await supabase
+      .from('imported_files')
+      .update({ status: 'pending' as any, error_message: null })
+      .in('drive_file_id', fileIds)
+      .eq('status', 'error' as any);
+    setReanalyzingAll(false);
+    if (error) toast.error('Erro ao agendar reanálise em lote');
+    else { toast.success(`${fileIds.length} arquivo(s) agendado(s) para reanálise`); fetchLogs(); }
   };
 
   const formatTimestamp = (ts: string | null) => {
@@ -197,10 +233,18 @@ export function ErrorLogsPanel() {
       {/* Other Errors */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-destructive" />
-            Erros do Sistema ({otherErrors.length})
-          </CardTitle>
+          <div className="flex items-center justify-between w-full">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              Erros do Sistema ({otherErrors.length})
+            </CardTitle>
+            {otherErrors.some(l => getMetadataFileId(l.metadata)) && (
+              <Button variant="outline" size="sm" onClick={handleReanalyzeAll} disabled={reanalyzingAll}>
+                <RefreshCw className={`w-4 h-4 mr-1 ${reanalyzingAll ? 'animate-spin' : ''}`} />
+                Reanalisar Todos
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {otherErrors.length === 0 ? (
@@ -214,6 +258,7 @@ export function ErrorLogsPanel() {
                   <TableHead>Serviço</TableHead>
                   <TableHead>Usuário</TableHead>
                   <TableHead>Mensagem</TableHead>
+                  <TableHead className="w-[80px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -234,6 +279,20 @@ export function ErrorLogsPanel() {
                     </TableCell>
                     <TableCell className="text-sm max-w-[300px] truncate">
                       {log.error_message || log.operation || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {getMetadataFileId(log.metadata) ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleReanalyze(getMetadataFileId(log.metadata)!)}
+                          disabled={reanalyzing === getMetadataFileId(log.metadata)}
+                          title="Reanalisar"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${reanalyzing === getMetadataFileId(log.metadata) ? 'animate-spin' : ''}`} />
+                        </Button>
+                      ) : '-'}
                     </TableCell>
                   </TableRow>
                 ))}
