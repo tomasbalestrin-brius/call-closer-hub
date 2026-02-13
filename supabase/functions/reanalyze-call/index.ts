@@ -713,7 +713,7 @@ Antes de finalizar, valide CADA item:
 
 Se faltar qualquer item, corrija antes de responder.`;
 
-// Função para chamar OpenAI diretamente
+// Função para chamar OpenAI diretamente com retry para erros transientes (502, 503)
 async function callOpenAI(systemPrompt: string, transcription: string): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   
@@ -724,42 +724,56 @@ async function callOpenAI(systemPrompt: string, transcription: string): Promise<
   console.log("[reanalyze-call] Calling OpenAI with gpt-4o model...");
   console.log("[reanalyze-call] Transcription length:", transcription.length);
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { 
-          role: "user", 
-          content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nFORMATO DE RESPOSTA OBRIGATÓRIO:\n- Retorne APENAS o JSON, sem texto adicional antes ou depois\n- NÃO use markdown code blocks (\`\`\`json ou \`\`\`)\n- Comece sua resposta diretamente com { e termine com }\n- Certifique-se de que todas as strings estão corretamente escapadas (aspas internas como \\", quebras de linha como \\n)\n- Use aspas duplas para strings, nunca aspas simples\n\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.\n\nQUALIDADE DOS PONTOS FORTES E FRACOS (OBRIGATÓRIO):\n- Cada ponto_forte deve ser ESPECÍFICO: cite o que o closer fez, quando fez, e porque foi bom. Exemplo: "Na abertura, ancorou autoridade mencionando '500 empresas atendidas e R$50M em vendas', o que criou credibilidade imediata"\n- Cada ponto_fraco deve ter DIAGNÓSTICO + IMPACTO: o que faltou, quando faltou, e qual foi a consequência. Exemplo: "Não explorou a dor pessoal quando o lead mencionou 'estou sobrecarregado' - perdeu oportunidade de criar urgência emocional"\n- EVITE frases genéricas como "explicou o objetivo" ou "identificou a estrutura" - seja ESPECÍFICO sobre COMO e QUANDO\n- Cada campo pode ter 2-3 frases se necessário para ser específico\n\nLIMITES DE TAMANHO:\n- Máximo 2 evidências por etapa\n- Máximo 2 itens em como_corrigir\n- Máximo 2 perguntas em perguntas_de_aprofundamento` 
-        },
-      ],
-      max_tokens: 16000,
-    }),
-  });
+  const MAX_RETRIES = 3;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("[reanalyze-call] OpenAI API error:", response.status, errorText);
-    
-    if (response.status === 429) {
-      throw new Error("Rate limit exceeded. Please try again later.");
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { 
+            role: "user", 
+            content: `Analise a seguinte transcrição de call:\n\n${transcription}\n\n---\nFORMATO DE RESPOSTA OBRIGATÓRIO:\n- Retorne APENAS o JSON, sem texto adicional antes ou depois\n- NÃO use markdown code blocks (\`\`\`json ou \`\`\`)\n- Comece sua resposta diretamente com { e termine com }\n- Certifique-se de que todas as strings estão corretamente escapadas (aspas internas como \\", quebras de linha como \\n)\n- Use aspas duplas para strings, nunca aspas simples\n\nINSTRUÇÃO OBRIGATÓRIA: Você DEVE preencher TODAS as 12 etapas em analise_por_etapa (conexao, abertura, mapeamento_empresa, mapeamento_problema, consultoria, problematizacao, solucao_imaginada, transicao, pitch, perguntas_compromisso, fechamento, objecoes_negociacao). CADA ETAPA deve ter a estrutura COMPLETA com todos os campos: aconteceu, nota, funcao_cumprida, evidencias, ponto_forte, ponto_fraco, erro_de_execucao, impacto_no_lead, como_corrigir, frase_melhor, perguntas_de_aprofundamento, seeds_prova_social, risco_principal_da_etapa. Se uma etapa não aconteceu, marque "aconteceu": "nao", "nota": 0, e preencha os demais campos explicando o que deveria ter sido feito. NENHUMA ETAPA PODE SER UM OBJETO VAZIO {}.\n\nQUALIDADE DOS PONTOS FORTES E FRACOS (OBRIGATÓRIO):\n- Cada ponto_forte deve ser ESPECÍFICO: cite o que o closer fez, quando fez, e porque foi bom. Exemplo: "Na abertura, ancorou autoridade mencionando '500 empresas atendidas e R$50M em vendas', o que criou credibilidade imediata"\n- Cada ponto_fraco deve ter DIAGNÓSTICO + IMPACTO: o que faltou, quando faltou, e qual foi a consequência. Exemplo: "Não explorou a dor pessoal quando o lead mencionou 'estou sobrecarregado' - perdeu oportunidade de criar urgência emocional"\n- EVITE frases genéricas como "explicou o objetivo" ou "identificou a estrutura" - seja ESPECÍFICO sobre COMO e QUANDO\n- Cada campo pode ter 2-3 frases se necessário para ser específico\n\nLIMITES DE TAMANHO:\n- Máximo 2 evidências por etapa\n- Máximo 2 itens em como_corrigir\n- Máximo 2 perguntas em perguntas_de_aprofundamento` 
+          },
+        ],
+        max_tokens: 16000,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[reanalyze-call] OpenAI API error (attempt ${attempt}/${MAX_RETRIES}):`, response.status, errorText);
+      
+      // Retry on transient errors (502, 503, 500)
+      if ([500, 502, 503].includes(response.status) && attempt < MAX_RETRIES) {
+        const delay = 2000 * attempt; // 2s, 4s backoff
+        console.log(`[reanalyze-call] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      if (response.status === 429) {
+        throw new Error("Rate limit exceeded. Please try again later.");
+      }
+      if (response.status === 402 || response.status === 401) {
+        throw new Error("Invalid API key or payment required.");
+      }
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
-    if (response.status === 402 || response.status === 401) {
-      throw new Error("Invalid API key or payment required.");
-    }
-    throw new Error(`OpenAI API error: ${response.status}`);
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || "";
+    console.log("[reanalyze-call] OpenAI response length:", content.length);
+    return content;
   }
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || "";
-  console.log("[reanalyze-call] OpenAI response length:", content.length);
-  return content;
+  throw new Error("OpenAI API failed after all retries");
 }
 
 // Função para tentar corrigir erros comuns de JSON
