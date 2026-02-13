@@ -1,45 +1,29 @@
 
 
-# Separar logs resolvidos dos nao resolvidos
+# Corrigir: reanálise não atualiza o campo `product` da call
 
-## O que muda
+## Problema encontrado
 
-O painel "Logs de Erros" sera dividido em duas abas internas:
+O `reanalyze-call` salva o `framework_selecionado` **apenas dentro do JSON** `technical_analysis`, mas **nunca atualiza a coluna `product`** da tabela `calls`. Como o UI (CallCard) exibe `call.product`, o framework antigo ("Mentoria Julia Ottoni") continua aparecendo mesmo após reanálise.
 
-- **Erros Pendentes**: mostra apenas logs cujos arquivos ainda estao com erro ou nao foram reprocessados
-- **Arquivos Resolvidos**: mostra logs cujos arquivos ja foram reprocessados com sucesso (status `completed` na tabela `imported_files`)
+O `analyze-call` original faz isso corretamente (linha 2344: `product: data.identificacao?.produto_ofertado`), mas o `reanalyze-call` esquece de mapear.
 
-Logs que nao possuem `fileId` no metadata (erros genericos do sistema sem arquivo associado) permanecerao sempre na aba "Erros Pendentes".
+## Correção
 
-## Como funciona a separacao
-
-Ao carregar os logs, o sistema tambem busca o status atual dos arquivos na tabela `imported_files` usando os `drive_file_id` extraidos do metadata. Compara-se:
-
-- Se o arquivo associado tem status `completed` -> log vai para "Arquivos Resolvidos"
-- Se o arquivo tem status `error`, `pending`, `processing`, ou nao existe -> log fica em "Erros Pendentes"
-- Se o log nao tem `fileId` no metadata -> fica em "Erros Pendentes"
-
-## Detalhes tecnicos
-
-| Arquivo | Mudanca |
+| Arquivo | Mudança |
 |---------|---------|
-| `src/components/admin/ErrorLogsPanel.tsx` | Adicionar Tabs (Erros Pendentes / Arquivos Resolvidos), buscar status dos arquivos em `imported_files`, separar logs por status resolvido/pendente |
+| `supabase/functions/reanalyze-call/index.ts` (~linha 1112) | Adicionar mapeamento de `framework_selecionado` para a coluna `product` |
 
-### Alteracoes especificas:
+### Código a adicionar (após a linha 1117, antes do elapsed time log):
 
-1. **Import**: Adicionar `Tabs, TabsList, TabsTrigger, TabsContent` e icone `CheckCircle`
+```typescript
+// Atualizar product com o framework selecionado pela IA
+if (analysis.framework_selecionado) {
+  updateData.product = analysis.framework_selecionado;
+}
+```
 
-2. **Novo estado**: `resolvedFileIds` (Set de drive_file_ids com status completed)
+Isso garante que ao reanalisar, o novo framework escolhido pela IA (respeitando as regras de bloqueio do Leandro/Deyvid) substitua o valor antigo na coluna `product`, que é o que aparece na interface.
 
-3. **fetchLogs atualizado**: Apos buscar logs, extrair todos os `fileId` do metadata e consultar `imported_files` para saber quais tem status `completed`. Guardar no Set.
-
-4. **Separacao dos logs**:
-   - `unresolvedLogs`: logs sem fileId OU cujo fileId nao esta no Set de resolvidos
-   - `resolvedLogs`: logs cujo fileId esta no Set de resolvidos
-
-5. **UI com Tabs**:
-   - Aba "Erros Pendentes" exibe filtros, quality rejections e erros do sistema (apenas os nao resolvidos)
-   - Aba "Arquivos Resolvidos" exibe tabela simples com data, arquivo, usuario, mensagem de erro original e um badge "Resolvido"
-
-6. **Contadores nas abas**: Cada aba mostra o numero de itens entre parenteses
+Apenas 3 linhas precisam ser adicionadas. Após o deploy, basta reanalisar as calls do Leandro para corrigir o framework exibido.
 
