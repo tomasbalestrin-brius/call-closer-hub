@@ -1116,6 +1116,11 @@ REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
       updateData.call_conclusion = identificacao.houve_venda === 'sim' ? 'vendeu' : 'nao_vendeu';
     }
 
+    // Atualizar product com o framework selecionado pela IA
+    if (analysis.framework_selecionado) {
+      updateData.product = analysis.framework_selecionado;
+    }
+
     const elapsedTime = Date.now() - startTime;
     console.log('[reanalyze-call] updateData keys:', Object.keys(updateData));
     console.log('[reanalyze-call] Score:', updateData.score);
