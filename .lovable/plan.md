@@ -1,29 +1,35 @@
 
 
-# Corrigir: reanálise não atualiza o campo `product` da call
+# Adicionar botao de excluir lead no card do CRM Intensivo
 
-## Problema encontrado
+## O que muda
 
-O `reanalyze-call` salva o `framework_selecionado` **apenas dentro do JSON** `technical_analysis`, mas **nunca atualiza a coluna `product`** da tabela `calls`. Como o UI (CallCard) exibe `call.product`, o framework antigo ("Mentoria Julia Ottoni") continua aparecendo mesmo após reanálise.
+Cada card de lead no CRM Intensivo ganhara um botao "X" (ou lixeira) no canto superior direito. Ao clicar, aparece um dialogo de confirmacao antes de excluir o lead permanentemente daquela edicao.
 
-O `analyze-call` original faz isso corretamente (linha 2344: `product: data.identificacao?.produto_ofertado`), mas o `reanalyze-call` esquece de mapear.
+## Como funciona
 
-## Correção
+- O botao fica posicionado no canto superior direito do card, ao lado do badge de temperatura
+- Clicar no botao abre um `AlertDialog` perguntando "Tem certeza que deseja excluir este lead?"
+- Confirmar chama o `deleteLead` que ja existe no hook `useIntensivoCRM`
+- O clique no botao nao abre o detalhe do lead (usa `stopPropagation`)
 
-| Arquivo | Mudança |
+## Detalhes tecnicos
+
+| Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/reanalyze-call/index.ts` (~linha 1112) | Adicionar mapeamento de `framework_selecionado` para a coluna `product` |
+| `src/components/intensivo/IntensiveLeadCard.tsx` | Adicionar prop `onDelete`, botao com icone `Trash2` no canto, e `AlertDialog` de confirmacao |
+| `src/components/intensivo/IntensiveKanban.tsx` | Passar callback `onDelete` para o `IntensiveLeadCard`, chamando `deleteLead.mutateAsync(lead.id)` |
 
-### Código a adicionar (após a linha 1117, antes do elapsed time log):
+### IntensiveLeadCard.tsx
 
-```typescript
-// Atualizar product com o framework selecionado pela IA
-if (analysis.framework_selecionado) {
-  updateData.product = analysis.framework_selecionado;
-}
-```
+1. Adicionar props: `onDelete?: (id: string) => void`
+2. Importar `Trash2` do lucide-react, e `AlertDialog` components
+3. Estado local `confirmOpen` para o dialogo
+4. Botao pequeno (ghost, icon) no header do card, ao lado do badge de temperatura
+5. AlertDialog com titulo "Excluir Lead", descricao "Tem certeza? Esta acao nao pode ser desfeita.", botoes Cancelar/Excluir
 
-Isso garante que ao reanalisar, o novo framework escolhido pela IA (respeitando as regras de bloqueio do Leandro/Deyvid) substitua o valor antigo na coluna `product`, que é o que aparece na interface.
+### IntensiveKanban.tsx
 
-Apenas 3 linhas precisam ser adicionadas. Após o deploy, basta reanalisar as calls do Leandro para corrigir o framework exibido.
+1. Extrair `deleteLead` do hook `useIntensivoCRM`
+2. Passar `onDelete={(id) => deleteLead.mutateAsync(id)}` para cada `IntensiveLeadCard`
 
