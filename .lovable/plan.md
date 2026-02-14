@@ -1,35 +1,50 @@
 
 
-# Adicionar botao de excluir lead no card do CRM Intensivo
+# Adicionar edicao completa de leads no CRM Intensivo
 
 ## O que muda
 
-Cada card de lead no CRM Intensivo ganhara um botao "X" (ou lixeira) no canto superior direito. Ao clicar, aparece um dialogo de confirmacao antes de excluir o lead permanentemente daquela edicao.
+Cada card de lead no Kanban do Intensivo ganhara um botao de edicao (icone de lapis) ao lado do botao de excluir, no canto superior direito. Ao clicar, abre um dialog com todos os campos editaveis do lead.
 
-## Como funciona
+## Campos editaveis no dialog
 
-- O botao fica posicionado no canto superior direito do card, ao lado do badge de temperatura
-- Clicar no botao abre um `AlertDialog` perguntando "Tem certeza que deseja excluir este lead?"
-- Confirmar chama o `deleteLead` que ja existe no hook `useIntensivoCRM`
-- O clique no botao nao abre o detalhe do lead (usa `stopPropagation`)
+- Nome
+- Telefone
+- Email
+- Empresa
+- Nicho
+- Temperatura do lead (quente/morno/frio)
+- Origem (source)
+- Observacoes (notes)
 
 ## Detalhes tecnicos
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/intensivo/IntensiveLeadCard.tsx` | Adicionar prop `onDelete`, botao com icone `Trash2` no canto, e `AlertDialog` de confirmacao |
-| `src/components/intensivo/IntensiveKanban.tsx` | Passar callback `onDelete` para o `IntensiveLeadCard`, chamando `deleteLead.mutateAsync(lead.id)` |
+| `src/components/intensivo/IntensiveLeadCard.tsx` | Adicionar prop `onEdit`, botao com icone `Pencil` ao lado do `Trash2`, com `stopPropagation` |
+| `src/components/intensivo/EditIntensiveLeadDialog.tsx` | **Novo arquivo** - Dialog com formulario para editar todos os campos do lead, usando o `updateLead` do hook |
+| `src/components/intensivo/IntensiveKanban.tsx` | Passar callback `onEdit` para o card, e gerenciar estado do dialog de edicao |
 
 ### IntensiveLeadCard.tsx
 
-1. Adicionar props: `onDelete?: (id: string) => void`
-2. Importar `Trash2` do lucide-react, e `AlertDialog` components
-3. Estado local `confirmOpen` para o dialogo
-4. Botao pequeno (ghost, icon) no header do card, ao lado do badge de temperatura
-5. AlertDialog com titulo "Excluir Lead", descricao "Tem certeza? Esta acao nao pode ser desfeita.", botoes Cancelar/Excluir
+- Nova prop: `onEdit?: (lead: IntensiveLead) => void`
+- Botao `Pencil` (ghost, icon, 6x6) entre o badge de temperatura e o botao de excluir
+- `e.stopPropagation()` para nao abrir o detalhe
+
+### EditIntensiveLeadDialog.tsx (novo)
+
+- Recebe `lead`, `open`, `onOpenChange`, `editionId`
+- Formulario com `Input` para nome, telefone, email, empresa, nicho
+- `Select` para temperatura (quente/morno/frio)
+- `Input` para origem
+- `Textarea` para observacoes
+- Botoes Cancelar e Salvar
+- Usa `updateLead.mutateAsync` do `useIntensivoCRM`
+- Estado local inicializado com os valores atuais do lead
 
 ### IntensiveKanban.tsx
 
-1. Extrair `deleteLead` do hook `useIntensivoCRM`
-2. Passar `onDelete={(id) => deleteLead.mutateAsync(id)}` para cada `IntensiveLeadCard`
+- Novo estado: `editingLead` para controlar qual lead esta sendo editado
+- Passa `onEdit={(lead) => setEditingLead(lead)}` para cada `IntensiveLeadCard`
+- Renderiza `EditIntensiveLeadDialog` com o lead selecionado
 
