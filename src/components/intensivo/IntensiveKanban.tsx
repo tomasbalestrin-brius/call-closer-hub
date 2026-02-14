@@ -30,7 +30,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const { handleDragOver: autoScrollDragOver, stopScroll } = useDragAutoScroll(scrollRef);
-  const { moveLeadStatus } = useIntensivoCRM(editionId);
+  const { moveLeadStatus, deleteLead } = useIntensivoCRM(editionId);
   const [selectedLead, setSelectedLead] = useState<IntensiveLead | null>(null);
   const [draggedLead, setDraggedLead] = useState<IntensiveLead | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
@@ -163,6 +163,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
                       <IntensiveLeadCard
                         lead={lead}
                         onClick={() => handleCardClick(lead)}
+                        onDelete={(id) => deleteLead.mutateAsync(id)}
                       />
                     </div>
                   ))}
