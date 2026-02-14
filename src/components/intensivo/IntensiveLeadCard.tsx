@@ -4,7 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Phone, Building2, Flame, Thermometer, Snowflake, Trash2 } from 'lucide-react';
+import { Phone, Building2, Flame, Thermometer, Snowflake, Trash2, Pencil } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -16,6 +16,7 @@ import { safeDate } from '@/lib/dateUtils';
 interface IntensiveLeadCardProps {
   lead: IntensiveLead;
   onClick: () => void;
+  onEdit?: (lead: IntensiveLead) => void;
   onDelete?: (id: string) => void;
 }
 
@@ -25,7 +26,7 @@ const temperatureConfig: Record<LeadTemperature, { icon: typeof Flame; label: st
   frio: { icon: Snowflake, label: 'Frio', className: 'bg-blue-500/10 text-blue-600 border-blue-500/30' },
 };
 
-export function IntensiveLeadCard({ lead, onClick, onDelete }: IntensiveLeadCardProps) {
+export function IntensiveLeadCard({ lead, onClick, onEdit, onDelete }: IntensiveLeadCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const statusChangedDate = safeDate(lead.status_changed_at);
@@ -51,6 +52,16 @@ export function IntensiveLeadCard({ lead, onClick, onDelete }: IntensiveLeadCard
                 <TempIcon className="w-3 h-3" />
                 {temp.label}
               </Badge>
+              {onEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-primary"
+                  onClick={(e) => { e.stopPropagation(); onEdit(lead); }}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+              )}
               {onDelete && (
                 <Button
                   variant="ghost"

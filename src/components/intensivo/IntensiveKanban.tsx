@@ -5,6 +5,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { IntensiveLeadCard } from './IntensiveLeadCard';
 import { IntensiveLeadDetailDialog } from './IntensiveLeadDetailDialog';
+import { EditIntensiveLeadDialog } from './EditIntensiveLeadDialog';
 import { useIntensivoCRM } from '@/hooks/useIntensivoCRM';
 import { safeDate } from '@/lib/dateUtils';
 import { INTENSIVE_COLUMNS, type IntensiveLead, type IntensiveLeadStatus, type IntensiveEdition } from '@/types/intensivo';
@@ -32,6 +33,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
   const { handleDragOver: autoScrollDragOver, stopScroll } = useDragAutoScroll(scrollRef);
   const { moveLeadStatus, deleteLead } = useIntensivoCRM(editionId);
   const [selectedLead, setSelectedLead] = useState<IntensiveLead | null>(null);
+  const [editingLead, setEditingLead] = useState<IntensiveLead | null>(null);
   const [draggedLead, setDraggedLead] = useState<IntensiveLead | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
@@ -163,6 +165,7 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
                       <IntensiveLeadCard
                         lead={lead}
                         onClick={() => handleCardClick(lead)}
+                        onEdit={(l) => setEditingLead(l)}
                         onDelete={(id) => deleteLead.mutateAsync(id)}
                       />
                     </div>
@@ -185,6 +188,13 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
         lead={selectedLead}
         open={!!selectedLead}
         onOpenChange={(open) => !open && setSelectedLead(null)}
+        editionId={editionId}
+      />
+
+      <EditIntensiveLeadDialog
+        lead={editingLead}
+        open={!!editingLead}
+        onOpenChange={(open) => !open && setEditingLead(null)}
         editionId={editionId}
       />
     </>
