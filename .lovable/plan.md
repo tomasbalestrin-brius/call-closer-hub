@@ -1,50 +1,67 @@
 
 
-# Adicionar edicao completa de leads no CRM Intensivo
+# Telefone clicavel nos cards de Calls (WhatsApp)
 
 ## O que muda
 
-Cada card de lead no Kanban do Intensivo ganhara um botao de edicao (icone de lapis) ao lado do botao de excluir, no canto superior direito. Ao clicar, abre um dialog com todos os campos editaveis do lead.
+Os cards de calls no CRM de Calls passarao a exibir o telefone do cliente vinculado (quando houver), como um link clicavel que abre o WhatsApp -- igual ja funciona no CRM de clientes e no CRM Intensivo.
 
-## Campos editaveis no dialog
+## Como funciona
 
-- Nome
-- Telefone
-- Email
-- Empresa
-- Nicho
-- Temperatura do lead (quente/morno/frio)
-- Origem (source)
-- Observacoes (notes)
+- O telefone vem do cliente vinculado a call (campo `client_id` -> tabela `clients.phone`)
+- A query de calls sera ajustada para buscar o telefone do cliente via join (`clients(phone)`)
+- O CallCard exibira o telefone abaixo das informacoes existentes, com icone de telefone e link para `wa.me`
+- Se a call nao tiver cliente vinculado ou o cliente nao tiver telefone, nada e exibido
 
 ## Detalhes tecnicos
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/intensivo/IntensiveLeadCard.tsx` | Adicionar prop `onEdit`, botao com icone `Pencil` ao lado do `Trash2`, com `stopPropagation` |
-| `src/components/intensivo/EditIntensiveLeadDialog.tsx` | **Novo arquivo** - Dialog com formulario para editar todos os campos do lead, usando o `updateLead` do hook |
-| `src/components/intensivo/IntensiveKanban.tsx` | Passar callback `onEdit` para o card, e gerenciar estado do dialog de edicao |
+| `src/pages/Calls.tsx` | Alterar a query para incluir join com clients: `select(CALLS_SELECT + ', clients(phone)')` e mapear o phone para cada call |
+| `src/components/calls/CallCard.tsx` | Adicionar prop `clientPhone`, exibir link WhatsApp clicavel com icone Phone |
+| `src/pages/SquadView.tsx` | Mesma alteracao na query de calls para incluir o telefone do cliente |
+| `src/pages/ClientDetail.tsx` | Mesma alteracao na query de calls (se aplicavel) |
+| `src/components/layout/Sidebar.tsx` | Mesma alteracao na query de calls para manter consistencia |
 
-### IntensiveLeadCard.tsx
+### Query ajustada
 
-- Nova prop: `onEdit?: (lead: IntensiveLead) => void`
-- Botao `Pencil` (ghost, icon, 6x6) entre o badge de temperatura e o botao de excluir
-- `e.stopPropagation()` para nao abrir o detalhe
+A query de calls sera alterada para fazer join com a tabela clients:
 
-### EditIntensiveLeadDialog.tsx (novo)
+```
+.select('..., clients(phone)')
+```
 
-- Recebe `lead`, `open`, `onOpenChange`, `editionId`
-- Formulario com `Input` para nome, telefone, email, empresa, nicho
-- `Select` para temperatura (quente/morno/frio)
-- `Input` para origem
-- `Textarea` para observacoes
-- Botoes Cancelar e Salvar
-- Usa `updateLead.mutateAsync` do `useIntensivoCRM`
-- Estado local inicializado com os valores atuais do lead
+O resultado tera um campo `clients: { phone: string | null }` que sera mapeado para `clientPhone` antes de passar ao CallCard.
 
-### IntensiveKanban.tsx
+### CallCard.tsx
 
-- Novo estado: `editingLead` para controlar qual lead esta sendo editado
-- Passa `onEdit={(lead) => setEditingLead(lead)}` para cada `IntensiveLeadCard`
-- Renderiza `EditIntensiveLeadDialog` com o lead selecionado
+- Nova prop opcional: `clientPhone?: string | null`
+- Quando houver telefone, exibir abaixo da data/hora:
+
+```tsx
+{clientPhone && (
+  <div className="flex items-center gap-2 text-muted-foreground">
+    <Phone className="w-4 h-4 flex-shrink-0" />
+    <a
+      href={`https://wa.me/${clientPhone.replace(/\D/g, '')}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="truncate text-primary hover:underline"
+    >
+      {clientPhone}
+    </a>
+  </div>
+)}
+```
+
+- `e.stopPropagation()` para nao abrir o dialog de detalhe ao clicar no link
+- O icone Phone ja esta importado no arquivo
+
+### Locais de query a atualizar
+
+1. **Calls.tsx** (CALLS_SELECT) - query principal
+2. **SquadView.tsx** - query de calls do time
+3. **Sidebar.tsx** - query de calls recentes
+4. **ClientDetail.tsx** - ja tem acesso ao cliente, pode passar o phone diretamente
 
