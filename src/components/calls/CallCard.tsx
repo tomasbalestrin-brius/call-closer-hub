@@ -3,7 +3,7 @@ import { Call, CallStatus, LeadClassification, CloserClassification } from '@/ty
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Calendar, Clock, Star, DollarSign, Target, TrendingUp, User, Flame, Thermometer, Snowflake } from 'lucide-react';
+import { Calendar, Clock, Star, DollarSign, Target, TrendingUp, User, Flame, Thermometer, Snowflake, Phone } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import CallDetailDialog from './CallDetailDialog';
@@ -14,6 +14,7 @@ interface CallCardProps {
   onClick?: () => void;
   canDelete?: boolean;
   onCallUpdated?: () => void;
+  clientPhone?: string | null;
 }
 
 const statusConfig: Record<CallStatus, { label: string; className: string }> = {
@@ -52,7 +53,7 @@ const formatCurrency = (value: number | null) => {
   }).format(value);
 };
 
-const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCallUpdated }: CallCardProps) {
+const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCallUpdated, clientPhone }: CallCardProps) {
   const [showDialog, setShowDialog] = useState(false);
   const statusInfo = statusConfig[call.status];
   const formattedDate = format(new Date(call.call_date), "dd 'de' MMM", { locale: ptBR });
@@ -127,6 +128,20 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="w-4 h-4 flex-shrink-0" />
                 <span>{call.call_time.slice(0, 5)}</span>
+              </div>
+            )}
+            {clientPhone && (
+              <div className="flex items-center gap-2 text-muted-foreground col-span-2">
+                <Phone className="w-4 h-4 flex-shrink-0" />
+                <a
+                  href={`https://wa.me/${clientPhone.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="truncate text-primary hover:underline"
+                >
+                  {clientPhone}
+                </a>
               </div>
             )}
             {call.score !== null && call.score !== undefined && (

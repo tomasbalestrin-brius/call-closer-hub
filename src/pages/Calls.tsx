@@ -62,7 +62,7 @@ export default function Calls() {
 
       let query = supabase
         .from('calls')
-        .select(CALLS_SELECT)
+        .select(CALLS_SELECT + ', clients(phone)')
         .eq('closer_id', targetCloserId!)
         .is('merged_with_call_id', null)
         .order('call_date', { ascending: false })
@@ -243,7 +243,7 @@ export default function Calls() {
                   {(canDeleteCalls || isAdmin || isLeader) && (
                     <input type="checkbox" checked={selectedCalls.includes(call.id)} onChange={() => toggleCallSelection(call.id)} className="absolute top-4 right-12 z-10 w-4 h-4 accent-primary" />
                   )}
-                  <CallCard call={call} canDelete={canDeleteCalls} onCallUpdated={invalidateCalls} />
+                  <CallCard call={call} canDelete={canDeleteCalls} onCallUpdated={invalidateCalls} clientPhone={(call as any).clients?.phone} />
                 </div>
               ))}
             </div>
