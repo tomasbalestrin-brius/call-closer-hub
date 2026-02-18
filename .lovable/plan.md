@@ -1,37 +1,42 @@
 
-
-# Nova aba "Calls Muito Curtas" no painel de logs
+# Agrupar erros duplicados no painel de logs
 
 ## O que muda
 
-O painel de logs passara a ter 3 abas em vez de 2:
+Na secao "Erros do Sistema", em vez de mostrar uma linha para cada ocorrencia do mesmo erro, os logs serao agrupados por chave unica (combinacao de `fileId` + `error_message` + `user_id` + `service`). Cada linha agrupada mostrara:
 
-1. **Erros Pendentes** - erros do sistema (sem as calls muito curtas com menos de 300 chars)
-2. **Calls Muito Curtas** (nova) - logs de quality_rejection onde `content_length < 300`
-3. **Arquivos Resolvidos** - mantido como esta
+- **Data**: data e horario da ultima ocorrencia
+- **Ocorrencias**: badge com o numero de vezes que o erro aconteceu (ex: "x3")
+- Os demais campos (nivel, servico, usuario, mensagem, acoes) permanecem iguais
 
-## Logica de separacao
-
-- Logs com `operation === 'quality_rejection'` e `content_length < 300` vao para a nova aba "Calls Muito Curtas"
-- Logs com `operation === 'quality_rejection'` e `content_length >= 300` permanecem em "Erros Pendentes" (na secao de Calls Rejeitadas por Qualidade)
-- Demais erros continuam em "Erros Pendentes"
+Erros de calls diferentes continuam aparecendo como linhas separadas. Apenas erros repetidos da mesma call/arquivo sao agrupados.
 
 ## Detalhes tecnicos
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/admin/ErrorLogsPanel.tsx` | Adicionar nova aba, ajustar filtros de logs |
+| `src/components/admin/ErrorLogsPanel.tsx` | Adicionar logica de agrupamento e exibir contagem |
 
-### Mudancas no ErrorLogsPanel.tsx
+### Logica de agrupamento
 
-1. Criar filtro `shortCalls` a partir dos `unresolvedLogs`:
-   - `operation === 'quality_rejection'` E `content_length < 300`
+Apos filtrar `unresolvedErrors`, agrupar por uma chave composta:
 
-2. Ajustar `unresolvedQuality` para mostrar apenas os que tem `content_length >= 300`
+```
+chave = `${fileId || 'no-file'}_${error_message}_${user_id}_${service}`
+```
 
-3. Adicionar nova `TabsTrigger` com icone `FileX` e contagem de calls muito curtas
+Para cada grupo:
+- Manter o log mais recente (maior timestamp) como representante
+- Contar o numero total de ocorrencias
+- Guardar o `fileId` do representante para a acao de reanalisar
 
-4. Adicionar nova `TabsContent` com tabela mostrando: Data, Arquivo, Usuario, Chars (atual / minimo)
+### Mudancas na tabela
 
-5. Atualizar contagem de "Erros Pendentes" para excluir as calls muito curtas
+- Nova coluna "Qtd" entre "Data" e "Nivel"
+- Quando a contagem for maior que 1, exibir um badge com "x{count}" (ex: "x5")
+- Quando for 1, exibir apenas "-" ou nada
+- A contagem total no titulo "Erros do Sistema" passara a mostrar o numero de grupos unicos, nao o total de logs
 
+### Mesma logica para "Calls Rejeitadas por Qualidade"
+
+Aplicar o mesmo agrupamento na secao de quality rejections, usando `fileId` como chave, mostrando contagem e data da ultima ocorrencia.
