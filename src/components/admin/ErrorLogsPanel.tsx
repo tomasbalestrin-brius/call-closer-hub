@@ -112,8 +112,14 @@ export function ErrorLogsPanel() {
   const unresolvedLogs = logs.filter(l => !isResolved(l));
   const resolvedLogs = logs.filter(l => isResolved(l));
 
-  const unresolvedQuality = unresolvedLogs.filter(l => l.operation === 'quality_rejection');
+  const shortCalls = unresolvedLogs.filter(l =>
+    l.operation === 'quality_rejection' && (getMetadataContentLength(l.metadata) ?? 0) < 300
+  );
+  const unresolvedQuality = unresolvedLogs.filter(l =>
+    l.operation === 'quality_rejection' && (getMetadataContentLength(l.metadata) ?? 0) >= 300
+  );
   const unresolvedErrors = unresolvedLogs.filter(l => l.operation !== 'quality_rejection');
+  const pendingCount = unresolvedQuality.length + unresolvedErrors.length;
 
   const getLevelIcon = (level: string) => {
     switch (level) {
@@ -182,7 +188,11 @@ export function ErrorLogsPanel() {
         <TabsList>
           <TabsTrigger value="pending" className="gap-1.5">
             <AlertTriangle className="w-4 h-4" />
-            Erros Pendentes ({unresolvedLogs.length})
+            Erros Pendentes ({pendingCount})
+          </TabsTrigger>
+          <TabsTrigger value="short-calls" className="gap-1.5">
+            <FileX className="w-4 h-4" />
+            Calls Muito Curtas ({shortCalls.length})
           </TabsTrigger>
           <TabsTrigger value="resolved" className="gap-1.5">
             <CheckCircle className="w-4 h-4" />
@@ -328,7 +338,47 @@ export function ErrorLogsPanel() {
         </Card>
       </TabsContent>
 
-      {/* Resolved Tab */}
+      {/* Short Calls Tab */}
+      <TabsContent value="short-calls" className="space-y-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileX className="w-5 h-5 text-yellow-500" />
+              Calls Muito Curtas ({shortCalls.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {shortCalls.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma call muito curta encontrada.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[130px]">Data</TableHead>
+                    <TableHead>Arquivo</TableHead>
+                    <TableHead>Usuário</TableHead>
+                    <TableHead>Chars (atual / mínimo)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {shortCalls.map(log => (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-xs text-muted-foreground">{formatTimestamp(log.timestamp)}</TableCell>
+                      <TableCell className="font-mono text-xs">{getMetadataFileName(log.metadata) || '-'}</TableCell>
+                      <TableCell className="text-sm">{log.user_id ? profiles[log.user_id] || log.user_id.slice(0, 8) : '-'}</TableCell>
+                      <TableCell className="text-sm">
+                        {getMetadataContentLength(log.metadata) ?? '?'} / {getMetadataMinLength(log.metadata) ?? '?'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+
       <TabsContent value="resolved" className="space-y-4">
         <Card>
           <CardHeader className="pb-3">
