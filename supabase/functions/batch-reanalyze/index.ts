@@ -23,11 +23,11 @@ serve(async (req) => {
 
     if (reanalyzeAll) {
       // Reanalyze ALL calls from ALL closers that have technical_analysis but missing framework_escolhido
-      console.log('Reanalyzing ALL calls from all closers...');
+      console.log('Reanalyzing ALL calls from all closers (only problematic ones)...');
       
       const { data: allCalls, error: fetchError } = await supabase
         .from('calls')
-        .select('id, client_name, call_date, closer_id')
+        .select('id, client_name, call_date, closer_id, technical_analysis, analysis_metadata, analysis_quality_score')
         .not('technical_analysis', 'is', null)
         .order('call_date', { ascending: false });
 
@@ -36,9 +36,34 @@ serve(async (req) => {
         throw new Error(`Erro ao buscar calls: ${fetchError.message}`);
       }
 
-      // Filter calls that don't have framework_escolhido or need reanalysis
-      calls = allCalls || [];
-      console.log(`Found ${calls.length} total calls to potentially reanalyze`);
+      const totalCalls = (allCalls || []).length;
+      
+      // Filter only problematic calls
+      const problematicCalls = (allCalls || []).filter(call => {
+        const meta = call.analysis_metadata as any;
+        const ta = call.technical_analysis as any;
+        
+        // 1. Timeout occurred
+        if (meta?.timeout_occurred === true) return true;
+        // 2. Partial analysis
+        if (meta?.is_partial_analysis === true) return true;
+        // 3. Confidence level not high
+        if (meta?.confidence_level && meta.confidence_level !== 'high') return true;
+        // 4. Low quality score
+        if (call.analysis_quality_score !== null && call.analysis_quality_score !== undefined && Number(call.analysis_quality_score) < 0.5) return true;
+        // 5. Missing analise_por_etapa
+        if (ta && !ta.analise_por_etapa) return true;
+        // 6. All stages with nota 0
+        if (ta?.analise_por_etapa) {
+          const stages = Object.values(ta.analise_por_etapa);
+          if (stages.length > 0 && stages.every((s: any) => s?.nota === 0)) return true;
+        }
+        
+        return false;
+      });
+      
+      calls = problematicCalls;
+      console.log(`Found ${calls.length} problematic calls out of ${totalCalls} total`);
     } else {
       // Original logic: reanalyze by closer name
       if (!closerName) {
@@ -162,7 +187,9 @@ serve(async (req) => {
     // Return immediate response
     return new Response(
       JSON.stringify({ 
-        message: `Iniciando reanálise de ${calls.length} calls para ${closerName}`,
+        message: reanalyzeAll 
+          ? `Iniciando reanálise de ${calls.length} calls com problemas (de ${calls.length} filtradas)`
+          : `Iniciando reanálise de ${calls.length} calls para ${closerName}`,
         calls: calls.map(c => ({ id: c.id, client_name: c.client_name, call_date: c.call_date })),
         status: 'processing'
       }),
