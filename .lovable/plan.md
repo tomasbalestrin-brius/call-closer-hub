@@ -1,42 +1,33 @@
 
-# Agrupar erros duplicados no painel de logs
 
-## O que muda
+# Filtrar "Reanalisar Todas" para apenas calls com problemas
 
-Na secao "Erros do Sistema", em vez de mostrar uma linha para cada ocorrencia do mesmo erro, os logs serao agrupados por chave unica (combinacao de `fileId` + `error_message` + `user_id` + `service`). Cada linha agrupada mostrara:
+## Problema atual
 
-- **Data**: data e horario da ultima ocorrencia
-- **Ocorrencias**: badge com o numero de vezes que o erro aconteceu (ex: "x3")
-- Os demais campos (nivel, servico, usuario, mensagem, acoes) permanecem iguais
+O botao "Reanalisar Todas" na aba de imports chama a edge function `batch-reanalyze` com `reanalyzeAll: true`, que busca **todas** as 163 calls que tem `technical_analysis` -- inclusive as que foram analisadas com sucesso. Isso gasta tempo e creditos da OpenAI desnecessariamente.
 
-Erros de calls diferentes continuam aparecendo como linhas separadas. Apenas erros repetidos da mesma call/arquivo sao agrupados.
+## Solucao
+
+Alterar a edge function `batch-reanalyze` para filtrar apenas calls problematicas quando `reanalyzeAll: true`. As calls consideradas "com problemas" sao:
+
+1. `analysis_metadata.timeout_occurred = true` (timeout na analise)
+2. `analysis_metadata.is_partial_analysis = true` (analise parcial)
+3. `analysis_metadata.confidence_level` diferente de "high" (baixa confianca)
+4. `analysis_quality_score < 0.5` (qualidade baixa)
+5. `analise_por_etapa` ausente no `technical_analysis` (falta dados de etapas)
+6. Todas as etapas em `analise_por_etapa` com nota 0 (etapas zeradas)
+
+Calls que nao se encaixam em nenhum desses criterios sao consideradas "bem sucedidas" e **nao serao reanalisadas**.
 
 ## Detalhes tecnicos
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/admin/ErrorLogsPanel.tsx` | Adicionar logica de agrupamento e exibir contagem |
+| `supabase/functions/batch-reanalyze/index.ts` | Filtrar calls problematicas no branch `reanalyzeAll` |
 
-### Logica de agrupamento
+### Mudanca na edge function
 
-Apos filtrar `unresolvedErrors`, agrupar por uma chave composta:
+No branch `reanalyzeAll`, a query passara a buscar tambem `technical_analysis`, `analysis_metadata` e `analysis_quality_score`. Apos o fetch, um filtro em JavaScript identifica apenas as calls com problemas usando os criterios acima.
 
-```
-chave = `${fileId || 'no-file'}_${error_message}_${user_id}_${service}`
-```
+A mensagem de retorno tambem sera atualizada para mostrar quantas calls tinham problemas vs total.
 
-Para cada grupo:
-- Manter o log mais recente (maior timestamp) como representante
-- Contar o numero total de ocorrencias
-- Guardar o `fileId` do representante para a acao de reanalisar
-
-### Mudancas na tabela
-
-- Nova coluna "Qtd" entre "Data" e "Nivel"
-- Quando a contagem for maior que 1, exibir um badge com "x{count}" (ex: "x5")
-- Quando for 1, exibir apenas "-" ou nada
-- A contagem total no titulo "Erros do Sistema" passara a mostrar o numero de grupos unicos, nao o total de logs
-
-### Mesma logica para "Calls Rejeitadas por Qualidade"
-
-Aplicar o mesmo agrupamento na secao de quality rejections, usando `fileId` como chave, mostrando contagem e data da ultima ocorrencia.
