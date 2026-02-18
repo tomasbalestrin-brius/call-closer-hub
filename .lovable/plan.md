@@ -1,67 +1,37 @@
 
 
-# Telefone clicavel nos cards de Calls (WhatsApp)
+# Nova aba "Calls Muito Curtas" no painel de logs
 
 ## O que muda
 
-Os cards de calls no CRM de Calls passarao a exibir o telefone do cliente vinculado (quando houver), como um link clicavel que abre o WhatsApp -- igual ja funciona no CRM de clientes e no CRM Intensivo.
+O painel de logs passara a ter 3 abas em vez de 2:
 
-## Como funciona
+1. **Erros Pendentes** - erros do sistema (sem as calls muito curtas com menos de 300 chars)
+2. **Calls Muito Curtas** (nova) - logs de quality_rejection onde `content_length < 300`
+3. **Arquivos Resolvidos** - mantido como esta
 
-- O telefone vem do cliente vinculado a call (campo `client_id` -> tabela `clients.phone`)
-- A query de calls sera ajustada para buscar o telefone do cliente via join (`clients(phone)`)
-- O CallCard exibira o telefone abaixo das informacoes existentes, com icone de telefone e link para `wa.me`
-- Se a call nao tiver cliente vinculado ou o cliente nao tiver telefone, nada e exibido
+## Logica de separacao
+
+- Logs com `operation === 'quality_rejection'` e `content_length < 300` vao para a nova aba "Calls Muito Curtas"
+- Logs com `operation === 'quality_rejection'` e `content_length >= 300` permanecem em "Erros Pendentes" (na secao de Calls Rejeitadas por Qualidade)
+- Demais erros continuam em "Erros Pendentes"
 
 ## Detalhes tecnicos
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/Calls.tsx` | Alterar a query para incluir join com clients: `select(CALLS_SELECT + ', clients(phone)')` e mapear o phone para cada call |
-| `src/components/calls/CallCard.tsx` | Adicionar prop `clientPhone`, exibir link WhatsApp clicavel com icone Phone |
-| `src/pages/SquadView.tsx` | Mesma alteracao na query de calls para incluir o telefone do cliente |
-| `src/pages/ClientDetail.tsx` | Mesma alteracao na query de calls (se aplicavel) |
-| `src/components/layout/Sidebar.tsx` | Mesma alteracao na query de calls para manter consistencia |
+| `src/components/admin/ErrorLogsPanel.tsx` | Adicionar nova aba, ajustar filtros de logs |
 
-### Query ajustada
+### Mudancas no ErrorLogsPanel.tsx
 
-A query de calls sera alterada para fazer join com a tabela clients:
+1. Criar filtro `shortCalls` a partir dos `unresolvedLogs`:
+   - `operation === 'quality_rejection'` E `content_length < 300`
 
-```
-.select('..., clients(phone)')
-```
+2. Ajustar `unresolvedQuality` para mostrar apenas os que tem `content_length >= 300`
 
-O resultado tera um campo `clients: { phone: string | null }` que sera mapeado para `clientPhone` antes de passar ao CallCard.
+3. Adicionar nova `TabsTrigger` com icone `FileX` e contagem de calls muito curtas
 
-### CallCard.tsx
+4. Adicionar nova `TabsContent` com tabela mostrando: Data, Arquivo, Usuario, Chars (atual / minimo)
 
-- Nova prop opcional: `clientPhone?: string | null`
-- Quando houver telefone, exibir abaixo da data/hora:
-
-```tsx
-{clientPhone && (
-  <div className="flex items-center gap-2 text-muted-foreground">
-    <Phone className="w-4 h-4 flex-shrink-0" />
-    <a
-      href={`https://wa.me/${clientPhone.replace(/\D/g, '')}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      className="truncate text-primary hover:underline"
-    >
-      {clientPhone}
-    </a>
-  </div>
-)}
-```
-
-- `e.stopPropagation()` para nao abrir o dialog de detalhe ao clicar no link
-- O icone Phone ja esta importado no arquivo
-
-### Locais de query a atualizar
-
-1. **Calls.tsx** (CALLS_SELECT) - query principal
-2. **SquadView.tsx** - query de calls do time
-3. **Sidebar.tsx** - query de calls recentes
-4. **ClientDetail.tsx** - ja tem acesso ao cliente, pode passar o phone diretamente
+5. Atualizar contagem de "Erros Pendentes" para excluir as calls muito curtas
 
