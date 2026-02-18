@@ -53,6 +53,56 @@ export type Database = {
         }
         Relationships: []
       }
+      api_costs: {
+        Row: {
+          call_id: string | null
+          created_at: string
+          estimated_cost_usd: number
+          file_id: string | null
+          id: string
+          model: string
+          operation: string | null
+          service: string
+          tokens_input: number
+          tokens_output: number
+          user_id: string
+        }
+        Insert: {
+          call_id?: string | null
+          created_at?: string
+          estimated_cost_usd?: number
+          file_id?: string | null
+          id?: string
+          model: string
+          operation?: string | null
+          service?: string
+          tokens_input?: number
+          tokens_output?: number
+          user_id: string
+        }
+        Update: {
+          call_id?: string | null
+          created_at?: string
+          estimated_cost_usd?: number
+          file_id?: string | null
+          id?: string
+          model?: string
+          operation?: string | null
+          service?: string
+          tokens_input?: number
+          tokens_output?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_costs_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_rate_limits: {
         Row: {
           created_at: string | null
@@ -1873,6 +1923,19 @@ export type Database = {
       is_squad_leader_of_user: {
         Args: { _leader_id: string; _user_id: string }
         Returns: boolean
+      }
+      log_api_cost: {
+        Args: {
+          p_call_id?: string
+          p_file_id?: string
+          p_model?: string
+          p_operation?: string
+          p_service?: string
+          p_tokens_input?: number
+          p_tokens_output?: number
+          p_user_id: string
+        }
+        Returns: string
       }
       log_event: {
         Args: {
