@@ -115,10 +115,33 @@ export function ErrorLogsPanel() {
   const shortCalls = unresolvedLogs.filter(l =>
     l.operation === 'quality_rejection' && (getMetadataContentLength(l.metadata) ?? 0) < 300
   );
-  const unresolvedQuality = unresolvedLogs.filter(l =>
+  const unresolvedQualityRaw = unresolvedLogs.filter(l =>
     l.operation === 'quality_rejection' && (getMetadataContentLength(l.metadata) ?? 0) >= 300
   );
-  const unresolvedErrors = unresolvedLogs.filter(l => l.operation !== 'quality_rejection');
+  const unresolvedErrorsRaw = unresolvedLogs.filter(l => l.operation !== 'quality_rejection');
+
+  // Group helper
+  type GroupedLog = SystemLog & { count: number };
+  const groupLogs = (items: SystemLog[]): GroupedLog[] => {
+    const map = new Map<string, { log: SystemLog; count: number }>();
+    for (const log of items) {
+      const fileId = getMetadataFileId(log.metadata) || 'no-file';
+      const key = `${fileId}_${log.error_message}_${log.user_id}_${log.service}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count++;
+        if (log.timestamp && (!existing.log.timestamp || log.timestamp > existing.log.timestamp)) {
+          existing.log = log;
+        }
+      } else {
+        map.set(key, { log, count: 1 });
+      }
+    }
+    return Array.from(map.values()).map(({ log, count }) => ({ ...log, count }));
+  };
+
+  const unresolvedQuality = groupLogs(unresolvedQualityRaw);
+  const unresolvedErrors = groupLogs(unresolvedErrorsRaw);
   const pendingCount = unresolvedQuality.length + unresolvedErrors.length;
 
   const getLevelIcon = (level: string) => {
@@ -157,7 +180,7 @@ export function ErrorLogsPanel() {
   };
 
   const handleReanalyzeAll = async () => {
-    const fileIds = [...new Set(unresolvedErrors.map(l => getMetadataFileId(l.metadata)).filter(Boolean))] as string[];
+    const fileIds = [...new Set(unresolvedErrorsRaw.map(l => getMetadataFileId(l.metadata)).filter(Boolean))] as string[];
     if (fileIds.length === 0) { toast.info('Nenhum arquivo para reanalisar'); return; }
     setReanalyzingAll(true);
     const { error } = await supabase
@@ -246,6 +269,7 @@ export function ErrorLogsPanel() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[130px]">Data</TableHead>
+                    <TableHead className="w-[60px]">Qtd</TableHead>
                     <TableHead>Arquivo</TableHead>
                     <TableHead>Usuário</TableHead>
                     <TableHead>Motivo</TableHead>
@@ -255,6 +279,7 @@ export function ErrorLogsPanel() {
                   {unresolvedQuality.map(log => (
                     <TableRow key={log.id}>
                       <TableCell className="text-xs text-muted-foreground">{formatTimestamp(log.timestamp)}</TableCell>
+                      <TableCell>{log.count > 1 ? <Badge variant="secondary" className="text-xs">x{log.count}</Badge> : '-'}</TableCell>
                       <TableCell className="font-mono text-xs">{getMetadataFileName(log.metadata) || '-'}</TableCell>
                       <TableCell className="text-sm">{log.user_id ? profiles[log.user_id] || log.user_id.slice(0, 8) : '-'}</TableCell>
                       <TableCell>
@@ -300,6 +325,7 @@ export function ErrorLogsPanel() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[130px]">Data</TableHead>
+                    <TableHead className="w-[60px]">Qtd</TableHead>
                     <TableHead className="w-[80px]">Nível</TableHead>
                     <TableHead>Serviço</TableHead>
                     <TableHead>Usuário</TableHead>
@@ -311,6 +337,7 @@ export function ErrorLogsPanel() {
                   {unresolvedErrors.map(log => (
                     <TableRow key={log.id}>
                       <TableCell className="text-xs text-muted-foreground">{formatTimestamp(log.timestamp)}</TableCell>
+                      <TableCell>{log.count > 1 ? <Badge variant="secondary" className="text-xs">x{log.count}</Badge> : '-'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           {getLevelIcon(log.level)}
