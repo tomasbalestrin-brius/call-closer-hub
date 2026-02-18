@@ -24,7 +24,8 @@ import {
   FileText,
   Activity,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  DollarSign
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
@@ -39,6 +40,7 @@ import { ImportStatusPanel } from '@/components/admin/ImportStatusPanel';
 import SystemMetricsDashboard from '@/components/admin/SystemMetricsDashboard';
 import { ErrorLogsPanel } from '@/components/admin/ErrorLogsPanel';
 import { ManualAnalysisDialog } from '@/components/admin/ManualAnalysisDialog';
+import CostDashboard from '@/components/admin/CostDashboard';
 import { Navigate } from 'react-router-dom';
 import { UserRole } from '@/types';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
@@ -413,6 +415,7 @@ export default function Admin() {
 
   const isLeaderOnly = isLeader && !isAdmin && !isFinanceiro;
   const isFinanceiroOnly = isFinanceiro && !isAdmin;
+  const isMasterAdmin = user?.email === 'tomasbalestrin@gmail.com';
 
   return (
     <MainLayout>
@@ -455,6 +458,12 @@ export default function Admin() {
                   <AlertTriangle className="w-4 h-4" />
                   Logs de Erros
                 </TabsTrigger>
+                {isMasterAdmin && (
+                  <TabsTrigger value="costs" className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    Custos
+                  </TabsTrigger>
+                )}
               </>
             )}
           </TabsList>
@@ -751,6 +760,11 @@ export default function Admin() {
               <TabsContent value="error-logs">
                 <ErrorLogsPanel />
               </TabsContent>
+              {isMasterAdmin && (
+                <TabsContent value="costs">
+                  <CostDashboard />
+                </TabsContent>
+              )}
             </>
           )}
         </Tabs>
