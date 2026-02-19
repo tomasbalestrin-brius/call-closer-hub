@@ -1,75 +1,41 @@
 
-# Painel de Custos e Uso de API (exclusivo admin mestre)
+# Correção: Análise Manual falhando para todos os Admins
 
-## Contexto
+## Problema Identificado
 
-O codigo da edge function `analyze-call` ja rastreia tokens usados via `globalThis.apiUsageStats` e tenta salvar via `supabase.rpc('log_api_cost', ...)`, porem a tabela e a funcao RPC nao existem no banco. Portanto os dados estao sendo perdidos silenciosamente.
+Os logs da edge function `manual-analyze` mostram dois erros recentes:
 
-## O que sera feito
-
-### 1. Criar tabela `api_costs` no banco
-
-Armazena cada chamada de API com:
-- `user_id`, `service` (openai), `model` (gpt-4o, gpt-4o-mini)
-- `operation` (direct-analysis, analyze-chunk-1, merge-analysis, etc.)
-- `tokens_input`, `tokens_output`
-- `call_id`, `file_id` (referencia opcional)
-- `estimated_cost_usd` (calculado automaticamente)
-- `created_at`
-
-RLS: apenas admins podem visualizar (SELECT). Insert via service role (RPC com SECURITY DEFINER).
-
-### 2. Criar funcao RPC `log_api_cost`
-
-Recebe os parametros da edge function e insere na tabela `api_costs`, calculando o custo estimado em USD baseado no modelo:
-- gpt-4o: input $2.50/1M, output $10.00/1M
-- gpt-4o-mini: input $0.15/1M, output $0.60/1M
-
-### 3. Criar componente `CostDashboard`
-
-Exibido apenas para `tomasbalestrin@gmail.com`. Mostrara:
-
-- **Cards de resumo**: Custo total do mes, total de tokens, numero de analises, custo medio por call
-- **Tabela por modelo**: gpt-4o vs gpt-4o-mini, tokens e custos separados
-- **Grafico de custos diarios** (ultimos 30 dias) usando Recharts
-- **Top 5 closers por custo** no mes
-- Filtro por periodo (7d, 30d, 90d)
-
-### 4. Adicionar aba "Custos" no Admin.tsx
-
-Nova aba visivel apenas quando `user?.email === 'tomasbalestrin@gmail.com'`, com icone `DollarSign`.
-
-## Detalhes tecnicos
-
-| Recurso | Arquivo/Local |
-|---------|---------------|
-| Tabela + RPC | Migration SQL |
-| Componente | `src/components/admin/CostDashboard.tsx` (novo) |
-| Integracao | `src/pages/Admin.tsx` (nova aba condicional) |
-
-### Precos por modelo (embutidos no calculo)
-
-```text
-gpt-4o:      $2.50 / 1M input,  $10.00 / 1M output
-gpt-4o-mini: $0.15 / 1M input,  $0.60  / 1M output
+```
+Insert error: { code: "22P02", message: 'invalid input syntax for type integer: "7.3"' }
+Insert error: { code: "22P02", message: 'invalid input syntax for type integer: "7.7"' }
 ```
 
-### Calculo de custo na RPC
+A coluna `score` na tabela `calls` é do tipo `integer`, mas a IA retorna valores decimais (7.3, 7.7). A edge function tenta inserir o valor bruto sem arredondar, causando falha para **todos os admins** — a análise roda, processa a transcrição, gasta tokens da OpenAI, mas **não salva o resultado**.
 
-```sql
-estimated_cost_usd = 
-  CASE model
-    WHEN 'gpt-4o' THEN (tokens_input * 2.5 + tokens_output * 10.0) / 1000000
-    WHEN 'gpt-4o-mini' THEN (tokens_input * 0.15 + tokens_output * 0.6) / 1000000
-    ELSE (tokens_input * 1.0 + tokens_output * 3.0) / 1000000
-  END
-```
+## O que será corrigido
 
-### Visibilidade restrita
+### 1. Edge Function `manual-analyze/index.ts`
 
-A aba so aparece no Admin quando:
+Linha 128, onde o score é inserido:
+
+**Antes (com bug):**
 ```typescript
-const isMasterAdmin = user?.email === 'tomasbalestrin@gmail.com';
+score: analysis.call_score || null,
 ```
 
-Nao depende de role, depende exclusivamente do email.
+**Depois (corrigido):**
+```typescript
+score: analysis.call_score != null ? Math.round(Number(analysis.call_score)) : null,
+```
+
+Isso garante que qualquer valor decimal (7.3 → 7, 7.7 → 8) seja convertido para inteiro antes de inserir no banco.
+
+### 2. Verificação adicional de robustez
+
+Também será adicionada a mesma proteção no campo `entry_value` e `sale_value` caso venham com formato inesperado (os campos de valor monetário são `numeric`, então não precisam de arredondamento, mas serão verificados).
+
+## Impacto
+
+- Todos os admins voltam a conseguir salvar análises manuais
+- Nenhuma mudança no banco de dados necessária
+- Correção pontual em um único arquivo
