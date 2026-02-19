@@ -86,6 +86,15 @@ serve(async (req) => {
     if (!analyzeResponse.ok) {
       const errorText = await analyzeResponse.text();
       console.error("analyze-call error:", analyzeResponse.status, errorText);
+
+      if (analyzeResponse.status === 408) {
+        return new Response(JSON.stringify({
+          error: `Timeout na análise: a transcrição tem ${transcription.length.toLocaleString('pt-BR')} caracteres e excedeu o tempo limite. Tente novamente — o sistema usará modo por partes automaticamente para transcrições longas.`
+        }), {
+          status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       return new Response(JSON.stringify({ error: "Erro na análise da transcrição" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -101,11 +110,10 @@ serve(async (req) => {
 
     const analysis = analyzeResult.analysis;
 
-    // Determine call status
-    let callStatus = "follow";
+    // Determine call status — must match call_status enum: pos_venda, follow_up, perdido, agendamento, sem_perfil
+    let callStatus = "follow_up";
     if (analysis.sold === "sim") callStatus = "pos_venda";
-    else if (analysis.sold === "nao") callStatus = "follow";
-    else callStatus = "follow";
+    else callStatus = "follow_up";
 
     // Map lead_classification
     const leadClassification = analysis.lead_classification || "follow";
