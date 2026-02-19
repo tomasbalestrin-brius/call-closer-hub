@@ -107,9 +107,9 @@ REGRA DE IDENTIFICAÇÃO DE PROBLEMATIZAÇÃO:
 // ============= CHUNKING CONFIGURATION =============
 const CHUNK_SIZE = 80000; // ~80KB per chunk (~20K tokens, gpt-4o supports 128K)
 const CHUNK_OVERLAP = 8000; // 8KB overlap for context (ensures full sentence preservation)
-const MAX_SIZE_FOR_DIRECT = 60000; // Files under 60KB go direct (reduced to force more files into chunked path with timeout protection)
-const FUNCTION_TIMEOUT = 120000; // 120 seconds safety timeout (Edge limit is ~150s)
-const ANALYSIS_TIMEOUT = 110000; // 110 seconds for analysis (10s buffer)
+const MAX_SIZE_FOR_DIRECT = 30000; // Files under 30KB go direct — transcriptions >30k chars use chunked (prevents timeout)
+const FUNCTION_TIMEOUT = 145000; // 145 seconds safety timeout (Edge limit is ~150s)
+const ANALYSIS_TIMEOUT = 130000; // 130 seconds for analysis (15s buffer)
 const BATCH_TIMEOUT = 50000; // 50 seconds max per batch
 
 // ============= RACING TIMEOUT HELPER =============
