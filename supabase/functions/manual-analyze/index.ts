@@ -112,7 +112,7 @@ serve(async (req) => {
 
     // Determine call status — must match call_status enum: pos_venda, follow_up, perdido, agendamento, sem_perfil
     let callStatus = "follow_up";
-    if (analysis.sold === "sim") callStatus = "pos_venda";
+    if (analysis.sold === "sim") callStatus = "vendido";
     else callStatus = "follow_up";
 
     // Map lead_classification
