@@ -125,7 +125,7 @@ serve(async (req) => {
         client_name: analysis.client_name || clientName,
         call_date: callDate || new Date().toISOString().split("T")[0],
         status: callStatus,
-        score: analysis.call_score || null,
+        score: analysis.call_score != null ? Math.round(Number(analysis.call_score)) : null,
         product: analysis.product || null,
         niche: analysis.niche || null,
         main_pain: analysis.main_pain || null,
