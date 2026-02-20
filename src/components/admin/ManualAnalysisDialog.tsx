@@ -26,7 +26,7 @@ import { FileText, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ManualAnalysisDialogProps {
-  onAnalysisComplete?: () => void;
+  onAnalysisComplete?: (closerId: string) => void;
 }
 
 export function ManualAnalysisDialog({ onAnalysisComplete }: ManualAnalysisDialogProps) {
@@ -93,11 +93,13 @@ export function ManualAnalysisDialog({ onAnalysisComplete }: ManualAnalysisDialo
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
+      const closerName = allClosers.find(c => c.user_id === closerId)?.full_name ?? 'o closer selecionado';
       toast.success(
-        `Call analisada com sucesso! Nota: ${data.score ?? 'N/A'}/10`,
+        `Call de ${closerName} analisada com sucesso! Nota: ${data.score ?? 'N/A'}/10`,
         { duration: 5000 }
       );
 
+      const analyzedCloserId = closerId;
       // Reset form
       setCloserId('');
       setClientName('');
@@ -105,7 +107,7 @@ export function ManualAnalysisDialog({ onAnalysisComplete }: ManualAnalysisDialo
       setFileName(null);
       setCallDate(new Date().toISOString().split('T')[0]);
       setOpen(false);
-      onAnalysisComplete?.();
+      onAnalysisComplete?.(analyzedCloserId);
     } catch (error) {
       console.error('Manual analysis error:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao analisar transcrição');

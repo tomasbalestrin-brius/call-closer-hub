@@ -181,7 +181,7 @@ export default function Calls() {
                 Excluir ({selectedCalls.length})
               </Button>
             )}
-            {isAdmin && <ManualAnalysisDialog onAnalysisComplete={invalidateCalls} />}
+            {isAdmin && <ManualAnalysisDialog onAnalysisComplete={(closerId) => { setSelectedCloserId(closerId); invalidateCalls(); }} />}
             <NewCallDialog onCallCreated={invalidateCalls} />
           </div>
         </div>
