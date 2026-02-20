@@ -1,55 +1,41 @@
 
-# Correção Crítica: Enum call_status incorreto
+# Problema identificado: As calls estão sendo salvas corretamente
 
-## Problema identificado
+## Diagnóstico real
 
-O erro nos logs é claro:
-```
-invalid input value for enum call_status: "pos_venda"
-```
+As calls analisadas manualmente **existem no banco de dados** e estão corretas:
+- Rodrigo → Leandro (19/02)
+- Marcos → Julia (19/02)
+- Dayane → Julia (19/02)
+- Carolina → Julia (19/02)
 
-O banco de dados tem o seguinte enum `call_status`:
-- `pendente`
-- `em_andamento`
-- `follow_up`
-- `proposta_enviada`
-- `vendido`
-- `perdido`
+O problema é de **experiência de uso, não de bug técnico**. A tela de Calls mostra por padrão as calls do usuário logado (o admin). Calls criadas para outros closers exigem que o admin selecione o closer no dropdown "Selecione um closer".
 
-O código em `manual-analyze/index.ts` tenta inserir `"pos_venda"` quando a venda foi realizada (`analysis.sold === "sim"`), mas o valor correto no banco é **`"vendido"`**.
+Após fechar o diálogo de análise manual, o admin continua vendo suas próprias calls (vazias, pois o admin não faz calls), sem nenhuma indicação de onde ver a call criada.
 
-## Correção
+## O que será corrigido
 
-### Arquivo: `supabase/functions/manual-analyze/index.ts`
+### 1. Feedback pós-análise no `ManualAnalysisDialog`
 
-Linha 114-116, trocar o mapeamento de status:
+Após a análise ser concluída com sucesso, exibir:
+- Nome do closer selecionado no toast de sucesso
+- Instrução clara: "Para ver a call, selecione [Nome do Closer] no filtro de closers na tela de Calls"
 
-**Antes (errado):**
-```typescript
-let callStatus = "follow_up";
-if (analysis.sold === "sim") callStatus = "pos_venda"; // ❌ não existe no enum
-else callStatus = "follow_up";
-```
+### 2. Auto-seleção do closer na tela de Calls
 
-**Depois (correto):**
-```typescript
-let callStatus = "follow_up";
-if (analysis.sold === "sim") callStatus = "vendido"; // ✅ valor real no enum
-else callStatus = "follow_up";
-```
+Após o `onAnalysisComplete()` ser chamado, o sistema passará o `closerId` do closer selecionado para que a tela de Calls mude automaticamente o filtro e mostre as calls daquele closer — sem o admin precisar selecionar manualmente.
 
-## Por que isso ocorreu
+Para isso:
+- `ManualAnalysisDialog` receberá um novo callback `onAnalysisComplete(closerId: string)`
+- A tela `Calls.tsx` usará esse `closerId` para setar o `selectedCloserId` automaticamente
 
-O enum `call_status` do banco usa `"vendido"`, mas em outras partes do sistema (como o lead_classification) existe o valor `"pos_venda"`. Houve uma confusão entre os dois enums diferentes.
-
-## Impacto
-
-- Calls com venda (`sold = "sim"`) estavam sempre falhando com erro de enum
-- Calls sem venda (`sold = "nao"`) já funcionavam corretamente com `"follow_up"`
-- Após a correção, todas as análises manuais serão salvas corretamente
-
-## Arquivo a editar
+## Arquivos a editar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/manual-analyze/index.ts` | `"pos_venda"` → `"vendido"` na linha 115 |
+| `src/components/admin/ManualAnalysisDialog.tsx` | Callback `onAnalysisComplete(closerId)` + toast com nome do closer |
+| `src/pages/Calls.tsx` | Receber `closerId` no callback e setar `selectedCloserId` automaticamente |
+
+## Impacto esperado
+
+Após analisar uma call do closer "Leandro", a tela de Calls vai automaticamente mostrar as calls do Leandro — sem o admin precisar usar o dropdown manualmente.
