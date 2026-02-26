@@ -1,41 +1,48 @@
 
-# Problema identificado: As calls estão sendo salvas corretamente
 
-## Diagnóstico real
+# Reprocessamento dos arquivos com erro + correção de timeout
 
-As calls analisadas manualmente **existem no banco de dados** e estão corretas:
-- Rodrigo → Leandro (19/02)
-- Marcos → Julia (19/02)
-- Dayane → Julia (19/02)
-- Carolina → Julia (19/02)
+## Diagnóstico
 
-O problema é de **experiência de uso, não de bug técnico**. A tela de Calls mostra por padrão as calls do usuário logado (o admin). Calls criadas para outros closers exigem que o admin selecione o closer no dropdown "Selecione um closer".
+Existem **3 arquivos** travados com status `error` no banco:
 
-Após fechar o diálogo de análise manual, o admin continua vendo suas próprias calls (vazias, pois o admin não faz calls), sem nenhuma indicação de onde ver a call criada.
+| Closer | Arquivo | Erro |
+|--------|---------|------|
+| Gisele | fof-hbzc-qyr (25/02) | Timeout |
+| Hannah | vbe-abyj-ywe (24/02) | Timeout |
+| Leandro | yrk-kuuy-jii (20/02) | Failed to export document |
 
-## O que será corrigido
+Os system_logs mostram 36+ ocorrências de "No chunks analyzed before timeout" — são retentativas repetidas dos mesmos arquivos falhando.
 
-### 1. Feedback pós-análise no `ManualAnalysisDialog`
+## Causa raiz do timeout
 
-Após a análise ser concluída com sucesso, exibir:
-- Nome do closer selecionado no toast de sucesso
-- Instrução clara: "Para ver a call, selecione [Nome do Closer] no filtro de closers na tela de Calls"
+O erro "No chunks analyzed before timeout" ocorre na linha 1608 de `analyze-call/index.ts` quando **nenhum chunk** do primeiro batch completa dentro do `BATCH_TIMEOUT` (atualmente **50 segundos**).
 
-### 2. Auto-seleção do closer na tela de Calls
+O problema: a função `analyzeChunk` tem retry interno com 3 tentativas e backoff exponencial. Se a primeira tentativa demora 30s e falha, o retry consome mais 30s, totalizando 60s+ — ultrapassando o BATCH_TIMEOUT de 50s. Resultado: o `withTimeout` retorna `null` e o sistema descarta o batch inteiro, mesmo que os chunks estivessem quase prontos.
 
-Após o `onAnalysisComplete()` ser chamado, o sistema passará o `closerId` do closer selecionado para que a tela de Calls mude automaticamente o filtro e mostre as calls daquele closer — sem o admin precisar selecionar manualmente.
+## Plano de correção (2 partes)
 
-Para isso:
-- `ManualAnalysisDialog` receberá um novo callback `onAnalysisComplete(closerId: string)`
-- A tela `Calls.tsx` usará esse `closerId` para setar o `selectedCloserId` automaticamente
+### Parte 1: Corrigir timeout em `analyze-call/index.ts`
+
+- **BATCH_TIMEOUT**: Aumentar de `50000` (50s) para `80000` (80s)
+  - Dá margem para 1 retry completo dentro do batch
+- **ANALYSIS_TIMEOUT**: Manter em `130000` (130s) — OK
+- **FUNCTION_TIMEOUT**: Manter em `145000` (145s) — OK
+
+### Parte 2: Aumentar timeout do fetch em `import-and-analyze/index.ts`
+
+- Linha 551: AbortController timeout de `120000` (120s) → `140000` (140s)
+  - Alinhado com o ANALYSIS_TIMEOUT de 130s + margem
+
+### Parte 3: Resetar os 3 arquivos para reprocessamento
+
+Após deploy das correções, resetar os 3 registros de `error` para `pending` via update no banco, limpando `error_message` e `started_processing_at`.
 
 ## Arquivos a editar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/admin/ManualAnalysisDialog.tsx` | Callback `onAnalysisComplete(closerId)` + toast com nome do closer |
-| `src/pages/Calls.tsx` | Receber `closerId` no callback e setar `selectedCloserId` automaticamente |
+| `supabase/functions/analyze-call/index.ts` | `BATCH_TIMEOUT`: 50000 → 80000 |
+| `supabase/functions/import-and-analyze/index.ts` | AbortController timeout: 120000 → 140000 |
+| SQL migration | Reset 3 arquivos: status `error` → `pending` |
 
-## Impacto esperado
-
-Após analisar uma call do closer "Leandro", a tela de Calls vai automaticamente mostrar as calls do Leandro — sem o admin precisar usar o dropdown manualmente.
