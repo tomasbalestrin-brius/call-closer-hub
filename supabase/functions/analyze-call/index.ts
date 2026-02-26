@@ -110,7 +110,7 @@ const CHUNK_OVERLAP = 8000; // 8KB overlap for context (ensures full sentence pr
 const MAX_SIZE_FOR_DIRECT = 30000; // Files under 30KB go direct — transcriptions >30k chars use chunked (prevents timeout)
 const FUNCTION_TIMEOUT = 145000; // 145 seconds safety timeout (Edge limit is ~150s)
 const ANALYSIS_TIMEOUT = 130000; // 130 seconds for analysis (15s buffer)
-const BATCH_TIMEOUT = 50000; // 50 seconds max per batch
+const BATCH_TIMEOUT = 80000; // 80 seconds max per batch (allows 1 full retry within batch)
 
 // ============= RACING TIMEOUT HELPER =============
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T | null = null): Promise<T | null> {

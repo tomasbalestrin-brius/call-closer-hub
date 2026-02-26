@@ -548,7 +548,7 @@ serve(async (req) => {
       
       // AbortController with 120s timeout to prevent hanging if analyze-call dies
       const analyzeController = new AbortController();
-      const analyzeTimeoutId = setTimeout(() => analyzeController.abort(), 120000);
+      const analyzeTimeoutId = setTimeout(() => analyzeController.abort(), 140000);
 
       try {
         analyzeResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-call`, {
