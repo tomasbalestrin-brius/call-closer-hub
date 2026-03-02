@@ -1,48 +1,31 @@
 
 
-# Reprocessamento dos arquivos com erro + correção de timeout
+# Reanálise da call Nathalia Gadelha — Problema e Solução
 
-## Diagnóstico
+## Situação atual
 
-Existem **3 arquivos** travados com status `error` no banco:
+A call de **Nathalia Gadelha** (ID: `40584ecf`, closer: Hannah, 02/03/2026) tem uma transcrição de **110.784 caracteres**. A função `reanalyze-call` envia toda a transcrição de uma vez para o OpenAI, o que causa timeout para transcrições grandes (>30K caracteres).
 
-| Closer | Arquivo | Erro |
-|--------|---------|------|
-| Gisele | fof-hbzc-qyr (25/02) | Timeout |
-| Hannah | vbe-abyj-ywe (24/02) | Timeout |
-| Leandro | yrk-kuuy-jii (20/02) | Failed to export document |
+A função `analyze-call` já tem um pipeline de chunks que lida com transcrições grandes, mas `reanalyze-call` não usa esse pipeline.
 
-Os system_logs mostram 36+ ocorrências de "No chunks analyzed before timeout" — são retentativas repetidas dos mesmos arquivos falhando.
+## Plano
 
-## Causa raiz do timeout
+### Opção: Chamar `analyze-call` a partir de `reanalyze-call` para transcrições grandes
 
-O erro "No chunks analyzed before timeout" ocorre na linha 1608 de `analyze-call/index.ts` quando **nenhum chunk** do primeiro batch completa dentro do `BATCH_TIMEOUT` (atualmente **50 segundos**).
+Em `supabase/functions/reanalyze-call/index.ts`:
 
-O problema: a função `analyzeChunk` tem retry interno com 3 tentativas e backoff exponencial. Se a primeira tentativa demora 30s e falha, o retry consome mais 30s, totalizando 60s+ — ultrapassando o BATCH_TIMEOUT de 50s. Resultado: o `withTimeout` retorna `null` e o sistema descarta o batch inteiro, mesmo que os chunks estivessem quase prontos.
+1. Adicionar verificação do tamanho da transcrição (threshold: 30.000 caracteres)
+2. Se a transcrição for maior que o threshold, em vez de chamar OpenAI diretamente, fazer um fetch interno para `analyze-call` passando a transcrição — que já tem o pipeline de chunking
+3. Mapear o resultado do `analyze-call` para o mesmo formato de update que `reanalyze-call` usa
+4. Para transcrições menores, manter o comportamento atual (chamada direta ao OpenAI)
 
-## Plano de correção (2 partes)
-
-### Parte 1: Corrigir timeout em `analyze-call/index.ts`
-
-- **BATCH_TIMEOUT**: Aumentar de `50000` (50s) para `80000` (80s)
-  - Dá margem para 1 retry completo dentro do batch
-- **ANALYSIS_TIMEOUT**: Manter em `130000` (130s) — OK
-- **FUNCTION_TIMEOUT**: Manter em `145000` (145s) — OK
-
-### Parte 2: Aumentar timeout do fetch em `import-and-analyze/index.ts`
-
-- Linha 551: AbortController timeout de `120000` (120s) → `140000` (140s)
-  - Alinhado com o ANALYSIS_TIMEOUT de 130s + margem
-
-### Parte 3: Resetar os 3 arquivos para reprocessamento
-
-Após deploy das correções, resetar os 3 registros de `error` para `pending` via update no banco, limpando `error_message` e `started_processing_at`.
-
-## Arquivos a editar
+### Arquivo a editar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/analyze-call/index.ts` | `BATCH_TIMEOUT`: 50000 → 80000 |
-| `supabase/functions/import-and-analyze/index.ts` | AbortController timeout: 120000 → 140000 |
-| SQL migration | Reset 3 arquivos: status `error` → `pending` |
+| `supabase/functions/reanalyze-call/index.ts` | Adicionar fallback para `analyze-call` quando transcrição > 30K chars |
+
+### Após o deploy
+
+Disparar novamente a reanálise da call `40584ecf` da Nathalia Gadelha.
 
