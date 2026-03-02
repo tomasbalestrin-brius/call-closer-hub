@@ -1204,7 +1204,8 @@ interface ChunkAnalysis {
 async function analyzeChunk(
   chunk: string, 
   chunkIndex: number, 
-  totalChunks: number
+  totalChunks: number,
+  customChunkPrompt?: string
 ): Promise<ChunkAnalysis> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   
@@ -1212,7 +1213,8 @@ async function analyzeChunk(
     throw new Error("OPENAI_API_KEY not configured");
   }
 
-  const prompt = CHUNK_ANALYSIS_PROMPT
+  const basePrompt = customChunkPrompt || CHUNK_ANALYSIS_PROMPT;
+  const prompt = basePrompt
     .replace(/\{\{chunkIndex\}\}/g, String(chunkIndex))
     .replace(/\{\{totalChunks\}\}/g, String(totalChunks));
 
@@ -1554,7 +1556,8 @@ async function analyzeWithChunking(
   transcription: string, 
   fileName: string,
   abortSignal?: AbortSignal,
-  customMergePrompt?: string
+  customMergePrompt?: string,
+  customChunkPrompt?: string
 ): Promise<AnalysisData> {
   console.log(`Starting chunked analysis for file: ${fileName}`);
   console.log(`Transcription length: ${transcription.length} chars`);
@@ -1581,7 +1584,7 @@ async function analyzeWithChunking(
     
     const batch = chunks.slice(i, i + batchSize);
     const batchPromises = batch.map((chunk, batchIdx) => 
-      analyzeChunk(chunk, i + batchIdx + 1, chunks.length)
+      analyzeChunk(chunk, i + batchIdx + 1, chunks.length, customChunkPrompt)
     );
     
     // Racing: either batch completes, or timeout fires
@@ -2217,7 +2220,7 @@ serve(async (req) => {
   }, FUNCTION_TIMEOUT);
 
   try {
-    const { transcription, fileName, userId, callId, fileId } = await req.json();
+    const { transcription, fileName, userId, callId, fileId, forceFramework } = await req.json();
 
     if (!transcription) {
       clearTimeout(timeoutId);
@@ -2246,20 +2249,37 @@ serve(async (req) => {
       }
     }
 
-    // Build final prompts with priority instructions
-    const finalMasterPrompt = priorityInstructions 
-      ? MASTER_PROMPT + priorityInstructions 
-      : MASTER_PROMPT;
-    const finalMergePrompt = priorityInstructions
-      ? MERGE_PROMPT + priorityInstructions
-      : MERGE_PROMPT;
+    // Build forceFramework instruction if provided
+    let forceFrameworkInstruction = '';
+    if (forceFramework) {
+      forceFrameworkInstruction = `
+
+════════════════════════════════════════════════════════════════════
+⚠️ INSTRUÇÃO OBRIGATÓRIA DE FRAMEWORK (OVERRIDE MANUAL) ⚠️
+════════════════════════════════════════════════════════════════════
+OBRIGATÓRIO: Classifique esta call como "${forceFramework}".
+Analise TODAS as etapas sob a perspectiva do framework "${forceFramework}".
+IGNORE qualquer regra de prioridade anterior — esta instrução tem prioridade ABSOLUTA.
+O campo "framework_selecionado" DEVE ser "${forceFramework}".
+════════════════════════════════════════════════════════════════════`;
+      console.log(`🎯 ForceFramework override: "${forceFramework}"`);
+    }
+
+    // Build final prompts with priority instructions + forceFramework
+    const finalMasterPrompt = MASTER_PROMPT + priorityInstructions + forceFrameworkInstruction;
+    const finalMergePrompt = MERGE_PROMPT + priorityInstructions + forceFrameworkInstruction;
+    
+    // Build chunk prompt with forceFramework if needed
+    const finalChunkPrompt = forceFramework 
+      ? CHUNK_ANALYSIS_PROMPT + `\n\nINSTRUÇÃO OBRIGATÓRIA: O framework desta call é "${forceFramework}". Classifique todas as etapas sob esta perspectiva.`
+      : CHUNK_ANALYSIS_PROMPT;
 
     let data: AnalysisData;
 
     // Check if chunking is needed
     if (transcription.length > MAX_SIZE_FOR_DIRECT) {
       console.log(`Large file detected (${transcription.length} chars > ${MAX_SIZE_FOR_DIRECT}), using CHUNKED analysis with timeout protection`);
-      data = await analyzeWithChunking(transcription, fileName, abortController.signal, finalMergePrompt);
+      data = await analyzeWithChunking(transcription, fileName, abortController.signal, finalMergePrompt, finalChunkPrompt);
     } else {
       console.log(`Standard file size, using DIRECT analysis`);
       // Run single comprehensive analysis WITH timeout protection
@@ -2432,6 +2452,19 @@ serve(async (req) => {
         timeout_occurred: false
       },
     };
+
+    // ForceFramework override: ensure product and framework fields match the forced framework
+    if (forceFramework) {
+      analysis.product = forceFramework;
+      analysis.framework = forceFramework;
+      if (analysis.technical_analysis) {
+        analysis.technical_analysis.framework_selecionado = forceFramework;
+      }
+      if (analysis.technical_analysis?.identificacao) {
+        analysis.technical_analysis.identificacao.produto_ofertado = forceFramework;
+      }
+      console.log(`🎯 ForceFramework override applied: product="${forceFramework}"`);
+    }
 
     console.log("Analysis complete, client:", analysis.client_name, "score:", analysis.call_score);
 

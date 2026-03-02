@@ -946,7 +946,7 @@ serve(async (req) => {
   const startTime = Date.now();
 
   try {
-    const { callId } = await req.json();
+    const { callId, forceFramework } = await req.json();
 
     if (!callId) {
       return new Response(
@@ -1035,9 +1035,25 @@ REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
       }
     }
 
+    // Inject forceFramework instruction if provided
+    let forceFrameworkInstruction = '';
+    if (forceFramework) {
+      forceFrameworkInstruction = `
+
+════════════════════════════════════════════════════════════════════
+⚠️ INSTRUÇÃO OBRIGATÓRIA DE FRAMEWORK (OVERRIDE MANUAL) ⚠️
+════════════════════════════════════════════════════════════════════
+OBRIGATÓRIO: Classifique esta call como "${forceFramework}".
+Analise TODAS as etapas sob a perspectiva do framework "${forceFramework}".
+IGNORE qualquer regra de prioridade anterior — esta instrução tem prioridade ABSOLUTA.
+O campo "framework_selecionado" DEVE ser "${forceFramework}".
+════════════════════════════════════════════════════════════════════`;
+      console.log(`[reanalyze-call] ForceFramework override: "${forceFramework}"`);
+    }
+
     // Threshold para transcrições grandes — acima disso, usa analyze-call (chunked pipeline)
     const LARGE_TRANSCRIPTION_THRESHOLD = 30000;
-    const finalPrompt = MASTER_PROMPT + frameworkPriorityInstructions;
+    const finalPrompt = MASTER_PROMPT + frameworkPriorityInstructions + forceFrameworkInstruction;
     
     let analysis: Record<string, unknown>;
 
@@ -1062,6 +1078,7 @@ REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
             closerId: call.closer_id,
             clientName: call.client_name,
             isReanalysis: true,
+            forceFramework: forceFramework || undefined,
           }),
           signal: analyzeController.signal,
         });
@@ -1197,9 +1214,19 @@ REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
       updateData.call_conclusion = identificacao.houve_venda === 'sim' ? 'vendeu' : 'nao_vendeu';
     }
 
-    // Atualizar product com o framework selecionado pela IA
-    if (analysis.framework_selecionado) {
-      updateData.product = analysis.framework_selecionado;
+    // Atualizar product com o framework selecionado pela IA (ou forceFramework)
+    if (forceFramework) {
+      updateData.product = forceFramework;
+      // Also override in technical_analysis
+      const ta = updateData.technical_analysis as Record<string, unknown>;
+      if (ta) {
+        ta.framework_selecionado = forceFramework;
+        const ident = ta.identificacao as Record<string, unknown> | undefined;
+        if (ident) ident.produto_ofertado = forceFramework;
+      }
+      console.log(`[reanalyze-call] ForceFramework override on DB update: product="${forceFramework}"`);
+    } else if (analysis.framework_selecionado || analysis.framework) {
+      updateData.product = analysis.framework_selecionado || analysis.framework;
     }
 
     const elapsedTime = Date.now() - startTime;
