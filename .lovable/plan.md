@@ -1,31 +1,33 @@
 
 
-# Reanálise da call Nathalia Gadelha — Problema e Solução
+# Reanálise da call Nathalia Gadelha como "Impl. IA"
 
-## Situação atual
+## Problema
 
-A call de **Nathalia Gadelha** (ID: `40584ecf`, closer: Hannah, 02/03/2026) tem uma transcrição de **110.784 caracteres**. A função `reanalyze-call` envia toda a transcrição de uma vez para o OpenAI, o que causa timeout para transcrições grandes (>30K caracteres).
+A call `40584ecf` (Hannah, 110K chars) foi analisada como "Mentoria Julia Ottoni". O usuário quer forçar a reanálise como "Implementação de IA (NextTrack)".
 
-A função `analyze-call` já tem um pipeline de chunks que lida com transcrições grandes, mas `reanalyze-call` não usa esse pipeline.
+O sistema atual não tem um parâmetro para forçar um framework específico — a IA decide com base na transcrição + regras de prioridade do closer. Para transcrições grandes (>30K), o `reanalyze-call` delega para `analyze-call`, que também não aceita framework forçado.
 
 ## Plano
 
-### Opção: Chamar `analyze-call` a partir de `reanalyze-call` para transcrições grandes
+### Adicionar parâmetro `forceFramework` em `reanalyze-call/index.ts`
 
-Em `supabase/functions/reanalyze-call/index.ts`:
+1. Aceitar campo opcional `forceFramework` no body da requisição
+2. Quando presente, adicionar instrução explícita ao prompt: _"OBRIGATÓRIO: Classifique esta call como [framework]. Analise todas as etapas sob a perspectiva deste framework."_
+3. Essa instrução é adicionada **após** as `frameworkPriorityInstructions`, sobrescrevendo qualquer prioridade
+4. Para transcrições grandes (delegadas ao `analyze-call`), passar o `forceFramework` no body do fetch interno — precisará também adicionar suporte em `analyze-call/index.ts`
 
-1. Adicionar verificação do tamanho da transcrição (threshold: 30.000 caracteres)
-2. Se a transcrição for maior que o threshold, em vez de chamar OpenAI diretamente, fazer um fetch interno para `analyze-call` passando a transcrição — que já tem o pipeline de chunking
-3. Mapear o resultado do `analyze-call` para o mesmo formato de update que `reanalyze-call` usa
-4. Para transcrições menores, manter o comportamento atual (chamada direta ao OpenAI)
+### Adicionar suporte em `analyze-call/index.ts`
 
-### Arquivo a editar
+1. Aceitar campo opcional `forceFramework` no body
+2. Quando presente, injetar a mesma instrução obrigatória no prompt de análise de cada chunk
+
+### Após deploy
+
+Chamar `reanalyze-call` com `{ callId: "40584ecf-...", forceFramework: "Implementação de IA (NextTrack)" }` para processar a call.
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/reanalyze-call/index.ts` | Adicionar fallback para `analyze-call` quando transcrição > 30K chars |
-
-### Após o deploy
-
-Disparar novamente a reanálise da call `40584ecf` da Nathalia Gadelha.
+| `supabase/functions/reanalyze-call/index.ts` | Aceitar `forceFramework`, injetar no prompt e passar para `analyze-call` |
+| `supabase/functions/analyze-call/index.ts` | Aceitar `forceFramework`, injetar no prompt dos chunks |
 
