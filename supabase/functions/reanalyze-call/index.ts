@@ -1035,15 +1035,82 @@ REGRA DE PRIORIDADE DE FRAMEWORK PARA ESTE CLOSER (${closerName}):
       }
     }
 
-    // Chamar OpenAI com prompt + regras de prioridade
+    // Threshold para transcrições grandes — acima disso, usa analyze-call (chunked pipeline)
+    const LARGE_TRANSCRIPTION_THRESHOLD = 30000;
     const finalPrompt = MASTER_PROMPT + frameworkPriorityInstructions;
-    const aiResponse = await callOpenAI(finalPrompt, call.transcription);
     
-    // Parsear o JSON
-    const analysis = parseJSONFromResponse(aiResponse);
-    
-    // Garantir que todas as 12 etapas existam
-    ensureAllStages(analysis);
+    let analysis: Record<string, unknown>;
+
+    if (call.transcription.length > LARGE_TRANSCRIPTION_THRESHOLD) {
+      // ============= LARGE TRANSCRIPTION: delegate to analyze-call (has chunking) =============
+      console.log(`[reanalyze-call] Transcription too large (${call.transcription.length} chars > ${LARGE_TRANSCRIPTION_THRESHOLD}). Delegating to analyze-call chunked pipeline...`);
+      
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const analyzeController = new AbortController();
+      const analyzeTimeoutId = setTimeout(() => analyzeController.abort(), 140000); // 140s timeout
+
+      try {
+        const analyzeResponse = await fetch(`${supabaseUrl}/functions/v1/analyze-call`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({
+            transcription: call.transcription,
+            callId: callId,
+            closerId: call.closer_id,
+            clientName: call.client_name,
+            isReanalysis: true,
+          }),
+          signal: analyzeController.signal,
+        });
+
+        clearTimeout(analyzeTimeoutId);
+
+        if (!analyzeResponse.ok) {
+          const errorText = await analyzeResponse.text();
+          console.error(`[reanalyze-call] analyze-call returned error: ${analyzeResponse.status}`, errorText);
+          throw new Error(`analyze-call failed: ${analyzeResponse.status} - ${errorText.substring(0, 200)}`);
+        }
+
+        const analyzeResult = await analyzeResponse.json();
+        console.log('[reanalyze-call] analyze-call returned successfully, keys:', Object.keys(analyzeResult));
+
+        // analyze-call already updates the DB directly, so we can return success
+        // But we need to check if it returned the analysis data or just updated the DB
+        if (analyzeResult.analysis) {
+          analysis = analyzeResult.analysis;
+          ensureAllStages(analysis);
+        } else {
+          // analyze-call already saved to DB — return success directly
+          const elapsedTime = Date.now() - startTime;
+          console.log(`[reanalyze-call] analyze-call handled DB update directly. Total time: ${elapsedTime}ms`);
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: 'Reanálise concluída com sucesso (via chunked pipeline)',
+              score: analyzeResult.score || analyzeResult.nota_geral,
+              processingTimeMs: elapsedTime,
+              method: 'chunked',
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch (fetchError) {
+        clearTimeout(analyzeTimeoutId);
+        if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+          throw new Error('analyze-call timed out after 140s for large transcription');
+        }
+        throw fetchError;
+      }
+    } else {
+      // ============= SMALL TRANSCRIPTION: direct OpenAI call =============
+      console.log(`[reanalyze-call] Transcription size OK (${call.transcription.length} chars). Using direct OpenAI call...`);
+      const aiResponse = await callOpenAI(finalPrompt, call.transcription);
+      analysis = parseJSONFromResponse(aiResponse);
+      ensureAllStages(analysis);
+    }
     
     console.log('[reanalyze-call] Analysis keys:', Object.keys(analysis));
     console.log('[reanalyze-call] analise_por_etapa keys:', Object.keys(analysis.analise_por_etapa || {}));
