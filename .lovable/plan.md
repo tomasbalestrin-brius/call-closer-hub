@@ -1,33 +1,55 @@
 
 
-# Reanálise da call Nathalia Gadelha como "Impl. IA"
+# Limpar importação do Deyvison — apenas arquivos de 17/03 em diante
 
-## Problema
+## Situação atual
+- Deyvison (user_id: `94e25a6d-8016-4b4c-b842-e8fefe0435f9`) tem **92 arquivos pendentes** na fila de importação
+- Muitos são de fevereiro e início de março (antes de 17/03)
+- Nenhuma call foi processada ainda (todos com status `pending`)
 
-A call `40584ecf` (Hannah, 110K chars) foi analisada como "Mentoria Julia Ottoni". O usuário quer forçar a reanálise como "Implementação de IA (NextTrack)".
+## Plano de ação
 
-O sistema atual não tem um parâmetro para forçar um framework específico — a IA decide com base na transcrição + regras de prioridade do closer. Para transcrições grandes (>30K), o `reanalyze-call` delega para `analyze-call`, que também não aceita framework forçado.
+### 1. Remover arquivos antigos da fila (migration SQL)
+Deletar da tabela `imported_files` todos os registros pendentes do Deyvison cujo nome contenha datas anteriores a 17/03/2026. Os nomes seguem o padrão `(2026-MM-DD ...)`, então filtraremos por:
+- Arquivos com `2026-02-` no nome (fevereiro)
+- Arquivos com datas de março antes do dia 17 (`2026-03-0`, `2026-03-1` seguido de 0-6)
 
-## Plano
+```sql
+DELETE FROM imported_files
+WHERE user_id = '94e25a6d-8016-4b4c-b842-e8fefe0435f9'
+  AND status = 'pending'
+  AND (
+    file_name LIKE '%(2026-02-%'
+    OR file_name LIKE '%(2026-03-01%'
+    OR file_name LIKE '%(2026-03-02%'
+    OR file_name LIKE '%(2026-03-03%'
+    OR file_name LIKE '%(2026-03-04%'
+    OR file_name LIKE '%(2026-03-05%'
+    OR file_name LIKE '%(2026-03-06%'
+    OR file_name LIKE '%(2026-03-07%'
+    OR file_name LIKE '%(2026-03-08%'
+    OR file_name LIKE '%(2026-03-09%'
+    OR file_name LIKE '%(2026-03-10%'
+    OR file_name LIKE '%(2026-03-11%'
+    OR file_name LIKE '%(2026-03-12%'
+    OR file_name LIKE '%(2026-03-13%'
+    OR file_name LIKE '%(2026-03-14%'
+    OR file_name LIKE '%(2026-03-15%'
+    OR file_name LIKE '%(2026-03-16%'
+  );
+```
 
-### Adicionar parâmetro `forceFramework` em `reanalyze-call/index.ts`
+### 2. Atualizar `drive_last_sync` do Deyvison
+Setar a data de última sincronização para `2026-03-17T00:00:00.000Z`, garantindo que futuras sincronizações automáticas não puxem arquivos anteriores:
 
-1. Aceitar campo opcional `forceFramework` no body da requisição
-2. Quando presente, adicionar instrução explícita ao prompt: _"OBRIGATÓRIO: Classifique esta call como [framework]. Analise todas as etapas sob a perspectiva deste framework."_
-3. Essa instrução é adicionada **após** as `frameworkPriorityInstructions`, sobrescrevendo qualquer prioridade
-4. Para transcrições grandes (delegadas ao `analyze-call`), passar o `forceFramework` no body do fetch interno — precisará também adicionar suporte em `analyze-call/index.ts`
+```sql
+UPDATE profiles
+SET drive_last_sync = '2026-03-17T00:00:00.000Z'
+WHERE user_id = '94e25a6d-8016-4b4c-b842-e8fefe0435f9';
+```
 
-### Adicionar suporte em `analyze-call/index.ts`
-
-1. Aceitar campo opcional `forceFramework` no body
-2. Quando presente, injetar a mesma instrução obrigatória no prompt de análise de cada chunk
-
-### Após deploy
-
-Chamar `reanalyze-call` com `{ callId: "40584ecf-...", forceFramework: "Implementação de IA (NextTrack)" }` para processar a call.
-
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/reanalyze-call/index.ts` | Aceitar `forceFramework`, injetar no prompt e passar para `analyze-call` |
-| `supabase/functions/analyze-call/index.ts` | Aceitar `forceFramework`, injetar no prompt dos chunks |
+### Resultado esperado
+- Apenas arquivos de 17/03 em diante permanecerão na fila pendente
+- Sincronizações futuras respeitarão a data mínima de 17/03
+- Nenhuma alteração de código necessária — apenas dados
 
