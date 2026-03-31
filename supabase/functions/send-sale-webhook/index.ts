@@ -101,11 +101,8 @@ Deno.serve(async (req) => {
         product_offered: client.product_offered,
       },
       sale: {
-        sale_value: client.sale_value,
-        entry_value: client.entry_value,
         sold_at: client.sold_at,
         contract_validity: client.contract_validity,
-        negotiation_notes: client.negotiation_notes,
         sale_notes: client.sale_notes,
       },
       closer_name: closerProfile?.full_name || null,
