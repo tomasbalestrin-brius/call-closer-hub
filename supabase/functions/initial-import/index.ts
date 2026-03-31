@@ -182,7 +182,7 @@ serve(async (req) => {
     );
 
     // Fixed minimum import date: February 2026
-    const MIN_IMPORT_DATE = '2026-02-01T00:00:00.000Z';
+    const MIN_IMPORT_DATE = '2026-03-17T00:00:00.000Z';
     
     // Use drive_last_sync if it's later than MIN_IMPORT_DATE (e.g. Deyvison starts from 17/03)
     const lastSync = profile.drive_last_sync ? new Date(profile.drive_last_sync).toISOString() : null;
