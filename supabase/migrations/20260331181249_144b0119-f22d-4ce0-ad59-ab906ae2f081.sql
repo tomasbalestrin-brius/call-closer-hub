@@ -1,0 +1,1 @@
+INSERT INTO squad_members (squad_id, user_id) VALUES ('b16021cf-6a4c-499e-956d-9ba63b1e121c', '94e25a6d-8016-4b4c-b842-e8fefe0435f9');
