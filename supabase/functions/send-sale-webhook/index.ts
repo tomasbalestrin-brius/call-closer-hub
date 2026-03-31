@@ -112,9 +112,30 @@ Deno.serve(async (req) => {
       transcription: call?.transcription || null,
     };
 
-    // Send to all active webhooks
+    // Filter webhooks by product_filter (if configured)
+    const matchingWebhooks = webhooks.filter((webhook) => {
+      // If no product_filter, send to all products
+      if (!webhook.product_filter || webhook.product_filter.length === 0) {
+        return true;
+      }
+      // Check if client's product matches any filter (case-insensitive)
+      const clientProduct = (client.product_offered || "").toLowerCase();
+      return webhook.product_filter.some(
+        (filter: string) => clientProduct.includes(filter.toLowerCase())
+      );
+    });
+
+    if (matchingWebhooks.length === 0) {
+      console.log(`No webhooks match product: ${client.product_offered}`);
+      return new Response(
+        JSON.stringify({ message: "No webhooks match product filter", product: client.product_offered }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Send to matching webhooks
     const results = await Promise.allSettled(
-      webhooks.map(async (webhook) => {
+      matchingWebhooks.map(async (webhook) => {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
           ...(webhook.headers || {}),

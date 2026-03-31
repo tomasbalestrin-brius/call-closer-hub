@@ -1,0 +1,1 @@
+ALTER TABLE public.webhook_configs ADD COLUMN product_filter text[] DEFAULT NULL;

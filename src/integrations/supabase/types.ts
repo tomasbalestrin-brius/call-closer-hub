@@ -1754,6 +1754,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          product_filter: string[] | null
           updated_at: string
           url: string
         }
@@ -1765,6 +1766,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          product_filter?: string[] | null
           updated_at?: string
           url: string
         }
@@ -1776,6 +1778,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          product_filter?: string[] | null
           updated_at?: string
           url?: string
         }
