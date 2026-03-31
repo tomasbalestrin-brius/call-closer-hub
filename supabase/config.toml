@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.admin-update-email]
 verify_jwt = false
+
+[functions.send-sale-webhook]
+verify_jwt = false
