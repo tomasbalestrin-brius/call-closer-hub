@@ -162,7 +162,7 @@ serve(async (req) => {
     // Get user profile with Google tokens
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("user_id, google_access_token, google_refresh_token, google_token_expires_at, drive_folder_id")
+      .select("user_id, google_access_token, google_refresh_token, google_token_expires_at, drive_folder_id, drive_last_sync")
       .eq("user_id", userId)
       .single();
 
