@@ -63,17 +63,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch the closer's profile
+    // Fetch closer name only
     const { data: closerProfile } = await supabase
       .from("profiles")
-      .select("full_name, phone, google_email")
+      .select("full_name")
       .eq("user_id", client.closer_id)
       .single();
 
-    // Fetch the most recent call linked to this client (with transcription)
+    // Fetch only the transcription from the most recent call
     const { data: call } = await supabase
       .from("calls")
-      .select("*")
+      .select("transcription")
       .eq("client_id", client_id)
       .is("deleted_at", null)
       .order("call_date", { ascending: false })
@@ -108,31 +108,8 @@ Deno.serve(async (req) => {
         negotiation_notes: client.negotiation_notes,
         sale_notes: client.sale_notes,
       },
-      closer: {
-        id: client.closer_id,
-        name: closerProfile?.full_name || null,
-        phone: closerProfile?.phone || null,
-        email: closerProfile?.google_email || null,
-      },
-      call: call
-        ? {
-            id: call.id,
-            call_date: call.call_date,
-            call_time: call.call_time,
-            duration_minutes: call.duration_minutes,
-            score: call.score,
-            status: call.status,
-            ai_summary: call.ai_summary,
-            call_conclusion: call.call_conclusion,
-            lead_classification: call.lead_classification,
-            closer_classification: call.closer_classification,
-            consciousness_level: call.consciousness_level,
-            main_errors: call.main_errors,
-            main_wins: call.main_wins,
-            loss_point: call.loss_point,
-            transcription: call.transcription,
-          }
-        : null,
+      closer_name: closerProfile?.full_name || null,
+      transcription: call?.transcription || null,
     };
 
     // Send to all active webhooks
