@@ -8,6 +8,7 @@ interface UserRoleContextType {
   isAdmin: boolean;
   isLeader: boolean;
   isFinanceiro: boolean;
+  isIntensivo: boolean;
   loading: boolean;
 }
 
