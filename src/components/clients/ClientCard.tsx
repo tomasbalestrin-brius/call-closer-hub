@@ -110,6 +110,15 @@ const ClientCardInner = memo(function ClientCard({ client, lastCallDate, onClick
           </div>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
+          {/* Origin Closer Badge */}
+          {(client as any).origin_closer_name && (
+            <div className="flex items-center gap-1 pb-1">
+              <Badge variant="secondary" className="text-xs gap-1 font-medium">
+                <UserCircle className="w-3 h-3" />
+                Closer: {(client as any).origin_closer_name}
+              </Badge>
+            </div>
+          )}
           {/* Datas */}
           <div className="flex items-center gap-3 text-xs border-b border-border/50 pb-2">
             <div className="flex items-center gap-1" title="Data de entrada no CRM">

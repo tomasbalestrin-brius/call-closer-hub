@@ -123,7 +123,7 @@ export default function Clients() {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
-          {(isAdmin || isLeader) && closers.length > 0 && (
+          {!isIntensivo && (isAdmin || isLeader) && closers.length > 0 && (
             <Select value={selectedCloserId || "mine"} onValueChange={(value) => setSelectedCloserId(value === "mine" ? null : value)}>
               <SelectTrigger className="w-[220px]">
                 <User className="w-4 h-4 mr-2 text-muted-foreground" />
