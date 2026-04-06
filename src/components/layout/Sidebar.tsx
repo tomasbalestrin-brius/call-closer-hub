@@ -38,7 +38,15 @@ const baseNavigation = [
 
 const closerOnlyItems = ['/clients', '/intensivo-crm'];
 
-const getBaseNavigation = (isAdmin: boolean) => {
+const intensivoNavigation = [
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'CRM Calls', href: '/clients', icon: Users },
+  { name: 'Chat', href: '/chat', icon: MessageCircle },
+  { name: 'Notificações', href: '/notifications', icon: Bell },
+];
+
+const getBaseNavigation = (isAdmin: boolean, isIntensivo: boolean) => {
+  if (isIntensivo) return intensivoNavigation;
   if (isAdmin) {
     return baseNavigation.filter(item => !closerOnlyItems.includes(item.href));
   }
