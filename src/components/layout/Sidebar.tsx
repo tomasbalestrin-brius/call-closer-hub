@@ -13,7 +13,8 @@ import {
   Shield,
   BarChart3,
   Briefcase,
-  Flame
+  Flame,
+  MessageCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
