@@ -26,7 +26,7 @@ interface ClientWithLastCall extends Client {
   lastCallDate?: string | null;
 }
 
-const CLIENTS_SELECT = 'id, closer_id, name, email, phone, company, niche, status, source, revenue, has_partner, main_difficulty, main_pain, notes, negotiation_notes, sale_notes, entry_value, sale_value, followup_date, contract_validity, is_sold, sold_at, is_from_indication, indication_source_id, is_super_hot, product_offered, sdr_name, funnel_source, status_changed_at, created_at, updated_at, instagram, data_completed_at, name_normalized';
+const CLIENTS_SELECT = 'id, closer_id, name, email, phone, company, niche, status, source, revenue, has_partner, main_difficulty, main_pain, notes, negotiation_notes, sale_notes, entry_value, sale_value, followup_date, contract_validity, is_sold, sold_at, is_from_indication, indication_source_id, is_super_hot, product_offered, sdr_name, funnel_source, status_changed_at, created_at, updated_at, instagram, data_completed_at, name_normalized, origin_closer_name';
 
 export default function Clients() {
   const { user } = useAuth();
