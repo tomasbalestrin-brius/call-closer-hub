@@ -159,6 +159,9 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
   const [clientForSale, setClientForSale] = useState<ClientWithLastCall | null>(null);
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
   const { settings, getColumnSettings, fetchSettings } = useColumnSettings();
+  const { isIntensivo } = useUserPermissions();
+
+  const columns = isIntensivo ? INTENSIVO_COLUMNS : KANBAN_COLUMNS;
 
   // Get viewport ref for auto-scroll
   useEffect(() => {
