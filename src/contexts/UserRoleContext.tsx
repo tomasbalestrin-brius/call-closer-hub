@@ -65,6 +65,7 @@ export function UserRoleProvider({ children }: { children: ReactNode }) {
       setIsAdmin(false);
       setIsLeader(false);
       setIsFinanceiro(false);
+      setIsIntensivo(false);
     } finally {
       setLoading(false);
     }
