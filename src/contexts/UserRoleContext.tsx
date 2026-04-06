@@ -58,6 +58,7 @@ export function UserRoleProvider({ children }: { children: ReactNode }) {
       setIsAdmin(userRole === 'admin');
       setIsLeader(userRole === 'lider');
       setIsFinanceiro(userRole === 'financeiro');
+      setIsIntensivo(userRole === 'intensivo');
     } catch (error) {
       console.error('Error fetching role:', error);
       setRole('closer');
