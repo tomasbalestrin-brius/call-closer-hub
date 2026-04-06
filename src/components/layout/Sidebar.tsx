@@ -103,14 +103,14 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { user, signOut } = useAuth();
-  const { isAdmin, isLeader, isFinanceiro } = useUserRole();
+  const { isAdmin, isLeader, isFinanceiro, isIntensivo } = useUserRole();
   const queryClient = useQueryClient();
   const { totalUnread } = useConversations();
 
   const navigation = [
-    ...getBaseNavigation(isAdmin),
-    ...(isAdmin || isLeader ? leaderNavigation : []),
-    ...(isAdmin || isFinanceiro ? adminNavigation : []),
+    ...getBaseNavigation(isAdmin, isIntensivo),
+    ...(!isIntensivo && (isAdmin || isLeader) ? leaderNavigation : []),
+    ...(!isIntensivo && (isAdmin || isFinanceiro) ? adminNavigation : []),
   ];
 
   const handleSignOut = async () => {

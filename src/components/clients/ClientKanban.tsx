@@ -359,7 +359,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
 
       {/* Column Settings Dialog */}
       {editingColumn && (() => {
-        const column = KANBAN_COLUMNS.find(c => c.id === editingColumn);
+        const column = columns.find(c => c.id === editingColumn);
         if (!column) return null;
         return (
           <ColumnSettingsDialog
