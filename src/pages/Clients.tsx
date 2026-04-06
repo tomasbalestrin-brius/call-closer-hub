@@ -30,7 +30,7 @@ const CLIENTS_SELECT = 'id, closer_id, name, email, phone, company, niche, statu
 
 export default function Clients() {
   const { user } = useAuth();
-  const { isAdmin, isLeader, loading: permissionsLoading } = useUserPermissions();
+  const { isAdmin, isLeader, isIntensivo, loading: permissionsLoading } = useUserPermissions();
   const queryClient = useQueryClient();
   const { data: closers = [] } = useClosersList();
   const [searchQuery, setSearchQuery] = useState('');
