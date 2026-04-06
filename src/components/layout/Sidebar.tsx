@@ -165,7 +165,14 @@ export default function Sidebar() {
                     : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
                 )}
               >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
+                <div className="relative">
+                  <item.icon className="w-5 h-5 flex-shrink-0" />
+                  {item.href === '/chat' && totalUnread > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center px-1">
+                      {totalUnread > 99 ? '99+' : totalUnread}
+                    </span>
+                  )}
+                </div>
                 {!collapsed && <span>{item.name}</span>}
               </NavLink>
             );

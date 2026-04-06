@@ -84,6 +84,7 @@ const App = () => (
             <Route path="/intensivo-crm" element={<IntensivoCRM />} />
             <Route path="/google-drive-callback" element={<GoogleDriveCallback />} />
             <Route path="/install" element={<Install />} />
+            <Route path="/chat" element={<Chat />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
