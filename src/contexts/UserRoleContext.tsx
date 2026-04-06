@@ -21,6 +21,7 @@ export function UserRoleProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLeader, setIsLeader] = useState(false);
   const [isFinanceiro, setIsFinanceiro] = useState(false);
+  const [isIntensivo, setIsIntensivo] = useState(false);
   const [lastFetchedUserId, setLastFetchedUserId] = useState<string | null>(null);
 
   useEffect(() => {
