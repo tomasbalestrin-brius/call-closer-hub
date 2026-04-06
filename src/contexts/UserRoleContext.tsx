@@ -72,7 +72,7 @@ export function UserRoleProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <UserRoleContext.Provider value={{ role, isAdmin, isLeader, isFinanceiro, loading }}>
+    <UserRoleContext.Provider value={{ role, isAdmin, isLeader, isFinanceiro, isIntensivo, loading }}>
       {children}
     </UserRoleContext.Provider>
   );

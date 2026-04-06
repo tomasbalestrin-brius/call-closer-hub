@@ -1,7 +1,7 @@
 import { useUserRole } from './useUserRole';
 
 export function useUserPermissions() {
-  const { role, isAdmin, isLeader, isFinanceiro, loading } = useUserRole();
+  const { role, isAdmin, isLeader, isFinanceiro, isIntensivo, loading } = useUserRole();
   
   const canDeleteCalls = isAdmin || isLeader;
   const canMergeCalls = true; // Todos podem juntar suas próprias calls (RLS protege)
@@ -15,6 +15,7 @@ export function useUserPermissions() {
     isAdmin, 
     isLeader,
     isFinanceiro,
+    isIntensivo,
     canDeleteCalls, 
     canMergeCalls, 
     canManageSquads, 
