@@ -22,6 +22,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   lider: 'Líder',
   closer: 'Closer',
   financeiro: 'Financeiro',
+  intensivo: 'Intensivo',
 };
 
 export function UserRoleSelect({ userId, currentRole, onRoleChange }: UserRoleSelectProps) {

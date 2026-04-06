@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useColumnSettings } from '@/hooks/useColumnSettings';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { 
   Phone, 
   RefreshCw, 
@@ -19,7 +20,12 @@ import {
   CheckCircle2, 
   XCircle, 
   Archive,
-  Settings
+  Settings,
+  Send,
+  Mail,
+  FileText,
+  Ticket,
+  UserCheck
 } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -38,6 +44,13 @@ const KANBAN_COLUMNS = [
     subtitle: null,
     icon: RefreshCw,
     color: 'bg-orange-500/10 border-orange-500/30 text-orange-600' 
+  },
+  { 
+    id: 'intensivo_carlos', 
+    title: 'Intensivo Carlos', 
+    subtitle: 'Enviar para Carlos',
+    icon: Send,
+    color: 'bg-pink-500/10 border-pink-500/30 text-pink-600' 
   },
   { 
     id: 'pos_call_0_2', 
@@ -97,6 +110,37 @@ const KANBAN_COLUMNS = [
   },
 ];
 
+const INTENSIVO_COLUMNS = [
+  { 
+    id: 'enviar_convite_intensivo', 
+    title: 'Enviar Convite', 
+    subtitle: 'Para o intensivo',
+    icon: Mail,
+    color: 'bg-blue-500/10 border-blue-500/30 text-blue-600' 
+  },
+  { 
+    id: 'formulario_preenchido', 
+    title: 'Formulário Preenchido', 
+    subtitle: null,
+    icon: FileText,
+    color: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-600' 
+  },
+  { 
+    id: 'retirado_ingresso', 
+    title: 'Retirado o Ingresso', 
+    subtitle: null,
+    icon: Ticket,
+    color: 'bg-green-500/10 border-green-500/30 text-green-600' 
+  },
+  { 
+    id: 'confirmado_intensivo', 
+    title: 'Confirmado', 
+    subtitle: null,
+    icon: UserCheck,
+    color: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600' 
+  },
+];
+
 interface ClientWithLastCall extends Client {
   lastCallDate?: string | null;
 }
@@ -115,6 +159,9 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
   const [clientForSale, setClientForSale] = useState<ClientWithLastCall | null>(null);
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
   const { settings, getColumnSettings, fetchSettings } = useColumnSettings();
+  const { isIntensivo } = useUserPermissions();
+
+  const columns = isIntensivo ? INTENSIVO_COLUMNS : KANBAN_COLUMNS;
 
   // Get viewport ref for auto-scroll
   useEffect(() => {
@@ -209,7 +256,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
     <>
       <ScrollArea className="w-full pb-4 client-kanban-scroll">
         <div className="flex gap-4 min-h-[600px] pb-4">
-          {KANBAN_COLUMNS.map((column) => {
+          {columns.map((column) => {
             const columnClients = getClientsForColumn(column.id);
             const Icon = column.icon;
             
@@ -312,7 +359,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
 
       {/* Column Settings Dialog */}
       {editingColumn && (() => {
-        const column = KANBAN_COLUMNS.find(c => c.id === editingColumn);
+        const column = columns.find(c => c.id === editingColumn);
         if (!column) return null;
         return (
           <ColumnSettingsDialog

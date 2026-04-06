@@ -38,7 +38,15 @@ const baseNavigation = [
 
 const closerOnlyItems = ['/clients', '/intensivo-crm'];
 
-const getBaseNavigation = (isAdmin: boolean) => {
+const intensivoNavigation = [
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'CRM Calls', href: '/clients', icon: Users },
+  { name: 'Chat', href: '/chat', icon: MessageCircle },
+  { name: 'Notificações', href: '/notifications', icon: Bell },
+];
+
+const getBaseNavigation = (isAdmin: boolean, isIntensivo: boolean) => {
+  if (isIntensivo) return intensivoNavigation;
   if (isAdmin) {
     return baseNavigation.filter(item => !closerOnlyItems.includes(item.href));
   }
@@ -95,14 +103,14 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { user, signOut } = useAuth();
-  const { isAdmin, isLeader, isFinanceiro } = useUserRole();
+  const { isAdmin, isLeader, isFinanceiro, isIntensivo } = useUserRole();
   const queryClient = useQueryClient();
   const { totalUnread } = useConversations();
 
   const navigation = [
-    ...getBaseNavigation(isAdmin),
-    ...(isAdmin || isLeader ? leaderNavigation : []),
-    ...(isAdmin || isFinanceiro ? adminNavigation : []),
+    ...getBaseNavigation(isAdmin, isIntensivo),
+    ...(!isIntensivo && (isAdmin || isLeader) ? leaderNavigation : []),
+    ...(!isIntensivo && (isAdmin || isFinanceiro) ? adminNavigation : []),
   ];
 
   const handleSignOut = async () => {
