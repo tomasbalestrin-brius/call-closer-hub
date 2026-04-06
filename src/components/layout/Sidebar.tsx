@@ -31,6 +31,7 @@ const baseNavigation = [
   { name: 'CRM Calls', href: '/clients', icon: Users },
   { name: 'CRM Intensivo', href: '/intensivo-crm', icon: Flame },
   { name: 'Carteira', href: '/portfolio', icon: Briefcase },
+  { name: 'Chat', href: '/chat', icon: MessageCircle },
   { name: 'Notificações', href: '/notifications', icon: Bell },
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
