@@ -97,6 +97,7 @@ export default function Sidebar() {
   const { user, signOut } = useAuth();
   const { isAdmin, isLeader, isFinanceiro } = useUserRole();
   const queryClient = useQueryClient();
+  const { totalUnread } = useConversations();
 
   const navigation = [
     ...getBaseNavigation(isAdmin),
