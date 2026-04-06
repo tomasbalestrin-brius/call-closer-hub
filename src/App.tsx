@@ -26,6 +26,7 @@ const Portfolio = lazy(() => import("./pages/Portfolio"));
 const IntensivoCRM = lazy(() => import("./pages/IntensivoCRM"));
 const GoogleDriveCallback = lazy(() => import("./pages/GoogleDriveCallback"));
 const Install = lazy(() => import("./pages/Install"));
+const Chat = lazy(() => import("./pages/Chat"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
