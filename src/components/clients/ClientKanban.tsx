@@ -256,7 +256,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
     <>
       <ScrollArea className="w-full pb-4 client-kanban-scroll">
         <div className="flex gap-4 min-h-[600px] pb-4">
-          {KANBAN_COLUMNS.map((column) => {
+          {columns.map((column) => {
             const columnClients = getClientsForColumn(column.id);
             const Icon = column.icon;
             
