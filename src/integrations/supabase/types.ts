@@ -637,6 +637,7 @@ export type Database = {
           negotiation_notes: string | null
           niche: string | null
           notes: string | null
+          origin_closer_name: string | null
           phone: string | null
           product_offered: string | null
           repitch_overdue_notification_sent: boolean | null
@@ -675,6 +676,7 @@ export type Database = {
           negotiation_notes?: string | null
           niche?: string | null
           notes?: string | null
+          origin_closer_name?: string | null
           phone?: string | null
           product_offered?: string | null
           repitch_overdue_notification_sent?: boolean | null
@@ -713,6 +715,7 @@ export type Database = {
           negotiation_notes?: string | null
           niche?: string | null
           notes?: string | null
+          origin_closer_name?: string | null
           phone?: string | null
           product_offered?: string | null
           repitch_overdue_notification_sent?: boolean | null
@@ -779,6 +782,7 @@ export type Database = {
           negotiation_notes: string | null
           niche: string | null
           notes: string | null
+          origin_closer_name: string | null
           phone: string | null
           product_offered: string | null
           repitch_overdue_notification_sent: boolean | null
@@ -820,6 +824,7 @@ export type Database = {
           negotiation_notes?: string | null
           niche?: string | null
           notes?: string | null
+          origin_closer_name?: string | null
           phone?: string | null
           product_offered?: string | null
           repitch_overdue_notification_sent?: boolean | null
@@ -861,6 +866,7 @@ export type Database = {
           negotiation_notes?: string | null
           niche?: string | null
           notes?: string | null
+          origin_closer_name?: string | null
           phone?: string | null
           product_offered?: string | null
           repitch_overdue_notification_sent?: boolean | null
@@ -2134,7 +2140,7 @@ export type Database = {
       lead_classification: "pos_venda" | "follow"
       student_activity_type: "intensivo" | "mentoria" | "evento"
       ticket_type: "29_90" | "12k" | "80k"
-      user_role: "admin" | "closer" | "lider" | "financeiro"
+      user_role: "admin" | "closer" | "lider" | "financeiro" | "intensivo"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2293,7 +2299,7 @@ export const Constants = {
       lead_classification: ["pos_venda", "follow"],
       student_activity_type: ["intensivo", "mentoria", "evento"],
       ticket_type: ["29_90", "12k", "80k"],
-      user_role: ["admin", "closer", "lider", "financeiro"],
+      user_role: ["admin", "closer", "lider", "financeiro", "intensivo"],
     },
   },
 } as const
