@@ -1,55 +1,46 @@
 
 
-# Limpar importação do Deyvison — apenas arquivos de 17/03 em diante
+# Impacto da Integração WhatsApp na Estrutura Atual
 
-## Situação atual
-- Deyvison (user_id: `94e25a6d-8016-4b4c-b842-e8fefe0435f9`) tem **92 arquivos pendentes** na fila de importação
-- Muitos são de fevereiro e início de março (antes de 17/03)
-- Nenhuma call foi processada ainda (todos com status `pending`)
+## Resumo
 
-## Plano de ação
+A integração é **aditiva** — não altera funcionalidades existentes, apenas adiciona novos módulos. O impacto no código atual é mínimo.
 
-### 1. Remover arquivos antigos da fila (migration SQL)
-Deletar da tabela `imported_files` todos os registros pendentes do Deyvison cujo nome contenha datas anteriores a 17/03/2026. Os nomes seguem o padrão `(2026-MM-DD ...)`, então filtraremos por:
-- Arquivos com `2026-02-` no nome (fevereiro)
-- Arquivos com datas de março antes do dia 17 (`2026-03-0`, `2026-03-1` seguido de 0-6)
+## O que NÃO muda
 
-```sql
-DELETE FROM imported_files
-WHERE user_id = '94e25a6d-8016-4b4c-b842-e8fefe0435f9'
-  AND status = 'pending'
-  AND (
-    file_name LIKE '%(2026-02-%'
-    OR file_name LIKE '%(2026-03-01%'
-    OR file_name LIKE '%(2026-03-02%'
-    OR file_name LIKE '%(2026-03-03%'
-    OR file_name LIKE '%(2026-03-04%'
-    OR file_name LIKE '%(2026-03-05%'
-    OR file_name LIKE '%(2026-03-06%'
-    OR file_name LIKE '%(2026-03-07%'
-    OR file_name LIKE '%(2026-03-08%'
-    OR file_name LIKE '%(2026-03-09%'
-    OR file_name LIKE '%(2026-03-10%'
-    OR file_name LIKE '%(2026-03-11%'
-    OR file_name LIKE '%(2026-03-12%'
-    OR file_name LIKE '%(2026-03-13%'
-    OR file_name LIKE '%(2026-03-14%'
-    OR file_name LIKE '%(2026-03-15%'
-    OR file_name LIKE '%(2026-03-16%'
-  );
-```
+- Dashboard, Calls, CRM, Portfolio, Intensivo — permanecem intactos
+- Autenticação, roles, RLS existentes — sem alteração
+- Edge functions atuais — sem modificação
+- Tipos existentes em `src/types/index.ts` — sem quebra
 
-### 2. Atualizar `drive_last_sync` do Deyvison
-Setar a data de última sincronização para `2026-03-17T00:00:00.000Z`, garantindo que futuras sincronizações automáticas não puxem arquivos anteriores:
+## O que é ADICIONADO (novo)
 
-```sql
-UPDATE profiles
-SET drive_last_sync = '2026-03-17T00:00:00.000Z'
-WHERE user_id = '94e25a6d-8016-4b4c-b842-e8fefe0435f9';
-```
+| Camada | Itens novos |
+|--------|------------|
+| **Banco de dados** | 2 tabelas novas (`whatsapp_conversations`, `whatsapp_messages`) + Realtime habilitado nelas |
+| **Edge Functions** | 2 novas (`whatsapp-send`, `whatsapp-webhook`) |
+| **Secrets** | 3 novos (`NEXTTRACK_JWT_TOKEN`, `NEXTTRACK_INSTANCE_ID`, `NEXTTRACK_API_BASE`) |
+| **Páginas** | 1 nova rota `/chat` com componente `Chat.tsx` |
+| **Componentes** | ~5 novos em `src/components/chat/` (layout, lista, mensagens, input, header) |
+| **Hooks** | 1-2 novos (`useWhatsAppMessages`, `useConversations`) |
+| **Types** | Novos tipos de WhatsApp (podem ficar em `src/types/whatsapp.ts`) |
 
-### Resultado esperado
-- Apenas arquivos de 17/03 em diante permanecerão na fila pendente
-- Sincronizações futuras respeitarão a data mínima de 17/03
-- Nenhuma alteração de código necessária — apenas dados
+## O que é MODIFICADO (pequenas alterações)
+
+Apenas **3 arquivos existentes** precisam de edição mínima:
+
+1. **`src/App.tsx`** — Adicionar 1 rota: `<Route path="/chat" element={<Chat />} />`
+2. **`src/components/layout/Sidebar.tsx`** — Adicionar 1 item no menu de navegação (ícone MessageCircle, link `/chat`) + badge de não lidas
+3. **`src/components/clients/ClientCardMenu.tsx`** — Trocar o link `wa.me/...` por navegação interna para `/chat?phone=...` (opcional, pode ser feito na Fase 3)
+
+## Riscos
+
+- **Nenhum risco de quebra** — são adições isoladas
+- **Performance**: o Realtime adiciona 2 subscriptions, mas é leve
+- **Bundle size**: a nova página é lazy-loaded, não impacta carregamento inicial
+
+## Dependências externas
+
+- API NextTrack precisa estar acessível e com webhook configurado
+- Tokens da NextTrack precisam ser mantidos válidos
 
