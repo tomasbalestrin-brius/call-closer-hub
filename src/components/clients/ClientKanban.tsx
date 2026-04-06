@@ -20,7 +20,12 @@ import {
   CheckCircle2, 
   XCircle, 
   Archive,
-  Settings
+  Settings,
+  Send,
+  Mail,
+  FileText,
+  Ticket,
+  UserCheck
 } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
