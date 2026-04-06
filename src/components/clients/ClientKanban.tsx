@@ -46,6 +46,13 @@ const KANBAN_COLUMNS = [
     color: 'bg-orange-500/10 border-orange-500/30 text-orange-600' 
   },
   { 
+    id: 'intensivo_carlos', 
+    title: 'Intensivo Carlos', 
+    subtitle: 'Enviar para Carlos',
+    icon: Send,
+    color: 'bg-pink-500/10 border-pink-500/30 text-pink-600' 
+  },
+  { 
     id: 'pos_call_0_2', 
     title: 'Pós Call 0-2 dias', 
     subtitle: 'Depoimentos e Conexão',
@@ -100,6 +107,37 @@ const KANBAN_COLUMNS = [
     subtitle: 'Carterização',
     icon: Archive,
     color: 'bg-slate-500/10 border-slate-500/30 text-slate-600' 
+  },
+];
+
+const INTENSIVO_COLUMNS = [
+  { 
+    id: 'enviar_convite_intensivo', 
+    title: 'Enviar Convite', 
+    subtitle: 'Para o intensivo',
+    icon: Mail,
+    color: 'bg-blue-500/10 border-blue-500/30 text-blue-600' 
+  },
+  { 
+    id: 'formulario_preenchido', 
+    title: 'Formulário Preenchido', 
+    subtitle: null,
+    icon: FileText,
+    color: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-600' 
+  },
+  { 
+    id: 'retirado_ingresso', 
+    title: 'Retirado o Ingresso', 
+    subtitle: null,
+    icon: Ticket,
+    color: 'bg-green-500/10 border-green-500/30 text-green-600' 
+  },
+  { 
+    id: 'confirmado_intensivo', 
+    title: 'Confirmado', 
+    subtitle: null,
+    icon: UserCheck,
+    color: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600' 
   },
 ];
 
