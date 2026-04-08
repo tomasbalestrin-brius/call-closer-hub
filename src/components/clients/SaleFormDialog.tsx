@@ -68,6 +68,11 @@ export default function SaleFormDialog({
 
       if (error) throw error;
 
+      // Fire sale webhook asynchronously (don't block UI)
+      supabase.functions.invoke('send-sale-webhook', {
+        body: { client_id: client.id },
+      }).catch((err) => console.warn('Webhook error (non-blocking):', err));
+
       toast.success('Venda registrada!');
       onOpenChange(false);
       onSaleUpdated();
