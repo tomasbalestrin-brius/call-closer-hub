@@ -77,6 +77,10 @@ export default function IntensivoCRM() {
     return <Navigate to="/auth" replace />;
   }
 
+  if (!roleLoading && !isIntensivo && !isAdminRole) {
+    return <Navigate to="/" replace />;
+  }
+
   // Error state handling
   if (editionsError || leadsError) {
     return (
