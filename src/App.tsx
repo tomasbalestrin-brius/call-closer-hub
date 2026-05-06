@@ -24,6 +24,7 @@ const SquadReports = lazy(() => import("./pages/SquadReports"));
 const SquadView = lazy(() => import("./pages/SquadView"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
 const IntensivoCRM = lazy(() => import("./pages/IntensivoCRM"));
+const SalesCRM = lazy(() => import("./pages/SalesCRM"));
 const GoogleDriveCallback = lazy(() => import("./pages/GoogleDriveCallback"));
 const Install = lazy(() => import("./pages/Install"));
 const Chat = lazy(() => import("./pages/Chat"));
@@ -82,6 +83,7 @@ const App = () => (
             <Route path="/squad-view" element={<SquadView />} />
             <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/intensivo-crm" element={<IntensivoCRM />} />
+            <Route path="/sales-crm" element={<SalesCRM />} />
             <Route path="/google-drive-callback" element={<GoogleDriveCallback />} />
             <Route path="/install" element={<Install />} />
             <Route path="/chat" element={<Chat />} />

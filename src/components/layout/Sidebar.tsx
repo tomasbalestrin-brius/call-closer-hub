@@ -14,7 +14,8 @@ import {
   BarChart3,
   Briefcase,
   Flame,
-  MessageCircle
+  MessageCircle,
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,6 +30,7 @@ const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Calls', href: '/calls', icon: Phone },
   { name: 'CRM Calls', href: '/clients', icon: Users },
+  { name: 'CRM Vendas', href: '/sales-crm', icon: TrendingUp },
   { name: 'CRM Intensivo', href: '/intensivo-crm', icon: Flame },
   { name: 'Carteira', href: '/portfolio', icon: Briefcase },
   { name: 'Chat', href: '/chat', icon: MessageCircle },
