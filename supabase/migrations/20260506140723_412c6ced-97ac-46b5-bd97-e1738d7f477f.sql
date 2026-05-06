@@ -1,12 +1,3 @@
-## Plano: Duplicar lead para CRM Intensivo ao chegar em "Pós Call 16-21 dias"
-
-### Comportamento
-Quando um `client` tiver `status` alterado para `pos_call_16_21`, copiar o lead para `intensive_leads` (1ª coluna = `abordagem_inicial`) atribuído ao usuário com role `intensivo` (Carlos). O cartão original permanece no kanban do closer (duplicação, não movimentação).
-
-### Banco de dados
-Criar trigger `AFTER UPDATE` em `public.clients`:
-
-```sql
 CREATE OR REPLACE FUNCTION public.copy_client_to_intensive_leads()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
@@ -20,7 +11,6 @@ BEGIN
     FROM user_roles WHERE role = 'intensivo' LIMIT 1;
     IF v_intensivo_user_id IS NULL THEN RETURN NEW; END IF;
 
-    -- Edição ativa mais próxima (futura) ou a mais recente
     SELECT id INTO v_edition_id
     FROM intensive_editions
     WHERE is_active = true
@@ -28,7 +18,6 @@ BEGIN
     LIMIT 1;
     IF v_edition_id IS NULL THEN RETURN NEW; END IF;
 
-    -- Evita duplicar se já existe lead vindo deste client nessa edição
     IF EXISTS (
       SELECT 1 FROM intensive_leads
       WHERE source_client_id = NEW.id AND edition_id = v_edition_id
@@ -46,19 +35,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_copy_client_to_intensive_leads ON public.clients;
 CREATE TRIGGER trg_copy_client_to_intensive_leads
 AFTER UPDATE OF status ON public.clients
 FOR EACH ROW EXECUTE FUNCTION public.copy_client_to_intensive_leads();
-```
-
-### Casos de borda
-- **Sem usuário com role `intensivo`** → não faz nada (log silencioso).
-- **Sem edição ativa** → não faz nada (Carlos cria edição primeiro).
-- **Já duplicado** → ignora (idempotente via `source_client_id` + `edition_id`).
-- **Original intocado** → trigger não move nem altera o `client` original.
-
-### Frontend
-Nenhuma alteração necessária — o lead aparece automaticamente na 1ª coluna do CRM Intensivo do Carlos via realtime/refetch existente.
-
-### Arquivos
-- 1 migration SQL nova (função + trigger).
