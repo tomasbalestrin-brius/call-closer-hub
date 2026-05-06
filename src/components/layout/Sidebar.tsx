@@ -36,7 +36,7 @@ const baseNavigation = [
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
 
-const closerOnlyItems = ['/clients', '/intensivo-crm'];
+const intensivoOnlyItems = ['/intensivo-crm'];
 
 const intensivoNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
