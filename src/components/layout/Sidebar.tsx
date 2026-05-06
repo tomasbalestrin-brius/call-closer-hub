@@ -36,7 +36,7 @@ const baseNavigation = [
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
 
-const closerOnlyItems = ['/clients', '/intensivo-crm'];
+const intensivoOnlyItems = ['/intensivo-crm'];
 
 const intensivoNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -47,10 +47,8 @@ const intensivoNavigation = [
 
 const getBaseNavigation = (isAdmin: boolean, isIntensivo: boolean) => {
   if (isIntensivo) return intensivoNavigation;
-  if (isAdmin) {
-    return baseNavigation.filter(item => !closerOnlyItems.includes(item.href));
-  }
-  return baseNavigation;
+  // Hide intensivo-only items from non-intensivo users (including admins)
+  return baseNavigation.filter(item => !intensivoOnlyItems.includes(item.href));
 };
 
 const leaderNavigation = [
