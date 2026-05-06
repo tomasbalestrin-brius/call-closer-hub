@@ -1,64 +1,81 @@
-## Plano: Duplicar lead para CRM Intensivo ao chegar em "Pós Call 16-21 dias"
+## Plano: Novo módulo "CRM Vendas"
 
-### Comportamento
-Quando um `client` tiver `status` alterado para `pos_call_16_21`, copiar o lead para `intensive_leads` (1ª coluna = `abordagem_inicial`) atribuído ao usuário com role `intensivo` (Carlos). O cartão original permanece no kanban do closer (duplicação, não movimentação).
+### Objetivo
+Criar uma nova página kanban dedicada ao pós-venda, com 7 colunas, alimentada automaticamente quando um cliente chega em "Venda Realizada" no CRM Calls. A duplicação preserva o cartão original.
+
+### Colunas (na ordem)
+1. Enviar Contrato (`enviar_contrato`)
+2. Contrato Enviado (`contrato_enviado`)
+3. Contrato Assinado (`contrato_assinado`)
+4. Valor Alto para Receber (`valor_alto_receber`)
+5. Pedindo Indicação (`pedindo_indicacao`)
+6. Rede (`rede`)
+7. Venda Realizada (`venda_finalizada`)
 
 ### Banco de dados
-Criar trigger `AFTER UPDATE` em `public.clients`:
+**Nova tabela `sales_pipeline`** (separada de `clients` para não poluir o kanban de calls):
 
 ```sql
-CREATE OR REPLACE FUNCTION public.copy_client_to_intensive_leads()
-RETURNS trigger
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
-AS $$
-DECLARE
-  v_intensivo_user_id uuid;
-  v_edition_id uuid;
-BEGIN
-  IF NEW.status = 'pos_call_16_21' AND (OLD.status IS DISTINCT FROM 'pos_call_16_21') THEN
-    SELECT user_id INTO v_intensivo_user_id
-    FROM user_roles WHERE role = 'intensivo' LIMIT 1;
-    IF v_intensivo_user_id IS NULL THEN RETURN NEW; END IF;
-
-    -- Edição ativa mais próxima (futura) ou a mais recente
-    SELECT id INTO v_edition_id
-    FROM intensive_editions
-    WHERE is_active = true
-    ORDER BY event_date ASC NULLS LAST
-    LIMIT 1;
-    IF v_edition_id IS NULL THEN RETURN NEW; END IF;
-
-    -- Evita duplicar se já existe lead vindo deste client nessa edição
-    IF EXISTS (
-      SELECT 1 FROM intensive_leads
-      WHERE source_client_id = NEW.id AND edition_id = v_edition_id
-    ) THEN RETURN NEW; END IF;
-
-    INSERT INTO intensive_leads (
-      edition_id, closer_id, name, phone, email, company, niche,
-      status, source, source_client_id, lead_temperature
-    ) VALUES (
-      v_edition_id, v_intensivo_user_id, NEW.name, NEW.phone, NEW.email, NEW.company, NEW.niche,
-      'abordagem_inicial', 'crm_calls', NEW.id, 'morno'
-    );
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER trg_copy_client_to_intensive_leads
-AFTER UPDATE OF status ON public.clients
-FOR EACH ROW EXECUTE FUNCTION public.copy_client_to_intensive_leads();
+CREATE TABLE public.sales_pipeline (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  closer_id uuid NOT NULL,
+  name text NOT NULL,
+  phone text,
+  email text,
+  company text,
+  product_offered text,
+  sale_value numeric,
+  entry_value numeric,
+  sold_at timestamptz,
+  status text NOT NULL DEFAULT 'enviar_contrato',
+  notes text,
+  status_changed_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE (client_id)  -- evita duplicação
+);
 ```
 
-### Casos de borda
-- **Sem usuário com role `intensivo`** → não faz nada (log silencioso).
-- **Sem edição ativa** → não faz nada (Carlos cria edição primeiro).
-- **Já duplicado** → ignora (idempotente via `source_client_id` + `edition_id`).
-- **Original intocado** → trigger não move nem altera o `client` original.
+**RLS**:
+- Closer vê/edita os próprios (`closer_id = auth.uid()`)
+- Admin: gerencia todos
+- Financeiro: select/update todos
+
+**Trigger** em `clients` (AFTER UPDATE OF is_sold/status):
+- Quando `is_sold` muda para `true` OU `status` muda para `venda_realizada` → INSERT em `sales_pipeline` (idempotente via UNIQUE).
+
+**Trigger** de `status_changed_at` e `updated_at` na nova tabela.
 
 ### Frontend
-Nenhuma alteração necessária — o lead aparece automaticamente na 1ª coluna do CRM Intensivo do Carlos via realtime/refetch existente.
+
+**Nova rota** `/sales-crm` (lazy) em `App.tsx`.
+
+**Sidebar** (`src/components/layout/Sidebar.tsx`): adicionar item "CRM Vendas" abaixo de "CRM Calls" — visível para closer, admin e financeiro (oculto para `intensivo` e `lider` puro).
+
+**Página `src/pages/SalesCRM.tsx`**: layout análogo ao `Clients.tsx` com header e kanban.
+
+**Componente `src/components/sales/SalesKanban.tsx`**:
+- 7 colunas com ícones/cores próprias
+- Drag & drop entre colunas (atualiza `status` em `sales_pipeline`)
+- Card simples mostrando: nome, valor da venda, produto, telefone
+
+**Hook `src/hooks/useSalesPipeline.ts`**: query + realtime de `sales_pipeline` filtrando por role (admin/financeiro veem todos; closer vê só os seus).
+
+### Casos de borda
+- **Re-duplicação**: bloqueada pelo `UNIQUE(client_id)`.
+- **Closer original deletado**: cascade não é aplicável (referência por uuid; mantém histórico).
+- **Cliente deletado em `clients`**: `ON DELETE CASCADE` remove do pipeline.
+- **Admin/Financeiro**: filtro padrão "Todos os closers"; podem filtrar por closer.
 
 ### Arquivos
-- 1 migration SQL nova (função + trigger).
+| Arquivo | Mudança |
+|---------|---------|
+| Migration SQL | Tabela + RLS + 2 triggers |
+| `src/App.tsx` | Lazy route `/sales-crm` |
+| `src/components/layout/Sidebar.tsx` | Item "CRM Vendas" |
+| `src/pages/SalesCRM.tsx` | Nova página |
+| `src/components/sales/SalesKanban.tsx` | Kanban 7 colunas |
+| `src/components/sales/SalesCard.tsx` | Card simples |
+| `src/hooks/useSalesPipeline.ts` | Fetch + realtime |
+| `src/integrations/supabase/types.ts` | Atualizado automaticamente |

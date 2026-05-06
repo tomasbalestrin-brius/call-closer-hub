@@ -1508,6 +1508,71 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_pipeline: {
+        Row: {
+          client_id: string
+          closer_id: string
+          company: string | null
+          created_at: string
+          email: string | null
+          entry_value: number | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          product_offered: string | null
+          sale_value: number | null
+          sold_at: string | null
+          status: string
+          status_changed_at: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          closer_id: string
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          entry_value?: number | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          product_offered?: string | null
+          sale_value?: number | null
+          sold_at?: string | null
+          status?: string
+          status_changed_at?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          closer_id?: string
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          entry_value?: number | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          product_offered?: string | null
+          sale_value?: number | null
+          sold_at?: string | null
+          status?: string
+          status_changed_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_pipeline_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       squad_members: {
         Row: {
           created_at: string | null
