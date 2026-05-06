@@ -46,13 +46,6 @@ const KANBAN_COLUMNS = [
     color: 'bg-orange-500/10 border-orange-500/30 text-orange-600' 
   },
   { 
-    id: 'intensivo_carlos', 
-    title: 'Intensivo Carlos', 
-    subtitle: 'Enviar para Carlos',
-    icon: Send,
-    color: 'bg-pink-500/10 border-pink-500/30 text-pink-600' 
-  },
-  { 
     id: 'pos_call_0_2', 
     title: 'Pós Call 0-2 dias', 
     subtitle: 'Depoimentos e Conexão',
