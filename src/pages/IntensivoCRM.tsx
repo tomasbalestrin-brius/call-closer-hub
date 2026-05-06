@@ -32,7 +32,7 @@ import { IntensiveKanban } from '@/components/intensivo/IntensiveKanban';
 
 export default function IntensivoCRM() {
   const { user, loading: authLoading } = useAuth();
-  const { canDeleteCalls } = useUserPermissions();
+  const { canDeleteCalls, isAdmin: isAdminRole, isIntensivo, loading: roleLoading } = useUserPermissions();
   const [selectedEditionId, setSelectedEditionId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<IntensiveLeadStatus | 'all'>('all');
