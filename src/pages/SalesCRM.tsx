@@ -19,9 +19,8 @@ export default function SalesCRM() {
     );
   }
   if (!user) return <Navigate to="/auth" replace />;
-  // Permitido: closer (default), admin, financeiro. Bloqueia intensivo e líder puro.
+  // Permitido: closer, admin, financeiro, líder. Bloqueia apenas intensivo.
   if (isIntensivo) return <Navigate to="/" replace />;
-  if (isLeader && !isAdmin && !isFinanceiro) return <Navigate to="/" replace />;
 
   return (
     <MainLayout>

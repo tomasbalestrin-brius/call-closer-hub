@@ -52,8 +52,6 @@ const getBaseNavigation = (isAdmin: boolean, isIntensivo: boolean, isLeader: boo
   if (isIntensivo) return intensivoNavigation;
   return baseNavigation.filter(item => {
     if (intensivoOnlyItems.includes(item.href)) return false;
-    // CRM Vendas: visível para closer, admin, financeiro. Oculto para líder puro.
-    if (item.href === salesCrmRestrictedFromPureLeader && isLeader && !isAdmin && !isFinanceiro) return false;
     return true;
   });
 };
