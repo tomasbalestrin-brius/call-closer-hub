@@ -39,6 +39,7 @@ const baseNavigation = [
 ];
 
 const intensivoOnlyItems = ['/intensivo-crm'];
+const salesCrmRestrictedFromPureLeader = '/sales-crm';
 
 const intensivoNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -47,10 +48,14 @@ const intensivoNavigation = [
   { name: 'Notificações', href: '/notifications', icon: Bell },
 ];
 
-const getBaseNavigation = (isAdmin: boolean, isIntensivo: boolean) => {
+const getBaseNavigation = (isAdmin: boolean, isIntensivo: boolean, isLeader: boolean, isFinanceiro: boolean) => {
   if (isIntensivo) return intensivoNavigation;
-  // Hide intensivo-only items from non-intensivo users (including admins)
-  return baseNavigation.filter(item => !intensivoOnlyItems.includes(item.href));
+  return baseNavigation.filter(item => {
+    if (intensivoOnlyItems.includes(item.href)) return false;
+    // CRM Vendas: visível para closer, admin, financeiro. Oculto para líder puro.
+    if (item.href === salesCrmRestrictedFromPureLeader && isLeader && !isAdmin && !isFinanceiro) return false;
+    return true;
+  });
 };
 
 const leaderNavigation = [
@@ -108,7 +113,7 @@ export default function Sidebar() {
   const { totalUnread } = useConversations();
 
   const navigation = [
-    ...getBaseNavigation(isAdmin, isIntensivo),
+    ...getBaseNavigation(isAdmin, isIntensivo, isLeader, isFinanceiro),
     ...(!isIntensivo && (isAdmin || isLeader) ? leaderNavigation : []),
     ...(!isIntensivo && (isAdmin || isFinanceiro) ? adminNavigation : []),
   ];
