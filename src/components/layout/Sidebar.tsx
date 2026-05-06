@@ -44,6 +44,7 @@ const salesCrmRestrictedFromPureLeader = '/sales-crm';
 const intensivoNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'CRM Calls', href: '/clients', icon: Users },
+  { name: 'CRM Intensivo', href: '/intensivo-crm', icon: Flame },
   { name: 'Chat', href: '/chat', icon: MessageCircle },
   { name: 'Notificações', href: '/notifications', icon: Bell },
 ];
