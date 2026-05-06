@@ -80,17 +80,24 @@ export function SalesKanban() {
                 {colCards.map((card) => (
                   <div
                     key={card.id}
-                    draggable
+                    draggable={canEdit}
                     onDragStart={(e) => {
+                      if (!canEdit) {
+                        e.preventDefault();
+                        return;
+                      }
                       setDragged(card);
                       e.dataTransfer.effectAllowed = 'move';
                     }}
                     onDragEnd={() => setDragged(null)}
-                    className="bg-card border rounded-lg p-3 cursor-move hover:shadow-md transition-shadow group"
+                    className={cn(
+                      'bg-card border rounded-lg p-3 hover:shadow-md transition-shadow group',
+                      canEdit ? 'cursor-move' : 'cursor-default'
+                    )}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-medium text-sm truncate flex-1">{card.name}</p>
-                      {isAdmin && (
+                      {canEdit && (
                         <Button
                           variant="ghost"
                           size="icon"
