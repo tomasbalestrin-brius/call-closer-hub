@@ -105,7 +105,7 @@ export default function Sidebar() {
   const { user, signOut } = useAuth();
   const { isAdmin, isLeader, isFinanceiro, isIntensivo } = useUserRole();
   const queryClient = useQueryClient();
-  const { totalUnread } = useConversations();
+  
 
   const navigation = [
     ...getBaseNavigation(isAdmin, isIntensivo, isLeader, isFinanceiro),
@@ -175,11 +175,6 @@ export default function Sidebar() {
               >
                 <div className="relative">
                   <item.icon className="w-5 h-5 flex-shrink-0" />
-                  {item.href === '/chat' && totalUnread > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center px-1">
-                      {totalUnread > 99 ? '99+' : totalUnread}
-                    </span>
-                  )}
                 </div>
                 {!collapsed && <span>{item.name}</span>}
               </NavLink>
