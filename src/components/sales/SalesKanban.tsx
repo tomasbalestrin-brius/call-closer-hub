@@ -17,7 +17,8 @@ const fmtBRL = (v: number | null | undefined) =>
 
 export function SalesKanban() {
   const { data: cards = [], isLoading, moveCard, deleteCard } = useSalesPipeline();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isFinanceiro } = useUserRole();
+  const canEdit = isAdmin || isFinanceiro;
   const [dragged, setDragged] = useState<SalesPipelineCard | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
 
@@ -25,12 +26,13 @@ export function SalesKanban() {
     async (e: React.DragEvent, status: SalesPipelineStatus) => {
       e.preventDefault();
       setOverCol(null);
+      if (!canEdit) return;
       if (dragged && dragged.status !== status) {
         await moveCard.mutateAsync({ id: dragged.id, newStatus: status });
       }
       setDragged(null);
     },
-    [dragged, moveCard]
+    [dragged, moveCard, canEdit]
   );
 
   if (isLoading) {
