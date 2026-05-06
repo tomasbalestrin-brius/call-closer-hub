@@ -27,7 +27,7 @@ const IntensivoCRM = lazy(() => import("./pages/IntensivoCRM"));
 const SalesCRM = lazy(() => import("./pages/SalesCRM"));
 const GoogleDriveCallback = lazy(() => import("./pages/GoogleDriveCallback"));
 const Install = lazy(() => import("./pages/Install"));
-const Chat = lazy(() => import("./pages/Chat"));
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -86,7 +86,7 @@ const App = () => (
             <Route path="/sales-crm" element={<SalesCRM />} />
             <Route path="/google-drive-callback" element={<GoogleDriveCallback />} />
             <Route path="/install" element={<Install />} />
-            <Route path="/chat" element={<Chat />} />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
