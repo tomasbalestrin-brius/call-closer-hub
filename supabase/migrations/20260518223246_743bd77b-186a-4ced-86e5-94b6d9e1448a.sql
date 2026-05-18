@@ -1,0 +1,1 @@
+UPDATE public.profiles SET full_name = 'Kauana' WHERE user_id = '7ab140c4-6134-48a1-a3aa-cb2420a34485';
