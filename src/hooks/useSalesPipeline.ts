@@ -29,6 +29,7 @@ export const SALES_PIPELINE_COLUMNS = [
   { id: 'contrato_enviado', title: 'Contrato Enviado', color: 'bg-blue-500' },
   { id: 'contrato_assinado', title: 'Contrato Assinado', color: 'bg-indigo-500' },
   { id: 'valor_alto_receber', title: 'Valor Alto para Receber', color: 'bg-amber-500' },
+  { id: 'recebimento_cheque', title: 'Recebimento do Cheque', color: 'bg-yellow-500' },
   { id: 'pedindo_indicacao', title: 'Pedindo Indicação', color: 'bg-purple-500' },
   { id: 'rede', title: 'Rede', color: 'bg-cyan-500' },
   { id: 'venda_finalizada', title: 'Venda Realizada', color: 'bg-emerald-500' },
