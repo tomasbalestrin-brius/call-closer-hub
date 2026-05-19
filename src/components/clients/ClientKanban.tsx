@@ -158,6 +158,45 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
 
   const columns = isIntensivo ? INTENSIVO_COLUMNS : KANBAN_COLUMNS;
 
+  // Bulk selection
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === clients.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(clients.map((c) => c.id)));
+  };
+
+  const handleBulkMove = async (columnId: string) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      const payload: Record<string, unknown> = { status: columnId };
+      if (columnId === 'venda_realizada') {
+        payload.is_sold = true;
+        payload.sold_at = new Date().toISOString();
+      }
+      const { error } = await supabase.from('clients').update(payload).in('id', ids);
+      if (error) throw error;
+      toast.success(`${ids.length} cliente(s) movido(s)`);
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+      onRefresh();
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao mover clientes');
+    }
+  };
+
   // Get viewport ref for auto-scroll
   useEffect(() => {
     const root = document.querySelector('.client-kanban-scroll [data-radix-scroll-area-viewport]');
