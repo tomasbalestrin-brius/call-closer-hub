@@ -61,8 +61,34 @@ serve(async (req) => {
       });
     }
 
-    if (transcription.length < 500) {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (typeof closerId !== "string" || !UUID_RE.test(closerId)) {
+      return new Response(JSON.stringify({ error: "Invalid closerId format" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (typeof clientName !== "string" || clientName.length === 0 || clientName.length > 200) {
+      return new Response(JSON.stringify({ error: "Invalid clientName (1-200 chars)" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (callDate !== undefined && callDate !== null && callDate !== "") {
+      if (typeof callDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(callDate) || isNaN(new Date(callDate).getTime())) {
+        return new Response(JSON.stringify({ error: "Invalid callDate format (expected YYYY-MM-DD)" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (typeof transcription !== "string" || transcription.length < 500) {
       return new Response(JSON.stringify({ error: "Transcrição muito curta (mínimo 500 caracteres)" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (transcription.length > 500000) {
+      return new Response(JSON.stringify({ error: "Transcrição muito longa" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
