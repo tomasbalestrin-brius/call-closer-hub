@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, Phone, Mail, Building2, DollarSign } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Trash2, Phone, Mail, Building2, DollarSign, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   SALES_PIPELINE_COLUMNS,
@@ -21,6 +22,17 @@ export function SalesKanban() {
   const canEdit = isAdmin || isFinanceiro;
   const [dragged, setDragged] = useState<SalesPipelineCard | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  const filteredCards = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(q) ||
+        (c.email?.toLowerCase().includes(q) ?? false)
+    );
+  }, [cards, search]);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent, status: SalesPipelineStatus) => {
@@ -44,10 +56,20 @@ export function SalesKanban() {
   }
 
   return (
-    <ScrollArea className="w-full">
-      <div className="flex gap-4 pb-4 min-h-[60vh]">
-        {SALES_PIPELINE_COLUMNS.map((col) => {
-          const colCards = cards.filter((c) => c.status === col.id);
+    <div className="space-y-3">
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por nome ou email..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+      <ScrollArea className="w-full">
+        <div className="flex gap-4 pb-4 min-h-[60vh]">
+          {SALES_PIPELINE_COLUMNS.map((col) => {
+            const colCards = filteredCards.filter((c) => c.status === col.id);
           const total = colCards.reduce((s, c) => s + (Number(c.sale_value) || 0), 0);
           const isOver = overCol === col.id;
           return (
@@ -146,8 +168,9 @@ export function SalesKanban() {
             </div>
           );
         })}
-      </div>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
+        </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
+    </div>
   );
 }
