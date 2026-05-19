@@ -3,12 +3,17 @@ import { differenceInDays } from 'date-fns';
 import { useDragAutoScroll } from '@/hooks/useDragAutoScroll';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { IntensiveLeadCard } from './IntensiveLeadCard';
 import { IntensiveLeadDetailDialog } from './IntensiveLeadDetailDialog';
 import { EditIntensiveLeadDialog } from './EditIntensiveLeadDialog';
 import { useIntensivoCRM } from '@/hooks/useIntensivoCRM';
 import { safeDate } from '@/lib/dateUtils';
 import { INTENSIVE_COLUMNS, type IntensiveLead, type IntensiveLeadStatus, type IntensiveEdition } from '@/types/intensivo';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import { BulkActionsBar } from '@/components/kanban/BulkActionsBar';
 import { 
   MessageSquare, Brain, Send, Clock, CheckCircle, Ticket, Flame, 
   UserCheck, UserX, XCircle, Calendar 
