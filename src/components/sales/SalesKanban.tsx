@@ -177,7 +177,7 @@ export function SalesKanban() {
                         }}
                         className={cn(
                           'relative bg-card border rounded-lg p-3 hover:shadow-md transition-shadow group',
-                          selectionMode ? 'cursor-pointer' : canEdit ? 'cursor-move' : 'cursor-default',
+                          selectionMode ? 'cursor-pointer' : 'cursor-pointer hover:border-primary/50',
                           isSelected && selectionMode && 'ring-2 ring-primary'
                         )}
                       >
