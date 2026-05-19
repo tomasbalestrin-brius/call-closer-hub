@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, Phone, Mail, Building2, DollarSign } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Trash2, Phone, Mail, Building2, DollarSign, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   SALES_PIPELINE_COLUMNS,
