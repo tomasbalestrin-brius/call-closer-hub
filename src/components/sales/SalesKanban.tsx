@@ -5,7 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, Phone, Mail, Building2, DollarSign, Search } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Trash2, Phone, Mail, Building2, DollarSign, Search, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -18,6 +25,7 @@ import {
   type SalesPipelineStatus,
 } from '@/hooks/useSalesPipeline';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useAuth } from '@/hooks/useAuth';
 
 const fmtBRL = (v: number | null | undefined) =>
   v ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
@@ -25,24 +33,46 @@ const fmtBRL = (v: number | null | undefined) =>
 export function SalesKanban() {
   const { data: cards = [], isLoading, moveCard, deleteCard } = useSalesPipeline();
   const { isAdmin, isFinanceiro } = useUserRole();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const canEdit = isAdmin || isFinanceiro;
+  const isPrivileged = isAdmin || isFinanceiro;
+  const canDelete = isPrivileged;
+  const canEditCard = useCallback(
+    (card: SalesPipelineCard) => isPrivileged || card.closer_id === user?.id,
+    [isPrivileged, user?.id]
+  );
   const [dragged, setDragged] = useState<SalesPipelineCard | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [closerFilter, setCloserFilter] = useState<string>('all');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  const closerOptions = useMemo(() => {
+    if (!isPrivileged) return [];
+    const map = new Map<string, string>();
+    cards.forEach((c) => {
+      if (c.closer_id && !map.has(c.closer_id)) {
+        map.set(c.closer_id, c.closer_name || 'Sem nome');
+      }
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [cards, isPrivileged]);
+
   const filteredCards = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return cards;
-    return cards.filter(
-      (c) =>
+    return cards.filter((c) => {
+      if (closerFilter !== 'all' && c.closer_id !== closerFilter) return false;
+      if (!q) return true;
+      return (
         c.name?.toLowerCase().includes(q) ||
         (c.email?.toLowerCase().includes(q) ?? false)
-    );
-  }, [cards, search]);
+      );
+    });
+  }, [cards, search, closerFilter]);
 
   const toggleSelected = (id: string) =>
     setSelectedIds((prev) => {
@@ -52,14 +82,19 @@ export function SalesKanban() {
       return next;
     });
 
+  const selectableCards = useMemo(
+    () => filteredCards.filter(canEditCard),
+    [filteredCards, canEditCard]
+  );
+
   const handleSelectAll = () => {
-    if (selectedIds.size === filteredCards.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filteredCards.map((c) => c.id)));
+    if (selectedIds.size === selectableCards.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(selectableCards.map((c) => c.id)));
   };
 
   const handleBulkMove = async (status: string) => {
     const ids = Array.from(selectedIds);
-    if (!canEdit || ids.length === 0) return;
+    if (ids.length === 0) return;
     const { error } = await (supabase as any)
       .from('sales_pipeline')
       .update({ status })
@@ -78,13 +113,12 @@ export function SalesKanban() {
     async (e: React.DragEvent, status: SalesPipelineStatus) => {
       e.preventDefault();
       setOverCol(null);
-      if (!canEdit) return;
-      if (dragged && dragged.status !== status) {
+      if (dragged && canEditCard(dragged) && dragged.status !== status) {
         await moveCard.mutateAsync({ id: dragged.id, newStatus: status });
       }
       setDragged(null);
     },
-    [dragged, moveCard, canEdit]
+    [dragged, moveCard, canEditCard]
   );
 
   if (isLoading) {
@@ -107,21 +141,33 @@ export function SalesKanban() {
             className="pl-10"
           />
         </div>
-        {canEdit && (
-          <BulkActionsBar
-            active={selectionMode}
-            selectedCount={selectedIds.size}
-            totalCount={filteredCards.length}
-            columns={SALES_PIPELINE_COLUMNS.map((c) => ({ id: c.id, title: c.title }))}
-            onToggleActive={() => {
-              setSelectionMode((v) => !v);
-              if (selectionMode) setSelectedIds(new Set());
-            }}
-            onSelectAll={handleSelectAll}
-            onClearSelection={() => setSelectedIds(new Set())}
-            onMoveTo={handleBulkMove}
-          />
+        {isPrivileged && closerOptions.length > 0 && (
+          <Select value={closerFilter} onValueChange={setCloserFilter}>
+            <SelectTrigger className="w-[220px]">
+              <User className="w-4 h-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Filtrar por closer" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os closers</SelectItem>
+              {closerOptions.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
+        <BulkActionsBar
+          active={selectionMode}
+          selectedCount={selectedIds.size}
+          totalCount={selectableCards.length}
+          columns={SALES_PIPELINE_COLUMNS.map((c) => ({ id: c.id, title: c.title }))}
+          onToggleActive={() => {
+            setSelectionMode((v) => !v);
+            if (selectionMode) setSelectedIds(new Set());
+          }}
+          onSelectAll={handleSelectAll}
+          onClearSelection={() => setSelectedIds(new Set())}
+          onMoveTo={handleBulkMove}
+        />
       </div>
       <ScrollArea className="w-full">
         <div className="flex gap-4 pb-4 min-h-[60vh]">
@@ -158,12 +204,13 @@ export function SalesKanban() {
                 <div className="space-y-2">
                   {colCards.map((card) => {
                     const isSelected = selectedIds.has(card.id);
+                    const editable = canEditCard(card);
                     return (
                       <div
                         key={card.id}
-                        draggable={canEdit && !selectionMode}
+                        draggable={editable && !selectionMode}
                         onDragStart={(e) => {
-                          if (!canEdit || selectionMode) {
+                          if (!editable || selectionMode) {
                             e.preventDefault();
                             return;
                           }
@@ -172,23 +219,27 @@ export function SalesKanban() {
                         }}
                         onDragEnd={() => setDragged(null)}
                         onClick={() => {
-                          if (selectionMode) toggleSelected(card.id);
-                          else if (card.client_id) navigate(`/clients/${card.client_id}`);
+                          if (selectionMode) {
+                            if (editable) toggleSelected(card.id);
+                          } else if (card.client_id) {
+                            navigate(`/clients/${card.client_id}`);
+                          }
                         }}
                         className={cn(
                           'relative bg-card border rounded-lg p-3 hover:shadow-md transition-shadow group',
-                          selectionMode ? 'cursor-pointer' : 'cursor-pointer hover:border-primary/50',
+                          'cursor-pointer hover:border-primary/50',
+                          selectionMode && !editable && 'opacity-50',
                           isSelected && selectionMode && 'ring-2 ring-primary'
                         )}
                       >
-                        {selectionMode && (
+                        {selectionMode && editable && (
                           <div className="absolute top-2 left-2 z-10 bg-background rounded p-0.5 shadow">
                             <Checkbox checked={isSelected} className="pointer-events-none" />
                           </div>
                         )}
                         <div className="flex items-start justify-between gap-2">
-                          <p className={cn('font-medium text-sm truncate flex-1', selectionMode && 'pl-6')}>{card.name}</p>
-                          {canEdit && !selectionMode && (
+                          <p className={cn('font-medium text-sm truncate flex-1', selectionMode && editable && 'pl-6')}>{card.name}</p>
+                          {canDelete && !selectionMode && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -203,43 +254,49 @@ export function SalesKanban() {
                           )}
                         </div>
 
-                    {card.company && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                        <Building2 className="w-3 h-3" /> {card.company}
-                      </p>
-                    )}
-                    {card.product_offered && (
-                      <Badge variant="outline" className="text-[10px] mt-2">
-                        {card.product_offered}
-                      </Badge>
-                    )}
-                    {card.sale_value != null && (
-                      <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-2">
-                        <DollarSign className="w-3 h-3" /> {fmtBRL(Number(card.sale_value))}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-2 mt-2 text-[11px] text-muted-foreground">
-                      {card.phone && (
-                        <span className="flex items-center gap-1">
-                          <Phone className="w-3 h-3" /> {card.phone}
-                        </span>
-                      )}
-                      {card.email && (
-                        <span className="flex items-center gap-1 truncate max-w-[140px]">
-                          <Mail className="w-3 h-3" /> {card.email}
-                        </span>
-                      )}
-                    </div>
+                        {isPrivileged && card.closer_name && (
+                          <Badge variant="secondary" className="text-[10px] mt-1.5 gap-1">
+                            <User className="w-2.5 h-2.5" />
+                            {card.closer_name}
+                          </Badge>
+                        )}
+                        {card.company && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                            <Building2 className="w-3 h-3" /> {card.company}
+                          </p>
+                        )}
+                        {card.product_offered && (
+                          <Badge variant="outline" className="text-[10px] mt-2">
+                            {card.product_offered}
+                          </Badge>
+                        )}
+                        {card.sale_value != null && (
+                          <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-2">
+                            <DollarSign className="w-3 h-3" /> {fmtBRL(Number(card.sale_value))}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-2 mt-2 text-[11px] text-muted-foreground">
+                          {card.phone && (
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3" /> {card.phone}
+                            </span>
+                          )}
+                          {card.email && (
+                            <span className="flex items-center gap-1 truncate max-w-[140px]">
+                              <Mail className="w-3 h-3" /> {card.email}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
-                {colCards.length === 0 && (
-                  <p className="text-xs text-muted-foreground/60 text-center py-6">Vazio</p>
-                )}
+                  {colCards.length === 0 && (
+                    <p className="text-xs text-muted-foreground/60 text-center py-6">Vazio</p>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
         </div>
         <ScrollBar orientation="horizontal" />
       </ScrollArea>

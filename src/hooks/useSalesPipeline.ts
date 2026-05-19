@@ -22,6 +22,7 @@ export interface SalesPipelineCard {
   status_changed_at: string;
   created_at: string;
   updated_at: string;
+  closer_name?: string | null;
 }
 
 export const SALES_PIPELINE_COLUMNS = [
@@ -52,7 +53,22 @@ export function useSalesPipeline() {
       }
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as unknown as SalesPipelineCard[];
+      const cards = (data || []) as unknown as SalesPipelineCard[];
+
+      if ((isAdmin || isFinanceiro) && cards.length > 0) {
+        const ids = Array.from(new Set(cards.map((c) => c.closer_id).filter(Boolean)));
+        if (ids.length > 0) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('user_id, full_name')
+            .in('user_id', ids);
+          const map = new Map((profs || []).map((p: any) => [p.user_id, p.full_name]));
+          cards.forEach((c) => {
+            c.closer_name = map.get(c.closer_id) || null;
+          });
+        }
+      }
+      return cards;
     },
   });
 
