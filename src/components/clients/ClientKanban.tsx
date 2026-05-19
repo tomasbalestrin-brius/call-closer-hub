@@ -288,12 +288,39 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
 
   return (
     <>
+      <div className="mb-3">
+        <BulkActionsBar
+          active={selectionMode}
+          selectedCount={selectedIds.size}
+          totalCount={clients.length}
+          columns={columns.map((c) => ({ id: c.id, title: c.title }))}
+          onToggleActive={() => {
+            setSelectionMode((v) => !v);
+            if (selectionMode) setSelectedIds(new Set());
+          }}
+          onSelectAll={handleSelectAll}
+          onClearSelection={() => setSelectedIds(new Set())}
+          onMoveTo={handleBulkMove}
+        />
+      </div>
       <ScrollArea className="w-full pb-4 client-kanban-scroll">
         <div className="flex gap-4 min-h-[600px] pb-4">
           {columns.map((column) => {
             const columnClients = getClientsForColumn(column.id);
             const Icon = column.icon;
-            
+            const columnIds = columnClients.map((c) => c.id);
+            const colSelectedCount = columnIds.filter((id) => selectedIds.has(id)).length;
+            const colAllSelected = columnIds.length > 0 && colSelectedCount === columnIds.length;
+
+            const toggleColumnSelection = () => {
+              setSelectedIds((prev) => {
+                const next = new Set(prev);
+                if (colAllSelected) columnIds.forEach((id) => next.delete(id));
+                else columnIds.forEach((id) => next.add(id));
+                return next;
+              });
+            };
+
             return (
               <div
                 key={column.id}
@@ -334,36 +361,62 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
                       {display.subtitle && (
                         <span className="text-xs opacity-80 mt-0.5 pl-6">{display.subtitle}</span>
                       )}
+                      {selectionMode && columnClients.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={toggleColumnSelection}
+                          className="mt-2 flex items-center gap-2 text-xs font-medium hover:underline"
+                        >
+                          <Checkbox checked={colAllSelected} className="pointer-events-none" />
+                          {colAllSelected ? 'Desmarcar coluna' : 'Selecionar coluna'}
+                        </button>
+                      )}
                     </div>
                   );
                 })()}
 
                 {/* Column Content */}
                 <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-300px)]">
-                  {columnClients.map((client) => (
-                    <div
-                      key={client.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, client)}
-                      onDragEnd={handleDragEnd}
-                      onClick={(e) => {
-                        if (isDraggingRef.current) {
-                          e.stopPropagation();
-                          e.preventDefault();
-                        }
-                      }}
-                      className={cn(
-                        "cursor-grab active:cursor-grabbing transition-opacity",
-                        draggedClient?.id === client.id && "opacity-50"
-                      )}
-                    >
-                      <ClientCard 
-                        client={client} 
-                        lastCallDate={client.lastCallDate} 
-                        onUpdate={onRefresh}
-                      />
-                    </div>
-                  ))}
+                  {columnClients.map((client) => {
+                    const isSelected = selectedIds.has(client.id);
+                    return (
+                      <div
+                        key={client.id}
+                        draggable={!selectionMode}
+                        onDragStart={(e) => !selectionMode && handleDragStart(e, client)}
+                        onDragEnd={handleDragEnd}
+                        onClick={(e) => {
+                          if (selectionMode) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            toggleSelected(client.id);
+                            return;
+                          }
+                          if (isDraggingRef.current) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                          }
+                        }}
+                        className={cn(
+                          "relative transition-opacity",
+                          selectionMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing',
+                          draggedClient?.id === client.id && "opacity-50",
+                          isSelected && selectionMode && 'ring-2 ring-primary rounded-xl'
+                        )}
+                      >
+                        {selectionMode && (
+                          <div className="absolute top-2 left-2 z-10 bg-background rounded p-0.5 shadow">
+                            <Checkbox checked={isSelected} className="pointer-events-none" />
+                          </div>
+                        )}
+                        <ClientCard
+                          client={client}
+                          lastCallDate={client.lastCallDate}
+                          onUpdate={onRefresh}
+                        />
+                      </div>
+                    );
+                  })}
                   
                   {columnClients.length === 0 && (
                     <div className="flex items-center justify-center h-24 text-muted-foreground text-xs border-2 border-dashed border-border/50 rounded-lg">
@@ -377,6 +430,7 @@ export default function ClientKanban({ clients, onRefresh }: ClientKanbanProps) 
         </div>
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
+
 
       {/* Sale Dialog */}
       {clientForSale && (
