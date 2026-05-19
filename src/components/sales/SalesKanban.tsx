@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ export function SalesKanban() {
   const { data: cards = [], isLoading, moveCard, deleteCard } = useSalesPipeline();
   const { isAdmin, isFinanceiro } = useUserRole();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const canEdit = isAdmin || isFinanceiro;
   const [dragged, setDragged] = useState<SalesPipelineCard | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
@@ -171,10 +173,11 @@ export function SalesKanban() {
                         onDragEnd={() => setDragged(null)}
                         onClick={() => {
                           if (selectionMode) toggleSelected(card.id);
+                          else if (card.client_id) navigate(`/clients/${card.client_id}`);
                         }}
                         className={cn(
                           'relative bg-card border rounded-lg p-3 hover:shadow-md transition-shadow group',
-                          selectionMode ? 'cursor-pointer' : canEdit ? 'cursor-move' : 'cursor-default',
+                          selectionMode ? 'cursor-pointer' : 'cursor-pointer hover:border-primary/50',
                           isSelected && selectionMode && 'ring-2 ring-primary'
                         )}
                       >
