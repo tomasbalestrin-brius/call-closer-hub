@@ -1314,6 +1314,33 @@ export type Database = {
           },
         ]
       }
+      login_attempts: {
+        Row: {
+          created_at: string
+          email: string
+          error_message: string | null
+          id: string
+          success: boolean
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          error_message?: string | null
+          id?: string
+          success?: boolean
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          error_message?: string | null
+          id?: string
+          success?: boolean
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       monthly_goals: {
         Row: {
           closer_id: string

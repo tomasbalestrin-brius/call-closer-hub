@@ -69,11 +69,22 @@ export default function Auth() {
     const { error } = await signIn(loginEmail, loginPassword);
     setIsSubmitting(false);
 
+    // Log every attempt (fire & forget)
+    supabase.from('login_attempts').insert({
+      email: loginEmail,
+      success: !error,
+      error_message: error?.message ?? null,
+      user_agent: navigator.userAgent,
+    }).then(({ error: logErr }) => {
+      if (logErr) console.error('login_attempts log failed:', logErr);
+    });
+
     if (error) {
+      console.error('[LOGIN ERROR]', { email: loginEmail, error });
       if (error.message.includes('Invalid login credentials')) {
         toast.error('Email ou senha incorretos');
       } else {
-        toast.error('Erro ao fazer login. Tente novamente.');
+        toast.error('Erro ao fazer login: ' + error.message);
       }
     } else {
       toast.success('Login realizado com sucesso!');
