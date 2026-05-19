@@ -58,8 +58,8 @@ export function SalesKanban() {
   const handleBulkMove = async (status: string) => {
     const ids = Array.from(selectedIds);
     if (!canEdit || ids.length === 0) return;
-    const { error } = await supabase
-      .from('sales_pipeline' as never)
+    const { error } = await (supabase as any)
+      .from('sales_pipeline')
       .update({ status })
       .in('id', ids);
     if (error) {
