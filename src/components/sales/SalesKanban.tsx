@@ -75,11 +75,6 @@ export function SalesKanban() {
     setSelectionMode(false);
     qc.invalidateQueries({ queryKey: ['sales-pipeline'] });
   };
-      (c) =>
-        c.name?.toLowerCase().includes(q) ||
-        (c.email?.toLowerCase().includes(q) ?? false)
-    );
-  }, [cards, search]);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent, status: SalesPipelineStatus) => {
