@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -169,8 +169,9 @@ export function SalesKanban() {
           onMoveTo={handleBulkMove}
         />
       </div>
-      <ScrollArea className="w-full">
+      <div className="w-full overflow-x-auto pb-2 [scrollbar-width:thin]">
         <div className="flex gap-4 pb-4 min-h-[60vh]">
+
           {SALES_PIPELINE_COLUMNS.map((col) => {
             const colCards = filteredCards.filter((c) => c.status === col.id);
             const total = colCards.reduce((s, c) => s + (Number(c.sale_value) || 0), 0);
@@ -298,8 +299,8 @@ export function SalesKanban() {
             );
           })}
         </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+      </div>
+
     </div>
   );
 }

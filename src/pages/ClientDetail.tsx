@@ -189,7 +189,7 @@ const copyToClipboard = (text: string) => {
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const { isAdmin, isLeader, loading: permissionsLoading } = useUserPermissions();
+  const { isAdmin, isLeader, isFinanceiro, loading: permissionsLoading } = useUserPermissions();
   const navigate = useNavigate();
   const [client, setClient] = useState<Client | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
@@ -267,7 +267,7 @@ export default function ClientDetail() {
         .eq('id', id);
       
       // Only filter by closer_id for regular closers
-      if (!isAdmin && !isLeader) {
+      if (!isAdmin && !isLeader && !isFinanceiro) {
         query = query.eq('closer_id', user.id);
       }
 
