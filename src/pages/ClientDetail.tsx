@@ -267,7 +267,7 @@ export default function ClientDetail() {
         .eq('id', id);
       
       // Only filter by closer_id for regular closers
-      if (!isAdmin && !isLeader) {
+      if (!isAdmin && !isLeader && !isFinanceiro) {
         query = query.eq('closer_id', user.id);
       }
 
