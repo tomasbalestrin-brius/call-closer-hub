@@ -231,8 +231,9 @@ export function SalesKanban() {
                         </span>
                       )}
                     </div>
-                  </div>
-                ))}
+                      </div>
+                    );
+                  })}
                 {colCards.length === 0 && (
                   <p className="text-xs text-muted-foreground/60 text-center py-6">Vazio</p>
                 )}
