@@ -169,8 +169,9 @@ export function SalesKanban() {
           onMoveTo={handleBulkMove}
         />
       </div>
-      <ScrollArea className="w-full">
+      <div className="w-full overflow-x-auto pb-2 [scrollbar-width:thin]">
         <div className="flex gap-4 pb-4 min-h-[60vh]">
+
           {SALES_PIPELINE_COLUMNS.map((col) => {
             const colCards = filteredCards.filter((c) => c.status === col.id);
             const total = colCards.reduce((s, c) => s + (Number(c.sale_value) || 0), 0);
