@@ -3,8 +3,13 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Trash2, Phone, Mail, Building2, DollarSign, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import { BulkActionsBar } from '@/components/kanban/BulkActionsBar';
 import {
   SALES_PIPELINE_COLUMNS,
   useSalesPipeline,
