@@ -3,12 +3,17 @@ import { differenceInDays } from 'date-fns';
 import { useDragAutoScroll } from '@/hooks/useDragAutoScroll';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { IntensiveLeadCard } from './IntensiveLeadCard';
 import { IntensiveLeadDetailDialog } from './IntensiveLeadDetailDialog';
 import { EditIntensiveLeadDialog } from './EditIntensiveLeadDialog';
 import { useIntensivoCRM } from '@/hooks/useIntensivoCRM';
 import { safeDate } from '@/lib/dateUtils';
 import { INTENSIVE_COLUMNS, type IntensiveLead, type IntensiveLeadStatus, type IntensiveEdition } from '@/types/intensivo';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import { BulkActionsBar } from '@/components/kanban/BulkActionsBar';
 import { 
   MessageSquare, Brain, Send, Clock, CheckCircle, Ticket, Flame, 
   UserCheck, UserX, XCircle, Calendar 
@@ -36,6 +41,32 @@ export function IntensiveKanban({ leads, editionId, loading, edition }: Intensiv
   const [editingLead, setEditingLead] = useState<IntensiveLead | null>(null);
   const [draggedLead, setDraggedLead] = useState<IntensiveLead | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const qc = useQueryClient();
+
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === leads.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(leads.map((l) => l.id)));
+  };
+
+  const handleBulkMove = async (status: string) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('intensive_leads').update({ status }).in('id', ids);
+    if (error) { toast.error('Erro ao mover'); return; }
+    toast.success(`${ids.length} lead(s) movido(s)`);
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    qc.invalidateQueries({ queryKey: ['intensive-leads'] });
+  };
 
   useEffect(() => {
     const root = document.querySelector('.intensive-kanban-scroll [data-radix-scroll-area-viewport]');
