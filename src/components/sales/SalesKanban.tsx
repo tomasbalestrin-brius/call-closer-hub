@@ -173,6 +173,7 @@ export function SalesKanban() {
                         onDragEnd={() => setDragged(null)}
                         onClick={() => {
                           if (selectionMode) toggleSelected(card.id);
+                          else if (card.client_id) navigate(`/clients/${card.client_id}`);
                         }}
                         className={cn(
                           'relative bg-card border rounded-lg p-3 hover:shadow-md transition-shadow group',
