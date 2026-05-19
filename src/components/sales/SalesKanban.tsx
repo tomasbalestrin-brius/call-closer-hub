@@ -24,10 +24,6 @@ const fmtBRL = (v: number | null | undefined) =>
 export function SalesKanban() {
   const { data: cards = [], isLoading, moveCard, deleteCard } = useSalesPipeline();
   const { isAdmin, isFinanceiro } = useUserRole();
-  const canEdit = isAdmin || isFinanceiro;
-export function SalesKanban() {
-  const { data: cards = [], isLoading, moveCard, deleteCard } = useSalesPipeline();
-  const { isAdmin, isFinanceiro } = useUserRole();
   const qc = useQueryClient();
   const canEdit = isAdmin || isFinanceiro;
   const [dragged, setDragged] = useState<SalesPipelineCard | null>(null);
