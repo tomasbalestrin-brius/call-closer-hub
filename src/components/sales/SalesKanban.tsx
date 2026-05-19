@@ -26,6 +26,7 @@ export function SalesKanban() {
   const { data: cards = [], isLoading, moveCard, deleteCard } = useSalesPipeline();
   const { isAdmin, isFinanceiro } = useUserRole();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const canEdit = isAdmin || isFinanceiro;
   const [dragged, setDragged] = useState<SalesPipelineCard | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
