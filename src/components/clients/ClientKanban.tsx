@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { BulkActionsBar } from '@/components/kanban/BulkActionsBar';
 
 const KANBAN_COLUMNS = [
   { 
