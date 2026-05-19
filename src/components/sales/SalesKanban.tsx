@@ -22,6 +22,17 @@ export function SalesKanban() {
   const canEdit = isAdmin || isFinanceiro;
   const [dragged, setDragged] = useState<SalesPipelineCard | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  const filteredCards = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(q) ||
+        (c.email?.toLowerCase().includes(q) ?? false)
+    );
+  }, [cards, search]);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent, status: SalesPipelineStatus) => {
