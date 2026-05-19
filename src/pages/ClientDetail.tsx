@@ -189,7 +189,7 @@ const copyToClipboard = (text: string) => {
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const { isAdmin, isLeader, loading: permissionsLoading } = useUserPermissions();
+  const { isAdmin, isLeader, isFinanceiro, loading: permissionsLoading } = useUserPermissions();
   const navigate = useNavigate();
   const [client, setClient] = useState<Client | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
