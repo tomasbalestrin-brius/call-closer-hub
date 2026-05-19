@@ -1,81 +1,30 @@
-## Plano: Novo módulo "CRM Vendas"
+## Melhorias no CRM Vendas
 
-### Objetivo
-Criar uma nova página kanban dedicada ao pós-venda, com 7 colunas, alimentada automaticamente quando um cliente chega em "Venda Realizada" no CRM Calls. A duplicação preserva o cartão original.
+Aplicar as três melhorias sugeridas para admin/financeiro/closer.
 
-### Colunas (na ordem)
-1. Enviar Contrato (`enviar_contrato`)
-2. Contrato Enviado (`contrato_enviado`)
-3. Contrato Assinado (`contrato_assinado`)
-4. Valor Alto para Receber (`valor_alto_receber`)
-5. Pedindo Indicação (`pedindo_indicacao`)
-6. Rede (`rede`)
-7. Venda Realizada (`venda_finalizada`)
+### 1. Filtro por closer (admin/financeiro)
+- No header do `SalesKanban`, adicionar `<Select>` "Todos os closers" + lista (reaproveitar `useClosersList`).
+- Visível só para `isAdmin || isFinanceiro`.
+- Filtrar `cards` por `closer_id` antes da busca por texto.
 
-### Banco de dados
-**Nova tabela `sales_pipeline`** (separada de `clients` para não poluir o kanban de calls):
+### 2. Badge com nome do closer no card
+- Em `useSalesPipeline`, fazer join leve: buscar `profiles (user_id, full_name)` dos closers presentes e mapear `closer_name` em cada card.
+- No card, exibir `<Badge variant="secondary">` com o nome do closer (apenas quando admin/financeiro — closer não precisa ver o próprio nome).
 
-```sql
-CREATE TABLE public.sales_pipeline (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
-  closer_id uuid NOT NULL,
-  name text NOT NULL,
-  phone text,
-  email text,
-  company text,
-  product_offered text,
-  sale_value numeric,
-  entry_value numeric,
-  sold_at timestamptz,
-  status text NOT NULL DEFAULT 'enviar_contrato',
-  notes text,
-  status_changed_at timestamptz DEFAULT now(),
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  UNIQUE (client_id)  -- evita duplicação
-);
-```
-
-**RLS**:
-- Closer vê/edita os próprios (`closer_id = auth.uid()`)
-- Admin: gerencia todos
-- Financeiro: select/update todos
-
-**Trigger** em `clients` (AFTER UPDATE OF is_sold/status):
-- Quando `is_sold` muda para `true` OU `status` muda para `venda_realizada` → INSERT em `sales_pipeline` (idempotente via UNIQUE).
-
-**Trigger** de `status_changed_at` e `updated_at` na nova tabela.
-
-### Frontend
-
-**Nova rota** `/sales-crm` (lazy) em `App.tsx`.
-
-**Sidebar** (`src/components/layout/Sidebar.tsx`): adicionar item "CRM Vendas" abaixo de "CRM Calls" — visível para closer, admin e financeiro (oculto para `intensivo` e `lider` puro).
-
-**Página `src/pages/SalesCRM.tsx`**: layout análogo ao `Clients.tsx` com header e kanban.
-
-**Componente `src/components/sales/SalesKanban.tsx`**:
-- 7 colunas com ícones/cores próprias
-- Drag & drop entre colunas (atualiza `status` em `sales_pipeline`)
-- Card simples mostrando: nome, valor da venda, produto, telefone
-
-**Hook `src/hooks/useSalesPipeline.ts`**: query + realtime de `sales_pipeline` filtrando por role (admin/financeiro veem todos; closer vê só os seus).
-
-### Casos de borda
-- **Re-duplicação**: bloqueada pelo `UNIQUE(client_id)`.
-- **Closer original deletado**: cascade não é aplicável (referência por uuid; mantém histórico).
-- **Cliente deletado em `clients`**: `ON DELETE CASCADE` remove do pipeline.
-- **Admin/Financeiro**: filtro padrão "Todos os closers"; podem filtrar por closer.
+### 3. Permitir closer mover seus próprios cards
+- Adicionar policy RLS `UPDATE` em `sales_pipeline`: `closer_id = auth.uid()` (using + with check).
+- Frontend: trocar `canEdit` por `canEditCard(card)` = admin/financeiro OU `card.closer_id === user.id`.
+- `draggable`, drop, bulk move e delete passam a respeitar essa regra por card.
+- Delete continua restrito a admin/financeiro.
 
 ### Arquivos
 | Arquivo | Mudança |
-|---------|---------|
-| Migration SQL | Tabela + RLS + 2 triggers |
-| `src/App.tsx` | Lazy route `/sales-crm` |
-| `src/components/layout/Sidebar.tsx` | Item "CRM Vendas" |
-| `src/pages/SalesCRM.tsx` | Nova página |
-| `src/components/sales/SalesKanban.tsx` | Kanban 7 colunas |
-| `src/components/sales/SalesCard.tsx` | Card simples |
-| `src/hooks/useSalesPipeline.ts` | Fetch + realtime |
-| `src/integrations/supabase/types.ts` | Atualizado automaticamente |
+|---|---|
+| Migração SQL | Nova policy UPDATE para closer dono |
+| `src/hooks/useSalesPipeline.ts` | Join com profiles → `closer_name` |
+| `src/components/sales/SalesKanban.tsx` | Filtro closer, badge, permissão por card |
+
+### Casos de borda
+- Closer continua **sem** ver cards de outros (RLS SELECT já bloqueia).
+- Bulk move do closer só afeta os próprios (RLS UPDATE filtra).
+- Filtro por closer some quando o usuário é closer puro.
