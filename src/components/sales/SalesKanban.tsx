@@ -56,10 +56,20 @@ export function SalesKanban() {
   }
 
   return (
-    <ScrollArea className="w-full">
-      <div className="flex gap-4 pb-4 min-h-[60vh]">
-        {SALES_PIPELINE_COLUMNS.map((col) => {
-          const colCards = cards.filter((c) => c.status === col.id);
+    <div className="space-y-3">
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por nome ou email..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+      <ScrollArea className="w-full">
+        <div className="flex gap-4 pb-4 min-h-[60vh]">
+          {SALES_PIPELINE_COLUMNS.map((col) => {
+            const colCards = filteredCards.filter((c) => c.status === col.id);
           const total = colCards.reduce((s, c) => s + (Number(c.sale_value) || 0), 0);
           const isOver = overCol === col.id;
           return (
