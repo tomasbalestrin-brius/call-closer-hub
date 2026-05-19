@@ -168,8 +168,9 @@ export function SalesKanban() {
             </div>
           );
         })}
-      </div>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
+        </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
+    </div>
   );
 }
