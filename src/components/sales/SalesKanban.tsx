@@ -25,14 +25,56 @@ export function SalesKanban() {
   const { data: cards = [], isLoading, moveCard, deleteCard } = useSalesPipeline();
   const { isAdmin, isFinanceiro } = useUserRole();
   const canEdit = isAdmin || isFinanceiro;
+export function SalesKanban() {
+  const { data: cards = [], isLoading, moveCard, deleteCard } = useSalesPipeline();
+  const { isAdmin, isFinanceiro } = useUserRole();
+  const qc = useQueryClient();
+  const canEdit = isAdmin || isFinanceiro;
   const [dragged, setDragged] = useState<SalesPipelineCard | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const filteredCards = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return cards;
     return cards.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(q) ||
+        (c.email?.toLowerCase().includes(q) ?? false)
+    );
+  }, [cards, search]);
+
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredCards.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredCards.map((c) => c.id)));
+  };
+
+  const handleBulkMove = async (status: string) => {
+    const ids = Array.from(selectedIds);
+    if (!canEdit || ids.length === 0) return;
+    const { error } = await supabase
+      .from('sales_pipeline' as never)
+      .update({ status })
+      .in('id', ids);
+    if (error) {
+      toast.error('Erro ao mover');
+      return;
+    }
+    toast.success(`${ids.length} cartão(s) movido(s)`);
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    qc.invalidateQueries({ queryKey: ['sales-pipeline'] });
+  };
       (c) =>
         c.name?.toLowerCase().includes(q) ||
         (c.email?.toLowerCase().includes(q) ?? false)
