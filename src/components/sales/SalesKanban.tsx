@@ -299,8 +299,8 @@ export function SalesKanban() {
             );
           })}
         </div>
-        <ScrollBar orientation="horizontal" className="h-3" />
-      </ScrollArea>
+      </div>
+
     </div>
   );
 }
