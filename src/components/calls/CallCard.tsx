@@ -57,6 +57,10 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
   const [showDialog, setShowDialog] = useState(false);
   const statusInfo = statusConfig[call.status];
   const formattedDate = format(new Date(call.call_date), "dd 'de' MMM", { locale: ptBR });
+  const joinedClient = (call as any).clients as { sale_value?: number | null; entry_value?: number | null; is_sold?: boolean } | null | undefined;
+  const displaySaleValue = call.sale_value ?? joinedClient?.sale_value ?? null;
+  const displayEntryValue = call.entry_value ?? joinedClient?.entry_value ?? null;
+  const isSoldVisually = call.status === 'vendido' || joinedClient?.is_sold === true;
 
   const handleClick = () => {
     if (onClick) {
