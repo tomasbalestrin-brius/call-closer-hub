@@ -111,6 +111,17 @@ export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, ta
         />
       )}
 
+      {showSoldDialog && (
+        <MarkAsSoldDialog
+          call={call}
+          open={showSoldDialog}
+          onOpenChange={setShowSoldDialog}
+          onSaved={onCallUpdated}
+        />
+      )}
+
+
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
