@@ -86,7 +86,7 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
         style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
       >
         {displaySaleValue ? (
-          <div className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md bg-success/10 border border-success/30 px-2 py-0.5 text-xs font-semibold text-success pointer-events-none">
+          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-md bg-success/15 border border-success/40 px-2 py-1 text-xs font-bold text-success shadow-sm pointer-events-none">
             <DollarSign className="w-3 h-3" />
             {formatCurrency(displaySaleValue)}
           </div>
