@@ -95,14 +95,13 @@ serve(async (req) => {
       console.error('Error updating password:', updateError);
       const msg = updateError.message || '';
       let friendly = 'Erro ao atualizar senha: ' + msg;
-      let status = 500;
-      if (/weak|known|pwned|easy to guess/i.test(msg)) {
-        friendly = 'Senha muito fraca ou comum. Use letras, números e símbolos (ex: Bethel@2026!).';
-        status = 400;
+      if (/weak|known|pwned|easy to guess|compromised/i.test(msg)) {
+        friendly = 'Senha muito fraca ou vazada em outros sites. Use letras, números e símbolos (ex: Bethel@2026!).';
       }
+      // Return 200 so supabase.functions.invoke exposes the body to the client
       return new Response(
         JSON.stringify({ error: friendly }),
-        { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
