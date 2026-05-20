@@ -35,7 +35,9 @@ interface CallCardMenuProps {
 export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, targetCloserId }: CallCardMenuProps) {
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showSoldDialog, setShowSoldDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const isSold = call.status === 'vendido';
 
   const handleDelete = async () => {
     setDeleting(true);
