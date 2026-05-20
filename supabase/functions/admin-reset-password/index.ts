@@ -93,9 +93,16 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Error updating password:', updateError);
+      const msg = updateError.message || '';
+      let friendly = 'Erro ao atualizar senha: ' + msg;
+      let status = 500;
+      if (/weak|known|pwned|easy to guess/i.test(msg)) {
+        friendly = 'Senha muito fraca ou comum. Use letras, números e símbolos (ex: Bethel@2026!).';
+        status = 400;
+      }
       return new Response(
-        JSON.stringify({ error: 'Erro ao atualizar senha: ' + updateError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: friendly }),
+        { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
