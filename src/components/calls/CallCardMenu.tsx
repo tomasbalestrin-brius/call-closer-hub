@@ -77,6 +77,11 @@ export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, ta
             <Merge className="h-4 w-4 mr-2" />
             Juntar com outra call
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setShowSoldDialog(true)} className="text-success focus:text-success">
+            <DollarSign className="h-4 w-4 mr-2" />
+            {isSold ? 'Editar venda' : 'Marcar como Vendida'}
+          </DropdownMenuItem>
           {canDelete && (
             <>
               <DropdownMenuSeparator />
