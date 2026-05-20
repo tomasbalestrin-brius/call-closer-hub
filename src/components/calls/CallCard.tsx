@@ -3,7 +3,7 @@ import { Call, CallStatus, LeadClassification, CloserClassification } from '@/ty
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Calendar, Clock, Star, DollarSign, Target, TrendingUp, User, Flame, Thermometer, Snowflake, Phone } from 'lucide-react';
+import { Calendar, Clock, Star, DollarSign, Target, TrendingUp, User, Flame, Thermometer, Snowflake, Phone, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import CallDetailDialog from './CallDetailDialog';
