@@ -160,10 +160,13 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
                 <span className="font-medium">{call.score}/10</span>
               </div>
             )}
-            {call.sale_value && (
+            {displaySaleValue && (
               <div className="flex items-center gap-2">
                 <DollarSign className="w-4 h-4 text-success flex-shrink-0" />
-                <span className="font-medium text-success">{formatCurrency(call.sale_value)}</span>
+                <span className="font-medium text-success">
+                  {formatCurrency(displaySaleValue)}
+                  {displayEntryValue ? <span className="text-xs text-muted-foreground ml-1">(ent. {formatCurrency(displayEntryValue)})</span> : null}
+                </span>
               </div>
             )}
           </div>
