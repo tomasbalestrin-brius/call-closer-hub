@@ -97,6 +97,11 @@ export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, ta
             Juntar com outra call
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleReanalyze} disabled={reanalyzing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${reanalyzing ? 'animate-spin' : ''}`} />
+            {reanalyzing ? 'Reanalisando...' : 'Reanalisar com IA'}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setShowSoldDialog(true)} className="text-success focus:text-success">
             <DollarSign className="h-4 w-4 mr-2" />
             {isSold ? 'Editar venda' : 'Marcar como Vendida'}
