@@ -94,8 +94,10 @@ serve(async (req) => {
     if (updateError) {
       console.error('Error updating password:', updateError);
       const msg = updateError.message || '';
+      const errorCode = (updateError as { code?: string }).code || '';
+      const errorName = (updateError as { name?: string }).name || '';
       let friendly = 'Erro ao atualizar senha: ' + msg;
-      if (/weak|known|pwned|easy to guess|compromised/i.test(msg)) {
+      if (/weak|known|pwned|easy to guess|compromised/i.test(`${msg} ${errorCode} ${errorName}`)) {
         friendly = 'Senha muito fraca ou vazada em outros sites. Use letras, números e símbolos (ex: Bethel@2026!).';
       }
       // Return 200 so supabase.functions.invoke exposes the body to the client
