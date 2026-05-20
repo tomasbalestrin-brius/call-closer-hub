@@ -83,7 +83,8 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
       <Card 
         className={cn(
           'relative cursor-pointer transition-all hover:shadow-md hover:border-accent/50 animate-slide-up',
-          isSoldVisually && 'border-l-4 border-l-success'
+          isSoldVisually && 'border-l-4 border-l-success',
+          isIncompleteAnalysis && 'border-l-4 border-l-warning'
         )}
         onClick={handleClick}
         style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
