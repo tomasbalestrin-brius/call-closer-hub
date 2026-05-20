@@ -1,0 +1,1 @@
+ALTER TABLE public.sales_pipeline ADD COLUMN IF NOT EXISTS webhook_sent_at timestamptz;
