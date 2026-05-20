@@ -54,11 +54,25 @@ export function ResetPasswordDialog({ open, onOpenChange, closer }: ResetPasswor
       });
 
       if (error) {
-        throw new Error(error.message);
+        let message = error.message || 'Erro ao resetar senha';
+        const response = (error as any)?.context;
+
+        if (response?.json) {
+          try {
+            const body = await response.json();
+            message = body?.error || message;
+          } catch {
+            // Keep the SDK message if the response body is not readable.
+          }
+        }
+
+        toast.error(message);
+        return;
       }
 
       if (data?.error) {
-        throw new Error(data.error);
+        toast.error(data.error);
+        return;
       }
 
       toast.success(`Senha de ${closer.full_name} atualizada com sucesso!`);
