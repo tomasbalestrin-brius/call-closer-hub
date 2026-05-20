@@ -1,71 +1,33 @@
-## Objetivo
-Quando um card chega na coluna **"Venda Realizada"** (`venda_finalizada`) do Kanban de CRM Vendas (`sales_pipeline`), disparar webhook para `https://cs.bethelapps.com/api/webhooks/in/bethelcloser` criando o card no outro sistema. Só dispara para produto **Elite**. Cadastro/gestão via painel admin.
+## O que vai mudar
 
----
+### 1. Mostrar faturamento no card da Call (em todos os locais que renderizam o card)
 
-## 1. Banco de dados (migration)
+Hoje o `CallCard.tsx` só mostra `call.sale_value`. Quando você registra a venda pelo **CRM Vendas** (kanban) ou pelo SaleFormDialog do cliente, o valor entra em `clients.sale_value` — e o card da call (que vive em outra tabela) continua sem nada.
 
-- Adicionar coluna em `sales_pipeline`:
-  - `webhook_sent_at timestamptz` — evita disparo duplicado se o card sair e voltar à coluna.
-- Adicionar novo `event_type` suportado em `webhook_configs`: `pipeline_sale_finalized` (apenas convenção textual, sem mudança de schema).
-- Inserir registro inicial via `supabase--insert`:
-  - `name`: "Bethel Apps - Pipeline Finalizado"
-  - `url`: `https://cs.bethelapps.com/api/webhooks/in/bethelcloser`
-  - `event_type`: `pipeline_sale_finalized`
-  - `product_filter`: `{elite}`
-  - `is_active`: true
+**Solução:**
+- No `CallCard`, exibir o valor priorizando `call.sale_value`; se vazio e existir `client_id`, buscar `clients.sale_value` / `entry_value` do cliente vinculado e exibir.
+- Centralizar o fetch em `useCalls` (ou hook semelhante já existente) para não disparar uma query por card — fazer um único `SELECT id, sale_value, entry_value FROM clients WHERE id IN (...)` e injetar `clientSaleValue` no objeto da call passado ao componente.
+- Adicionar um badge discreto no **canto superior direito** do card (`absolute top-2 right-2` dentro do CardContent, ou logo abaixo dos badges de status) com ícone `DollarSign` + valor formatado em BRL, cor `success`. Aparece em qualquer tela que renderize o `CallCard` (Calls, SquadView, etc.).
 
-## 2. Nova edge function `send-pipeline-sale-webhook`
-Espelho de `send-sale-webhook`, com diferenças:
-- Recebe `{ pipeline_card_id }`.
-- Busca o card em `sales_pipeline`, junta `clients` (dados completos) + `profiles` (closer_name) + última `calls.transcription`.
-- Filtra webhooks por `event_type = 'pipeline_sale_finalized'` e `is_active = true`.
-- Aplica `product_filter` (case-insensitive contains) sobre `product_offered` — só dispara para Elite.
-- Após sucesso, atualiza `sales_pipeline.webhook_sent_at = now()`.
-- Idempotência: se `webhook_sent_at` já estiver preenchido, retorna 200 sem reenviar.
-- Registrar em `supabase/config.toml`: `[functions.send-pipeline-sale-webhook] verify_jwt = false`.
+### 2. Botão "Marcar como Vendida" no menu da call
 
-Payload enviado:
-```json
-{
-  "event": "pipeline_sale_finalized",
-  "timestamp": "...",
-  "client": { "id","name","email","phone","company","niche","instagram","source",
-              "sdr_name","funnel_source","has_partner","main_pain","main_difficulty","product_offered" },
-  "sale":   { "sale_value","entry_value","sold_at","contract_validity","sale_notes","notes" },
-  "closer_name": "...",
-  "transcription": "..."
-}
-```
+**Solução:**
+- Em `CallCardMenu.tsx`, adicionar item de menu **"Marcar como Vendida"** (ícone `DollarSign`, visível quando `call.status !== 'vendido'`).
+- Ao clicar, abrir um novo `MarkAsSoldDialog` simples com 2 campos: **Valor da Venda** e **Valor de Entrada** (ambos opcionais), botão **Confirmar**.
+- Ao confirmar:
+  1. `UPDATE calls SET status='vendido', sale_value=?, entry_value=? WHERE id=?`
+  2. Se `call.client_id` existir: `UPDATE clients SET is_sold=true, sold_at=now(), sale_value=?, entry_value=?, status='venda_realizada' WHERE id=?` (mesma lógica do `SaleFormDialog`).
+  3. Disparar o webhook existente `send-sale-webhook` (fire-and-forget) se houver `client_id`.
+  4. Chamar `onCallUpdated()` para refrescar a lista e mover o card para o filtro **Vendidas**.
+- Se já estiver vendida, o item de menu vira **"Editar venda"** com os valores preenchidos.
 
-## 3. Disparo no frontend
-Em `src/hooks/useSalesPipeline.ts`, dentro de `moveCard.mutationFn` após o `update` bem-sucedido:
-- Se `newStatus === 'venda_finalizada'`, chamar `supabase.functions.invoke('send-pipeline-sale-webhook', { body: { pipeline_card_id: id } })` em fire-and-forget (`.catch(console.warn)`), sem bloquear UI — mesmo padrão usado em `SaleFormDialog`.
+### Arquivos afetados
 
-## 4. Painel admin de webhooks
-Nova rota/aba dentro de `src/pages/Admin.tsx` (ou novo componente `src/components/admin/WebhooksPanel.tsx`):
-- Lista todos os `webhook_configs` (nome, URL, event_type, produtos, ativo).
-- Botão **Novo webhook** → dialog com:
-  - `name` (texto)
-  - `url` (texto)
-  - `event_type` (select: `sale_closed` | `pipeline_sale_finalized`)
-  - `product_filter` (multi-tag: lista livre, vazio = todos)
-  - `is_active` (switch)
-  - `headers` (JSON opcional, avançado)
-- Editar / Deletar inline.
-- Botão **Testar** que invoca a edge function correspondente com um payload de exemplo (opcional, fase 2 se quiser deixar simples agora).
-- Acesso restrito a admin (já garantido pelo RLS `Admins can manage webhook configs`).
+- `src/components/calls/CallCard.tsx` — exibir valor no canto, fallback para sale_value do client vinculado.
+- `src/components/calls/CallCardMenu.tsx` — novo item de menu "Marcar como Vendida".
+- `src/components/calls/MarkAsSoldDialog.tsx` *(novo)* — diálogo simples com valor da venda/entrada.
+- `src/hooks/useCalls.ts` (ou onde a lista de calls é buscada) — enriquecer com `clientSaleValue`/`clientEntryValue` via batch query.
 
-## 5. Comportamento da venda
-Não alteramos `send-sale-webhook` (continua disparando no `SaleFormDialog`). O novo webhook é independente — quando o card vai pra Venda Realizada no Kanban, o outro sistema recebe a criação do card. Se você quiser desativar o webhook antigo depois, basta marcar `is_active = false` pelo painel.
-
----
-
-## Arquivos afetados
-- **migration**: `ALTER TABLE sales_pipeline ADD COLUMN webhook_sent_at timestamptz;`
-- **insert**: novo registro em `webhook_configs`.
-- **novo**: `supabase/functions/send-pipeline-sale-webhook/index.ts`
-- **edit**: `supabase/config.toml` (registrar a function)
-- **edit**: `src/hooks/useSalesPipeline.ts` (disparo fire-and-forget)
-- **novo**: `src/components/admin/WebhooksPanel.tsx` (CRUD de webhooks)
-- **edit**: `src/pages/Admin.tsx` (nova aba "Webhooks")
+### Não muda
+- RLS, edge functions e schema — closers já podem fazer UPDATE em calls e clients próprios.
+- O fluxo do CRM Vendas (kanban) e do `SaleFormDialog` continua intacto.
