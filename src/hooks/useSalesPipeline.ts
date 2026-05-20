@@ -89,6 +89,11 @@ export function useSalesPipeline() {
     mutationFn: async ({ id, newStatus }: { id: string; newStatus: SalesPipelineStatus }) => {
       const { error } = await supabase.from('sales_pipeline' as any).update({ status: newStatus }).eq('id', id);
       if (error) throw error;
+      if (newStatus === 'venda_finalizada') {
+        supabase.functions
+          .invoke('send-pipeline-sale-webhook', { body: { pipeline_card_id: id } })
+          .catch((err) => console.warn('pipeline webhook failed', err));
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sales-pipeline'] });

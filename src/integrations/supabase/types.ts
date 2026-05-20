@@ -1553,6 +1553,7 @@ export type Database = {
           status: string
           status_changed_at: string
           updated_at: string
+          webhook_sent_at: string | null
         }
         Insert: {
           client_id: string
@@ -1571,6 +1572,7 @@ export type Database = {
           status?: string
           status_changed_at?: string
           updated_at?: string
+          webhook_sent_at?: string | null
         }
         Update: {
           client_id?: string
@@ -1589,6 +1591,7 @@ export type Database = {
           status?: string
           status_changed_at?: string
           updated_at?: string
+          webhook_sent_at?: string | null
         }
         Relationships: [
           {

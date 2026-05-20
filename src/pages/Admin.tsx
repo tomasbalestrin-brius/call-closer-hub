@@ -25,7 +25,8 @@ import {
   Activity,
   AlertTriangle,
   RefreshCw,
-  DollarSign
+  DollarSign,
+  Webhook
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NewCloserDialog } from '@/components/admin/NewCloserDialog';
@@ -41,6 +42,7 @@ import SystemMetricsDashboard from '@/components/admin/SystemMetricsDashboard';
 import { ErrorLogsPanel } from '@/components/admin/ErrorLogsPanel';
 import { ManualAnalysisDialog } from '@/components/admin/ManualAnalysisDialog';
 import CostDashboard from '@/components/admin/CostDashboard';
+import { WebhooksPanel } from '@/components/admin/WebhooksPanel';
 import { Navigate } from 'react-router-dom';
 import { UserRole } from '@/types';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
@@ -458,6 +460,10 @@ export default function Admin() {
                   <AlertTriangle className="w-4 h-4" />
                   Logs de Erros
                 </TabsTrigger>
+                <TabsTrigger value="webhooks" className="flex items-center gap-2">
+                  <Webhook className="w-4 h-4" />
+                  Webhooks
+                </TabsTrigger>
                 {isMasterAdmin && (
                   <TabsTrigger value="costs" className="flex items-center gap-2">
                     <DollarSign className="w-4 h-4" />
@@ -759,6 +765,9 @@ export default function Admin() {
               </TabsContent>
               <TabsContent value="error-logs">
                 <ErrorLogsPanel />
+              </TabsContent>
+              <TabsContent value="webhooks">
+                <WebhooksPanel />
               </TabsContent>
               {isMasterAdmin && (
                 <TabsContent value="costs">
