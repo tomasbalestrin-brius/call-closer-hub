@@ -61,6 +61,9 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
   const displaySaleValue = call.sale_value ?? joinedClient?.sale_value ?? null;
   const displayEntryValue = call.entry_value ?? joinedClient?.entry_value ?? null;
   const isSoldVisually = call.status === 'vendido' || joinedClient?.is_sold === true;
+  const isIncompleteAnalysis =
+    (call.score === 0 || call.score === null || call.score === undefined) &&
+    /^Lead\s*-/i.test(call.client_name || '');
 
   const handleClick = () => {
     if (onClick) {
