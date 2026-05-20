@@ -1,30 +1,71 @@
-## Melhorias no CRM Vendas
+## Objetivo
+Quando um card chega na coluna **"Venda Realizada"** (`venda_finalizada`) do Kanban de CRM Vendas (`sales_pipeline`), disparar webhook para `https://cs.bethelapps.com/api/webhooks/in/bethelcloser` criando o card no outro sistema. Só dispara para produto **Elite**. Cadastro/gestão via painel admin.
 
-Aplicar as três melhorias sugeridas para admin/financeiro/closer.
+---
 
-### 1. Filtro por closer (admin/financeiro)
-- No header do `SalesKanban`, adicionar `<Select>` "Todos os closers" + lista (reaproveitar `useClosersList`).
-- Visível só para `isAdmin || isFinanceiro`.
-- Filtrar `cards` por `closer_id` antes da busca por texto.
+## 1. Banco de dados (migration)
 
-### 2. Badge com nome do closer no card
-- Em `useSalesPipeline`, fazer join leve: buscar `profiles (user_id, full_name)` dos closers presentes e mapear `closer_name` em cada card.
-- No card, exibir `<Badge variant="secondary">` com o nome do closer (apenas quando admin/financeiro — closer não precisa ver o próprio nome).
+- Adicionar coluna em `sales_pipeline`:
+  - `webhook_sent_at timestamptz` — evita disparo duplicado se o card sair e voltar à coluna.
+- Adicionar novo `event_type` suportado em `webhook_configs`: `pipeline_sale_finalized` (apenas convenção textual, sem mudança de schema).
+- Inserir registro inicial via `supabase--insert`:
+  - `name`: "Bethel Apps - Pipeline Finalizado"
+  - `url`: `https://cs.bethelapps.com/api/webhooks/in/bethelcloser`
+  - `event_type`: `pipeline_sale_finalized`
+  - `product_filter`: `{elite}`
+  - `is_active`: true
 
-### 3. Permitir closer mover seus próprios cards
-- Adicionar policy RLS `UPDATE` em `sales_pipeline`: `closer_id = auth.uid()` (using + with check).
-- Frontend: trocar `canEdit` por `canEditCard(card)` = admin/financeiro OU `card.closer_id === user.id`.
-- `draggable`, drop, bulk move e delete passam a respeitar essa regra por card.
-- Delete continua restrito a admin/financeiro.
+## 2. Nova edge function `send-pipeline-sale-webhook`
+Espelho de `send-sale-webhook`, com diferenças:
+- Recebe `{ pipeline_card_id }`.
+- Busca o card em `sales_pipeline`, junta `clients` (dados completos) + `profiles` (closer_name) + última `calls.transcription`.
+- Filtra webhooks por `event_type = 'pipeline_sale_finalized'` e `is_active = true`.
+- Aplica `product_filter` (case-insensitive contains) sobre `product_offered` — só dispara para Elite.
+- Após sucesso, atualiza `sales_pipeline.webhook_sent_at = now()`.
+- Idempotência: se `webhook_sent_at` já estiver preenchido, retorna 200 sem reenviar.
+- Registrar em `supabase/config.toml`: `[functions.send-pipeline-sale-webhook] verify_jwt = false`.
 
-### Arquivos
-| Arquivo | Mudança |
-|---|---|
-| Migração SQL | Nova policy UPDATE para closer dono |
-| `src/hooks/useSalesPipeline.ts` | Join com profiles → `closer_name` |
-| `src/components/sales/SalesKanban.tsx` | Filtro closer, badge, permissão por card |
+Payload enviado:
+```json
+{
+  "event": "pipeline_sale_finalized",
+  "timestamp": "...",
+  "client": { "id","name","email","phone","company","niche","instagram","source",
+              "sdr_name","funnel_source","has_partner","main_pain","main_difficulty","product_offered" },
+  "sale":   { "sale_value","entry_value","sold_at","contract_validity","sale_notes","notes" },
+  "closer_name": "...",
+  "transcription": "..."
+}
+```
 
-### Casos de borda
-- Closer continua **sem** ver cards de outros (RLS SELECT já bloqueia).
-- Bulk move do closer só afeta os próprios (RLS UPDATE filtra).
-- Filtro por closer some quando o usuário é closer puro.
+## 3. Disparo no frontend
+Em `src/hooks/useSalesPipeline.ts`, dentro de `moveCard.mutationFn` após o `update` bem-sucedido:
+- Se `newStatus === 'venda_finalizada'`, chamar `supabase.functions.invoke('send-pipeline-sale-webhook', { body: { pipeline_card_id: id } })` em fire-and-forget (`.catch(console.warn)`), sem bloquear UI — mesmo padrão usado em `SaleFormDialog`.
+
+## 4. Painel admin de webhooks
+Nova rota/aba dentro de `src/pages/Admin.tsx` (ou novo componente `src/components/admin/WebhooksPanel.tsx`):
+- Lista todos os `webhook_configs` (nome, URL, event_type, produtos, ativo).
+- Botão **Novo webhook** → dialog com:
+  - `name` (texto)
+  - `url` (texto)
+  - `event_type` (select: `sale_closed` | `pipeline_sale_finalized`)
+  - `product_filter` (multi-tag: lista livre, vazio = todos)
+  - `is_active` (switch)
+  - `headers` (JSON opcional, avançado)
+- Editar / Deletar inline.
+- Botão **Testar** que invoca a edge function correspondente com um payload de exemplo (opcional, fase 2 se quiser deixar simples agora).
+- Acesso restrito a admin (já garantido pelo RLS `Admins can manage webhook configs`).
+
+## 5. Comportamento da venda
+Não alteramos `send-sale-webhook` (continua disparando no `SaleFormDialog`). O novo webhook é independente — quando o card vai pra Venda Realizada no Kanban, o outro sistema recebe a criação do card. Se você quiser desativar o webhook antigo depois, basta marcar `is_active = false` pelo painel.
+
+---
+
+## Arquivos afetados
+- **migration**: `ALTER TABLE sales_pipeline ADD COLUMN webhook_sent_at timestamptz;`
+- **insert**: novo registro em `webhook_configs`.
+- **novo**: `supabase/functions/send-pipeline-sale-webhook/index.ts`
+- **edit**: `supabase/config.toml` (registrar a function)
+- **edit**: `src/hooks/useSalesPipeline.ts` (disparo fire-and-forget)
+- **novo**: `src/components/admin/WebhooksPanel.tsx` (CRUD de webhooks)
+- **edit**: `src/pages/Admin.tsx` (nova aba "Webhooks")
