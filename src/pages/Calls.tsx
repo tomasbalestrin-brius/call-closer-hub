@@ -62,7 +62,7 @@ export default function Calls() {
 
       let query = supabase
         .from('calls')
-        .select(CALLS_SELECT + ', clients(phone)')
+        .select(CALLS_SELECT + ', clients(phone, sale_value, entry_value, is_sold)')
         .eq('closer_id', targetCloserId!)
         .is('merged_with_call_id', null)
         .order('call_date', { ascending: false })
