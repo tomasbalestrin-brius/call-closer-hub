@@ -37,7 +37,26 @@ export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, ta
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showSoldDialog, setShowSoldDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
   const isSold = call.status === 'vendido';
+
+  const handleReanalyze = async () => {
+    setReanalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reanalyze-call', {
+        body: { callId: call.id },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      toast.success('Call reanalisada com sucesso');
+      onCallUpdated();
+    } catch (err) {
+      console.error('Error reanalyzing call:', err);
+      toast.error(err instanceof Error ? err.message : 'Erro ao reanalisar call');
+    } finally {
+      setReanalyzing(false);
+    }
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
