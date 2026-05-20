@@ -2468,6 +2468,33 @@ O campo "framework_selecionado" DEVE ser "${forceFramework}".
 
     console.log("Analysis complete, client:", analysis.client_name, "score:", analysis.call_score);
 
+    // ============= QUALITY VALIDATION =============
+    // Prevents persisting "empty" AI responses (nome_lead=nao_informado, score=0, etc.)
+    const ident = (analysis.technical_analysis as Record<string, unknown> | undefined)?.identificacao as Record<string, string> | undefined;
+    const stages = (analysis.technical_analysis as Record<string, unknown> | undefined)?.analise_por_etapa as Record<string, { aconteceu?: string }> | undefined;
+    let qualityScore = 0;
+    if (ident?.nome_lead && ident.nome_lead !== "nao_informado") qualityScore += 1;
+    if (ident?.nome_closer && ident.nome_closer !== "nao_informado") qualityScore += 1;
+    if (ident?.houve_venda && ident.houve_venda !== "nao_informado") qualityScore += 1;
+    if (typeof analysis.call_score === "number" && analysis.call_score >= 1 && analysis.call_score <= 10) qualityScore += 2;
+    if (stages && Object.values(stages).filter((s) => s?.aconteceu === "sim").length >= 4) qualityScore += 2;
+    if (analysis.niche && analysis.niche !== "nao_informado") qualityScore += 1;
+    (analysis as Record<string, unknown>).analysis_quality_score = qualityScore;
+    console.log(`📊 Quality score: ${qualityScore}/8`);
+
+    if (qualityScore < 3) {
+      console.warn(`⚠️ Low-quality analysis (score=${qualityScore}). Returning 422 to avoid persisting empty data.`);
+      clearTimeout(timeoutId);
+      return new Response(
+        JSON.stringify({
+          error: "low_quality_analysis",
+          message: "A IA retornou uma análise vazia ou incompleta. Tente reanalisar.",
+          quality_score: qualityScore,
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Log API costs if userId provided and usage stats collected
     if (userId && globalThis.apiUsageStats && globalThis.apiUsageStats.length > 0) {
       console.log(`Logging ${globalThis.apiUsageStats.length} API usage records...`);

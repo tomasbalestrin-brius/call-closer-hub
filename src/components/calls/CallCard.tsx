@@ -3,7 +3,7 @@ import { Call, CallStatus, LeadClassification, CloserClassification } from '@/ty
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Calendar, Clock, Star, DollarSign, Target, TrendingUp, User, Flame, Thermometer, Snowflake, Phone } from 'lucide-react';
+import { Calendar, Clock, Star, DollarSign, Target, TrendingUp, User, Flame, Thermometer, Snowflake, Phone, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import CallDetailDialog from './CallDetailDialog';
@@ -61,6 +61,9 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
   const displaySaleValue = call.sale_value ?? joinedClient?.sale_value ?? null;
   const displayEntryValue = call.entry_value ?? joinedClient?.entry_value ?? null;
   const isSoldVisually = call.status === 'vendido' || joinedClient?.is_sold === true;
+  const isIncompleteAnalysis =
+    (call.score === 0 || call.score === null || call.score === undefined) &&
+    /^Lead\s*-/i.test(call.client_name || '');
 
   const handleClick = () => {
     if (onClick) {
@@ -80,11 +83,18 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
       <Card 
         className={cn(
           'relative cursor-pointer transition-all hover:shadow-md hover:border-accent/50 animate-slide-up',
-          isSoldVisually && 'border-l-4 border-l-success'
+          isSoldVisually && 'border-l-4 border-l-success',
+          isIncompleteAnalysis && 'border-l-4 border-l-warning'
         )}
         onClick={handleClick}
         style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
       >
+        {isIncompleteAnalysis && (
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-md bg-warning/15 border border-warning/40 px-2 py-1 text-[10px] font-semibold text-warning shadow-sm pointer-events-none">
+            <AlertTriangle className="w-3 h-3" />
+            Análise incompleta
+          </div>
+        )}
         {displaySaleValue ? (
           <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-md bg-success/15 border border-success/40 px-2 py-1 text-xs font-bold text-success shadow-sm pointer-events-none">
             <DollarSign className="w-3 h-3" />

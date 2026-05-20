@@ -578,13 +578,19 @@ serve(async (req) => {
           break;
         }
 
-        // Retry for timeouts (408) AND empty responses (runtime killed the function)
-        const isRetryable = analyzeResponse.status === 408 || analyzeParseError === "Empty response from function";
+        // Retry for timeouts (408), empty responses, AND low-quality analyses (422)
+        const isLowQuality = analyzeResponse.status === 422;
+        const isRetryable = analyzeResponse.status === 408 || analyzeParseError === "Empty response from function" || isLowQuality;
         if (isRetryable && retryCount < MAX_RETRIES_ON_TIMEOUT) {
           console.log(`Retryable error on attempt ${retryCount + 1} (status=${analyzeResponse.status}, parseError=${analyzeParseError}), retrying in 5s...`);
           retryCount++;
           await new Promise(resolve => setTimeout(resolve, 5000));
           continue;
+        }
+
+        // Non-retryable 422 (final attempt low quality) → friendly message
+        if (isLowQuality) {
+          analyzeParseError = "Análise retornou vazia (a IA não conseguiu extrair dados do lead). Clique em Reanalisar para tentar novamente.";
         }
 
         // Non-retryable error or last retry - exit loop

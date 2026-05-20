@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MoreVertical, Eye, Merge, Trash2, DollarSign } from 'lucide-react';
+import { MoreVertical, Eye, Merge, Trash2, DollarSign, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -37,7 +37,26 @@ export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, ta
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showSoldDialog, setShowSoldDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
   const isSold = call.status === 'vendido';
+
+  const handleReanalyze = async () => {
+    setReanalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reanalyze-call', {
+        body: { callId: call.id },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      toast.success('Call reanalisada com sucesso');
+      onCallUpdated();
+    } catch (err) {
+      console.error('Error reanalyzing call:', err);
+      toast.error(err instanceof Error ? err.message : 'Erro ao reanalisar call');
+    } finally {
+      setReanalyzing(false);
+    }
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -76,6 +95,11 @@ export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, ta
           <DropdownMenuItem onClick={() => setShowMergeDialog(true)}>
             <Merge className="h-4 w-4 mr-2" />
             Juntar com outra call
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleReanalyze} disabled={reanalyzing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${reanalyzing ? 'animate-spin' : ''}`} />
+            {reanalyzing ? 'Reanalisando...' : 'Reanalisar com IA'}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setShowSoldDialog(true)} className="text-success focus:text-success">
