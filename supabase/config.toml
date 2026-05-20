@@ -72,6 +72,9 @@ verify_jwt = false
 [functions.send-sale-webhook]
 verify_jwt = false
 
+[functions.send-pipeline-sale-webhook]
+verify_jwt = false
+
 [functions.whatsapp-webhook]
 verify_jwt = false
 
