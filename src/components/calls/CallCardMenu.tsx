@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MoreVertical, Eye, Merge, Trash2 } from 'lucide-react';
+import { MoreVertical, Eye, Merge, Trash2, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { MergeCallDialog } from './MergeCallDialog';
+import { MarkAsSoldDialog } from './MarkAsSoldDialog';
 import { Call } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -34,7 +35,9 @@ interface CallCardMenuProps {
 export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, targetCloserId }: CallCardMenuProps) {
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showSoldDialog, setShowSoldDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const isSold = call.status === 'vendido';
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -74,6 +77,11 @@ export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, ta
             <Merge className="h-4 w-4 mr-2" />
             Juntar com outra call
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setShowSoldDialog(true)} className="text-success focus:text-success">
+            <DollarSign className="h-4 w-4 mr-2" />
+            {isSold ? 'Editar venda' : 'Marcar como Vendida'}
+          </DropdownMenuItem>
           {canDelete && (
             <>
               <DropdownMenuSeparator />
@@ -102,6 +110,17 @@ export function CallCardMenu({ call, canDelete, onViewDetails, onCallUpdated, ta
           onOpenChange={setShowMergeDialog}
         />
       )}
+
+      {showSoldDialog && (
+        <MarkAsSoldDialog
+          call={call}
+          open={showSoldDialog}
+          onOpenChange={setShowSoldDialog}
+          onSaved={onCallUpdated}
+        />
+      )}
+
+
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

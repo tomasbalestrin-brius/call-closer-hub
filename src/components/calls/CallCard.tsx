@@ -57,6 +57,10 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
   const [showDialog, setShowDialog] = useState(false);
   const statusInfo = statusConfig[call.status];
   const formattedDate = format(new Date(call.call_date), "dd 'de' MMM", { locale: ptBR });
+  const joinedClient = (call as any).clients as { sale_value?: number | null; entry_value?: number | null; is_sold?: boolean } | null | undefined;
+  const displaySaleValue = call.sale_value ?? joinedClient?.sale_value ?? null;
+  const displayEntryValue = call.entry_value ?? joinedClient?.entry_value ?? null;
+  const isSoldVisually = call.status === 'vendido' || joinedClient?.is_sold === true;
 
   const handleClick = () => {
     if (onClick) {
@@ -75,12 +79,18 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
     <>
       <Card 
         className={cn(
-          'cursor-pointer transition-all hover:shadow-md hover:border-accent/50 animate-slide-up',
-          call.status === 'vendido' && 'border-l-4 border-l-success'
+          'relative cursor-pointer transition-all hover:shadow-md hover:border-accent/50 animate-slide-up',
+          isSoldVisually && 'border-l-4 border-l-success'
         )}
         onClick={handleClick}
         style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
       >
+        {displaySaleValue ? (
+          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-md bg-success/15 border border-success/40 px-2 py-1 text-xs font-bold text-success shadow-sm pointer-events-none">
+            <DollarSign className="w-3 h-3" />
+            {formatCurrency(displaySaleValue)}
+          </div>
+        ) : null}
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
@@ -150,10 +160,13 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
                 <span className="font-medium">{call.score}/10</span>
               </div>
             )}
-            {call.sale_value && (
+            {displaySaleValue && (
               <div className="flex items-center gap-2">
                 <DollarSign className="w-4 h-4 text-success flex-shrink-0" />
-                <span className="font-medium text-success">{formatCurrency(call.sale_value)}</span>
+                <span className="font-medium text-success">
+                  {formatCurrency(displaySaleValue)}
+                  {displayEntryValue ? <span className="text-xs text-muted-foreground ml-1">(ent. {formatCurrency(displayEntryValue)})</span> : null}
+                </span>
               </div>
             )}
           </div>
