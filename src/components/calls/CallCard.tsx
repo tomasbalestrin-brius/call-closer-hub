@@ -79,12 +79,18 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
     <>
       <Card 
         className={cn(
-          'cursor-pointer transition-all hover:shadow-md hover:border-accent/50 animate-slide-up',
-          call.status === 'vendido' && 'border-l-4 border-l-success'
+          'relative cursor-pointer transition-all hover:shadow-md hover:border-accent/50 animate-slide-up',
+          isSoldVisually && 'border-l-4 border-l-success'
         )}
         onClick={handleClick}
         style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
       >
+        {displaySaleValue ? (
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md bg-success/10 border border-success/30 px-2 py-0.5 text-xs font-semibold text-success pointer-events-none">
+            <DollarSign className="w-3 h-3" />
+            {formatCurrency(displaySaleValue)}
+          </div>
+        ) : null}
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
