@@ -89,6 +89,12 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
         onClick={handleClick}
         style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
       >
+        {isIncompleteAnalysis && (
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-md bg-warning/15 border border-warning/40 px-2 py-1 text-[10px] font-semibold text-warning shadow-sm pointer-events-none">
+            <AlertTriangle className="w-3 h-3" />
+            Análise incompleta
+          </div>
+        )}
         {displaySaleValue ? (
           <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-md bg-success/15 border border-success/40 px-2 py-1 text-xs font-bold text-success shadow-sm pointer-events-none">
             <DollarSign className="w-3 h-3" />
