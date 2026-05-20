@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MoreVertical, Eye, Merge, Trash2 } from 'lucide-react';
+import { MoreVertical, Eye, Merge, Trash2, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { MergeCallDialog } from './MergeCallDialog';
+import { MarkAsSoldDialog } from './MarkAsSoldDialog';
 import { Call } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
