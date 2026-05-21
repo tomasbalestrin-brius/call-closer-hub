@@ -169,8 +169,8 @@ export function SalesKanban() {
           onMoveTo={handleBulkMove}
         />
       </div>
-      <div className="w-full overflow-x-auto pb-2 [scrollbar-width:thin]">
-        <div className="flex gap-4 pb-4 min-h-[60vh]">
+      <div className="w-full overflow-x-auto overflow-y-hidden pb-2 [scrollbar-width:thin] [scrollbar-color:hsl(var(--muted-foreground))_transparent] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+        <div className="flex gap-4 pb-4 min-h-[60vh] w-max">
 
           {SALES_PIPELINE_COLUMNS.map((col) => {
             const colCards = filteredCards.filter((c) => c.status === col.id);
