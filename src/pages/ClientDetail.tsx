@@ -260,20 +260,36 @@ export default function ClientDetail() {
     if (!user || !id) return;
 
     try {
-      // Fetch client - Admin/Leader can see any client, regular user only their own
+      // Fetch client - Admin/Leader/Financeiro can see any client, regular user only their own
       let query = supabase
         .from('clients')
         .select('id, closer_id, name, email, phone, company, niche, status, source, revenue, has_partner, main_difficulty, main_pain, notes, negotiation_notes, sale_notes, entry_value, sale_value, followup_date, contract_validity, is_sold, sold_at, is_from_indication, indication_source_id, is_super_hot, product_offered, sdr_name, funnel_source, status_changed_at, created_at, updated_at, instagram, data_completed_at, name_normalized')
         .eq('id', id);
-      
-      // Only filter by closer_id for regular closers
+
       if (!isAdmin && !isLeader && !isFinanceiro) {
         query = query.eq('closer_id', user.id);
       }
 
-      const { data: clientData, error: clientError } = await query.single();
+      // maybeSingle avoids the noisy 406 error when the row doesn't exist
+      const { data: clientData, error: clientError } = await query.maybeSingle();
 
       if (clientError) throw clientError;
+
+      // Fallback: maybe the URL has a stale sales_pipeline card id instead of a client id
+      if (!clientData) {
+        const { data: pipelineCard } = await supabase
+          .from('sales_pipeline')
+          .select('client_id')
+          .eq('id', id)
+          .maybeSingle();
+        if (pipelineCard?.client_id && pipelineCard.client_id !== id) {
+          navigate(`/clients/${pipelineCard.client_id}`, { replace: true });
+          return;
+        }
+        setClient(null);
+        return;
+      }
+
       setClient(clientData as Client);
 
       // Fetch calls for this client
@@ -286,7 +302,7 @@ export default function ClientDetail() {
       if (callsError) throw callsError;
       const typedCalls = (callsData || []) as Call[];
       setCalls(typedCalls);
-      
+
       // Select the most recent call with analysis
       const callWithAnalysis = typedCalls.find(c => c.technical_analysis);
       if (callWithAnalysis) {
@@ -300,6 +316,7 @@ export default function ClientDetail() {
       setLoading(false);
     }
   };
+
 
   const formatCurrency = (value: number | null) => {
     if (!value) return '-';
