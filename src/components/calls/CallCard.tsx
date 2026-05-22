@@ -249,6 +249,16 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
         open={showDialog} 
         onOpenChange={setShowDialog} 
       />
+
+      <MarkAsSoldDialog
+        call={call}
+        open={showSoldDialog}
+        onOpenChange={setShowSoldDialog}
+        onSaved={() => {
+          qc.invalidateQueries({ queryKey: ['calls'] });
+          onCallUpdated?.();
+        }}
+      />
     </>
   );
 }, (prev, next) => {
