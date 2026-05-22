@@ -134,9 +134,22 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
             </div>
             <div className="flex items-center gap-1">
               <div className="flex flex-col items-end gap-1">
-                <Badge className={cn('font-medium text-xs', statusInfo.className)}>
-                  {statusInfo.label}
-                </Badge>
+                <Select value={call.status} onValueChange={(v) => handleStatusChange(v as CallStatus)}>
+                  <SelectTrigger
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      'h-auto py-1 px-2 text-xs font-medium border-0 rounded-md gap-1 w-auto min-w-0 [&>svg]:h-3 [&>svg]:w-3',
+                      statusInfo.className
+                    )}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent onClick={(e) => e.stopPropagation()}>
+                    {(Object.keys(statusConfig) as CallStatus[]).map((s) => (
+                      <SelectItem key={s} value={s}>{statusConfig[s].label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {leadInfo && (
                   <Badge variant="outline" className={cn('text-xs border', leadInfo.className)}>
                     {leadInfo.label}
