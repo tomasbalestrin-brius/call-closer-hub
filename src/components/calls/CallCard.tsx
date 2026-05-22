@@ -60,6 +60,8 @@ const formatCurrency = (value: number | null) => {
 
 const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCallUpdated, clientPhone }: CallCardProps) {
   const [showDialog, setShowDialog] = useState(false);
+  const [showSoldDialog, setShowSoldDialog] = useState(false);
+  const qc = useQueryClient();
   const statusInfo = statusConfig[call.status];
   const formattedDate = format(new Date(call.call_date), "dd 'de' MMM", { locale: ptBR });
   const joinedClient = (call as any).clients as { sale_value?: number | null; entry_value?: number | null; is_sold?: boolean } | null | undefined;
@@ -76,6 +78,19 @@ const CallCard = memo(function CallCard({ call, onClick, canDelete = false, onCa
     } else {
       setShowDialog(true);
     }
+  };
+
+  const handleStatusChange = async (newStatus: CallStatus) => {
+    if (newStatus === call.status) return;
+    if (newStatus === 'vendido') {
+      setShowSoldDialog(true);
+      return;
+    }
+    const { error } = await supabase.from('calls').update({ status: newStatus }).eq('id', call.id);
+    if (error) { toast.error('Erro ao alterar status'); return; }
+    toast.success('Status atualizado');
+    qc.invalidateQueries({ queryKey: ['calls'] });
+    onCallUpdated?.();
   };
 
   const leadInfo = call.lead_classification ? leadClassificationConfig[call.lead_classification] : null;
