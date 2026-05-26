@@ -43,6 +43,7 @@ import { ErrorLogsPanel } from '@/components/admin/ErrorLogsPanel';
 import { ManualAnalysisDialog } from '@/components/admin/ManualAnalysisDialog';
 import CostDashboard from '@/components/admin/CostDashboard';
 import { WebhooksPanel } from '@/components/admin/WebhooksPanel';
+import { ExportLeadsButton } from '@/components/admin/ExportLeadsButton';
 import { Navigate } from 'react-router-dom';
 import { UserRole } from '@/types';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
@@ -679,6 +680,12 @@ export default function Admin() {
                               >
                                 {closer.status === 'active' ? 'Desativar' : 'Ativar'}
                               </Button>
+                              {isAdmin && (
+                                <ExportLeadsButton
+                                  closerId={closer.user_id}
+                                  closerName={closer.full_name}
+                                />
+                              )}
                               {isAdmin && (
                                 <Button
                                   variant="destructive"
