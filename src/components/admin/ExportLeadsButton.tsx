@@ -44,12 +44,15 @@ export function ExportLeadsButton({ closerId, closerName }: ExportLeadsButtonPro
             size="sm"
             onClick={handleExport}
             disabled={loading}
+            aria-label={`Exportar leads de ${closerName}`}
+            className="min-w-[112px]"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Download className="w-4 h-4" />
             )}
+            {loading ? 'Exportando' : 'Exportar'}
           </Button>
         </TooltipTrigger>
         <TooltipContent>Exportar leads (CSV)</TooltipContent>
